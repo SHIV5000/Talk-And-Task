@@ -749,6 +749,52 @@ export function ChatApp({ user, onLogout }) {
         } catch(e) {}
     };
 
+const onGroupUpdate = useCallback(async (updates) => {
+  if (!activeGroup || !activeGroup.id) return;
+
+  // File upload
+  if (updates.profilePicFile) {
+    const file = updates.profilePicFile;
+    setGroupPicUploadProgress(10);
+    const uniqueFileName = `group_${Date.now()}_${file.name}`;
+    const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => setGroupPicUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+      (error) => { console.error('Upload failed', error); setGroupPicUploadProgress(0); },
+      async () => {
+        const url = await getDownloadURL(uploadTask.snapshot.ref);
+        await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
+        setGroupPicUploadProgress(0);
+        setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
+        setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, profilePicUrl: url } : g));
+      }
+    );
+    return;
+  }
+
+  // Text updates
+  try {
+    await updateDoc(doc(db, "groups", activeGroup.id), updates);
+    // Instant local state
+    setActiveGroup(prev => ({ ...prev, ...updates }));
+    setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, ...updates } : g));
+    logImmutableAction("GROUP_UPDATE", `Updated group: ${activeGroup.name}`, `Fields: ${Object.keys(updates).join(', ')}`);
+  } catch (err) { console.error('Group update failed', err); }
+}, [activeGroup, storage, db]);
+
+
+
+
+
+
+
+
+
+
+
+    
+
     const handleSendOfflineAware = async () => {
         if (!inputText.trim() || !activeGroup) return;
         if (!isOnline) {
