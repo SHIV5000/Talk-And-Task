@@ -784,15 +784,6 @@ const onGroupUpdate = useCallback(async (updates) => {
 }, [activeGroup, storage, db]);
 
 
-
-
-
-
-
-
-
-
-
     
 
     const handleSendOfflineAware = async () => {
@@ -1039,17 +1030,6 @@ const onGroupUpdate = useCallback(async (updates) => {
     logImmutableAction("GROUP_UPDATE", `Updated group: ${activeGroup.name}`, `Fields: ${Object.keys(cleanUpdates).join(', ')}`);
   } catch (err) { console.error('Update failed', err); }
 }, [activeGroup, storage, db]);
-
-
-
-
-
-
-
-
-
-
-
     
     const handleUpdateGroupMembers = async (e) => {
         e.preventDefault();
