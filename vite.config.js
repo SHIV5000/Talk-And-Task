@@ -1,3 +1,7 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';  // ← This line must be exactly like this
+
 VitePWA({
   registerType: 'autoUpdate',
   injectManifest: false,
