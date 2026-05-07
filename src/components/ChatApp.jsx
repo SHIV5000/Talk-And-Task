@@ -1322,13 +1322,13 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                         <div className="flex items-center gap-2">
 
-<button onClick={() => setActiveModal('task_analytics')} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur">
+<button onClick={() => setActiveModal('task_analytics')} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30">
     <i className="fa-solid fa-chart-bar"></i> Analytics
 </button>
-<button onClick={() => setActiveModal('task_templates')} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur">
+<button onClick={() => setActiveModal('task_templates')} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30">
     <i className="fa-solid fa-layer-group"></i> Templates
 </button>
-<button onClick={() => setViewMode("chat")} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur">
+<button onClick={() => setViewMode("chat")} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30">
     <i className="fa-solid fa-arrow-left"></i> Back to Hub
 </button>
 
