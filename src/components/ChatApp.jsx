@@ -973,6 +973,63 @@ export function ChatApp({ user, onLogout }) {
         } catch (error) { alert("Failed to save group."); }
     };
 
+
+const onGroupUpdate = useCallback(async (updates) => {
+  if (!activeGroup || !activeGroup.id) return;
+  
+  // Handle file upload separately
+  if (updates.profilePicFile) {
+    const file = updates.profilePicFile;
+    setGroupPicUploadProgress(10);
+    const uniqueFileName = `group_${Date.now()}_${file.name}`;
+    const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => setGroupPicUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+      (error) => { console.error('Upload failed', error); setGroupPicUploadProgress(0); },
+      async () => {
+        const url = await getDownloadURL(uploadTask.snapshot.ref);
+        const updateData = { profilePicUrl: url };
+        await updateDoc(doc(db, "groups", activeGroup.id), updateData);
+        setGroupPicUploadProgress(0);
+        // update local state
+        setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
+        setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, profilePicUrl: url } : g));
+      }
+    );
+    return;
+  }
+
+  // Text-based updates (name, members, admins)
+  const cleanUpdates = {};
+  if (updates.name) cleanUpdates.name = updates.name;
+  if (updates.members) {
+    cleanUpdates.members = updates.members;
+    // If admins not explicitly provided, keep only those still in members
+    cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a));
+  }
+  if (Object.keys(cleanUpdates).length === 0) return;
+  
+  try {
+    await updateDoc(doc(db, "groups", activeGroup.id), cleanUpdates);
+    // Immediately update local state to avoid delay
+    setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
+    setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, ...cleanUpdates } : g));
+    logImmutableAction("GROUP_UPDATE", `Updated group: ${activeGroup.name}`, `Fields: ${Object.keys(cleanUpdates).join(', ')}`);
+  } catch (err) { console.error('Update failed', err); }
+}, [activeGroup, storage, db]);
+
+
+
+
+
+
+
+
+
+
+
+    
     const handleUpdateGroupMembers = async (e) => {
         e.preventDefault();
         try {
@@ -1710,6 +1767,7 @@ export function ChatApp({ user, onLogout }) {
                         currentUserData={currentUserData}
                         isVipAdmin={isVipAdmin}
                         handleUpdateGroupMembers={handleUpdateGroupMembers}
+                       onGroupUpdate={onGroupUpdate}
                       />
                     )}
 
