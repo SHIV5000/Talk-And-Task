@@ -1020,31 +1020,6 @@ const onGroupUpdate = useCallback(async (updates) => {
     };
 
 
-const onGroupUpdate = useCallback(async (updates) => {
-  if (!activeGroup || !activeGroup.id) return;
-  
-  // Handle file upload separately
-  if (updates.profilePicFile) {
-    const file = updates.profilePicFile;
-    setGroupPicUploadProgress(10);
-    const uniqueFileName = `group_${Date.now()}_${file.name}`;
-    const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => setGroupPicUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-      (error) => { console.error('Upload failed', error); setGroupPicUploadProgress(0); },
-      async () => {
-        const url = await getDownloadURL(uploadTask.snapshot.ref);
-        const updateData = { profilePicUrl: url };
-        await updateDoc(doc(db, "groups", activeGroup.id), updateData);
-        setGroupPicUploadProgress(0);
-        // update local state
-        setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
-        setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, profilePicUrl: url } : g));
-      }
-    );
-    return;
-  }
 
   // Text-based updates (name, members, admins)
   const cleanUpdates = {};
