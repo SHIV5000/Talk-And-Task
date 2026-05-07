@@ -1600,7 +1600,9 @@ export function ChatApp({ user, onLogout }) {
                                 
                                 <div className="flex items-center gap-1 shrink-0">
                                     <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
-                                    
+                                    <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5 text-[#54656f] text-[19px]" title="Task Analytics">
+    <i className="fa-solid fa-chart-pie"></i>
+</button>
                                     <div className="relative">
                                         <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px] relative`}>
                                             <i className="fa-solid fa-bell"></i>
