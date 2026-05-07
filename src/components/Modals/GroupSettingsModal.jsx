@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 export default function GroupSettingsModal({
   setActiveModal,
@@ -8,34 +7,23 @@ export default function GroupSettingsModal({
   user,
   currentUserData,
   isVipAdmin,
-  handleUpdateGroupMembers,
-  onGroupUpdate,            // new prop – immediate local updater
+  onGroupUpdate,
 }) {
   const [editName, setEditName] = useState(activeGroup.name);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const groupPicInputRef = useRef(null);
-  
+
   const isAdmin = activeGroup?.admins?.includes(user.email) || currentUserData?.isAdmin || isVipAdmin;
 
-  // Sync edit name when activeGroup changes (e.g., after saving)
+  // keep editName in sync if activeGroup changes externally
   useEffect(() => {
     setEditName(activeGroup.name);
   }, [activeGroup.name]);
 
-  const handleSaveName = async () => {
-    if (editName.trim() && editName !== activeGroup.name) {
-      await onGroupUpdate({ name: editName.trim() });
-    }
-  };
-
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
-      // immediately upload via parent handler (similar to group creation)
-      onGroupUpdate({ profilePicFile: file });
-    }
+    if (!file || !isAdmin) return;
+    onGroupUpdate({ profilePicFile: file });
   };
 
   const handleMemberToggle = (email, checked) => {
@@ -43,8 +31,16 @@ export default function GroupSettingsModal({
     const newMembers = checked
       ? [...activeGroup.members, email]
       : activeGroup.members.filter(m => m !== email);
+    // Keep admins only if still in members
     const newAdmins = activeGroup.admins.filter(a => newMembers.includes(a));
     onGroupUpdate({ members: newMembers, admins: newAdmins });
+  };
+
+  const handleSaveName = () => {
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== activeGroup.name) {
+      onGroupUpdate({ name: trimmed });
+    }
   };
 
   return (
@@ -77,10 +73,15 @@ export default function GroupSettingsModal({
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  onBlur={handleSaveName}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); }}
                   className="text-xl font-bold text-slate-800 outline-none border-b border-slate-300 focus:border-[#008069] bg-transparent w-full"
                 />
+                <button
+                  onClick={handleSaveName}
+                  className="text-xs bg-[#008069] text-white px-3 py-1 rounded-lg font-semibold shadow-sm hover:bg-[#006e5a] transition-colors"
+                >
+                  Save
+                </button>
               </div>
             ) : (
               <div className="text-xl font-bold text-slate-800 truncate">{activeGroup.name}</div>
