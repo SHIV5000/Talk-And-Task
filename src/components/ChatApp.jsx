@@ -29,524 +29,6 @@ const toSentenceCase = (str) => {
 
 const formatMessageText = (text) => {
     if (!text) return '';
-    // Replace markdown-like syntax with HTML
-    const html = text
-        .replace(/\*(.*?)\*/g, '<strong>$1</strong>')   // *bold*
-        .replace(/_(.*?)_/g, '<em>$1</em>')             // _italic_
-        .replace(/~(.*?)~/g, '<del>$1</del>')           // ~strikethrough~
-        .replace(/\n/g, '<br/>');                      // preserve newlines
-    return html;
-};
-
-// Component 4.1: MemoizedAvatar
-const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", isGroup = false, extraClasses = "" }) => {
-    const cachedUrl = useMemo(() => {
-        if (!url) return null;
-        try {
-            const existing = localStorage.getItem(`avatar_${uid}`);
-            if (existing === url) return url;
-            localStorage.setItem(`avatar_${uid}`, url);
-        } catch (e) {}
-        return url;
-    }, [uid, url]);
-
-    if (cachedUrl) return <img src={cachedUrl} loading="lazy" className={`${sizeClass} rounded-full object-cover shadow-sm ${extraClasses}`} alt={name} />;
-    return (
-        <div className={`${sizeClass} rounded-full ${isGroup ? 'bg-rose-50 text-[#800020] border border-rose-100' : 'bg-[#dfe5e7] text-[#54656f]'} flex items-center justify-center font-bold text-sm shadow-sm ${extraClasses}`}>
-            {isGroup ? <i className="fa-solid fa-users"></i> : (name || '').substring(0,2).toUpperCase()}
-        </div>
-    );
-});
-
-// Component 4.2: ErrorBoundary
-class ErrorBoundary extends React.Component {
-    constructor(props) { super(props); this.state = { hasError: false, error: null, errorInfo: null }; }
-    static getDerivedStateFromError(error) { return { hasError: true }; }
-    componentDidCatch(error, errorInfo) { this.setState({ error, errorInfo }); }
-    render() {
-        if (this.state.hasError) {
-            return (
-                <div className="p-8 bg-red-50 text-red-800 h-screen w-full flex flex-col items-center justify-center overflow-auto z-50 absolute inset-0">
-                    <h1 className="text-2xl font-bold mb-4">React Compilation Error Detected</h1>
-                    <pre className="text-sm bg-white p-4 rounded-xl border border-red-200 shadow-sm max-w-2xl w-full">{this.state.error && this.state.error.toString()}</pre>
-                    <button className="mt-6 bg-red-600 text-white px-8 py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(220,38,38,0.3)] hover:scale-105 transition-transform" onClick={() => window.location.reload()}>Reload Application</button>
-                </div>
-            );
-        }
-        return this.props.children;
-    }
-}
-
-const EMOJI_LIST = ['😀','😂','🤣','😍','🥰','😘','😜','🤪','😎','🤩','😇','🙂','😊','🥳','😡','🤬','💀','👻','👍','👎','❤️','🔥','⭐','✨','🎉','💯','✅','❌','🤔','🙏','💪','🤝','👋','🙌','🤲','🫶','👀','🗣️','💬','📎','📌','🗑️','✏️','📷','🎵','🌈','🍕'];
-
-export function ChatApp({ user, onLogout }) {
-    // --- 5.1 View & Modal States ---
-    const [isVipAdmin, setIsVipAdmin] = useState(false);
-    const [activeModal, setActiveModal] = useState(null);
-    const [showRightSidebar, setShowRightSidebar] = useState(false);
-    const [viewMode, setViewMode] = useState("chat");
-    const [showFilterMenu, setShowFilterMenu] = useState(false);
-    const [showNotifications, setShowNotifications] = useState(false);
-    const [isAtBottom, setIsAtBottom] = useState(true);
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
-
-    // --- 5.2 Chat Interaction States ---
-    const [inputText, setInputText] = useState("");
-    const [searchQuery, setSearchQuery] = useState("");
-    const [sidebarSearch, setSidebarSearch] = useState("");
-    const [chatFilter, setChatFilter] = useState("all");
-    const [selectedMessage, setSelectedMessage] = useState(null);
-    const [replyingTo, setReplyingTo] = useState(null);
-    const [editingMessageId, setEditingMessageId] = useState(null);
-    const [editMessageText, setEditMessageText] = useState("");
-
-    // --- 5.3 Task specific states ---
-    const [taskAssignees, setTaskAssignees] = useState([]);
-    const [taskDeadline, setTaskDeadline] = useState("");
-    const [delegateAssignees, setDelegateAssignees] = useState([]);
-    const [showDelegateDropdown, setShowDelegateDropdown] = useState(false);
-    const [trailComment, setTrailComment] = useState("");
-    const [reminderDateTime, setReminderDateTime] = useState("");
-    const [isEditingTaskTitle, setIsEditingTaskTitle] = useState(false);
-    const [newTaskTitle, setNewTaskTitle] = useState("");
-
-    // --- 5.4 Data Stream Arrays (Firestore Sync) ---
-    const [messages, setMessages] = useState([]);
-    const [dbUsers, setDbUsers] = useState([]);
-    const [groups, setGroups] = useState([]);
-    const [activeGroup, setActiveGroup] = useState(null); 
-    const [currentUserData, setCurrentUserData] = useState(null);
-    const [typingStatus, setTypingStatus] = useState([]);
-    const [activeReminders, setActiveReminders] = useState([]);
-    const [genericNotifications, setGenericNotifications] = useState([]);
-    const [allAdminReminders, setAllAdminReminders] = useState([]);
-    const [immutableAuditLogs, setImmutableAuditLogs] = useState([]);
-
-    // --- 5.5 Admin/Form Management States ---
-    const [adminForm, setAdminForm] = useState({ uid: '', name: '', email: '', password: '', isAdmin: false, canCreateGroups: false });
-    const [profileForm, setProfileForm] = useState({ name: "", fontSize: "text-[14.2px]", fontFamily: "font-sans" });
-    const [groupForm, setGroupForm] = useState({ name: "", members: [], profilePicUrl: null });
-    const [editingGroup, setEditingGroup] = useState(null);
-    const [adminFilterUser, setAdminFilterUser] = useState("");
-    const [adminFilterDate, setAdminFilterDate] = useState("");
-    const [adminFilterType, setAdminFilterType] = useState("");
-    const [adminFilterGroup, setAdminFilterGroup] = useState("");
-
-    // --- 5.6 File Upload Progress ---
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [isUploading, setIsUploading] = useState(false);
-    const [trailFileUploading, setTrailFileUploading] = useState(false);
-    const [profileUploadProgress, setProfileUploadProgress] = useState(0);
-    const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
-
-    // --- 5.7 DOM Element References ---
-    const messagesEndRef = useRef(null);
-    const chatContainerRef = useRef(null);
-    const chatInputRef = useRef(null);
-    const fileInputRef = useRef(null);
-    const trailFileInputRef = useRef(null);
-    const profilePicInputRef = useRef(null);
-    const groupPicInputRef = useRef(null);
-    const emojiPickerRef = useRef(null);
-    const prevMessagesCountRef = useRef(0);
-    const lastTypingTime = useRef(0);
-    const highlightTimerRef = useRef(null);
-    const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
-
-    const loaderTips = [
-        "Tip: Type '@' to instantly mention your peers or entire departments.",
-        "Tip: Convert any message into an official trackable Task using the context menu.",
-        "Tip: Your session will automatically secure and log out after 5 minutes of inactivity.",
-        "Tip: Admins can download Immutable Audit Logs in PDF format from the Dashboard.",
-        "Tip: Pressing 'Enter' instantly submits your Task Updates."
-    ];
-    const [currentTip, setCurrentTip] = useState(loaderTips[0]);
-
-    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-    const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-    const [highlightedMsgId, setHighlightedMsgId] = useState(null);
-
-    const [toolPreferences, setToolPreferences] = useState({
-        reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
-    });
-
-    // F1: Scheduled Messages
-    const [scheduledMessages, setScheduledMessages] = useState([]);
-    const [scheduleDateTime, setScheduleDateTime] = useState("");
-    const [showScheduleInput, setShowScheduleInput] = useState(false);
-    const [pendingScheduledText, setPendingScheduledText] = useState("");
-
-    // F2: Task Analytics
-    const [analyticsView, setAnalyticsView] = useState("overview"); // overview | staff | overdue
-
-    // F3: Recurring Task Templates
-    const [taskTemplates, setTaskTemplates] = useState([]);
-    const [templateForm, setTemplateForm] = useState({ title: "", assignees: [], deadlineDays: 1, groupId: "", recurring: "once", category: "General" });
-    const [editingTemplate, setEditingTemplate] = useState(null);
-
-    // F4: Offline Draft Queue
-    const [offlineDrafts, setOfflineDrafts] = useState([]);
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-    // F5: Inactivity Warning
-    const [showInactivityWarning, setShowInactivityWarning] = useState(false);
-    const [inactivityCountdown, setInactivityCountdown] = useState(60);
-    const inactivityTimerRef = useRef(null);
-    const inactivityCountdownRef = useRef(null);
-    const lastActivityRef = useRef(Date.now());
-
-    // F6: Scheduled Message (per-message send scheduling)
-    const [msgScheduleDateTime, setMsgScheduleDateTime] = useState("");
-
-    useEffect(() => {
-        let tipIndex = 0;
-        const tipInterval = setInterval(() => {
-            tipIndex = (tipIndex + 1) % loaderTips.length;
-            setCurrentTip(loaderTips[tipIndex]);
-        }, 1500);
-        const timer = setTimeout(() => {
-            clearInterval(tipInterval);
-            setIsWorkspaceLoading(false);
-            setIsLoaded(true);
-        }, 4000);
-        return () => { clearTimeout(timer); clearInterval(tipInterval); };
-    }, []);
-
-    useEffect(() => {
-        const primeAudio = () => {
-            if (!window.audioPrimed) {
-                const audioEl = document.getElementById('app-sound');
-                const taskAudioEl = document.getElementById('task-sound');
-                if (audioEl) { audioEl.volume = 0; audioEl.play().then(() => { audioEl.pause(); audioEl.currentTime = 0; audioEl.volume = 1.0; window.audioPrimed = true; }).catch(()=>{}); }
-                if (taskAudioEl) { taskAudioEl.volume = 0; taskAudioEl.play().then(() => { taskAudioEl.pause(); taskAudioEl.currentTime = 0; taskAudioEl.volume = 1.0; }).catch(()=>{}); }
-            }
-        };
-        window.addEventListener('click', primeAudio, { once: true });
-        window.addEventListener('touchstart', primeAudio, { once: true });
-        return () => { window.removeEventListener('click', primeAudio); window.removeEventListener('touchstart', primeAudio); };
-    }, []);
-
-    useEffect(() => {
-        let timeoutId;
-        const INACTIVITY_LIMIT = 5 * 60 * 1000;
-        const resetTimer = () => { clearTimeout(timeoutId); timeoutId = setTimeout(() => { onLogout(); }, INACTIVITY_LIMIT); };
-        window.addEventListener('mousemove', resetTimer);
-        window.addEventListener('keydown', resetTimer);
-        window.addEventListener('click', resetTimer);
-        window.addEventListener('touchstart', resetTimer);
-        window.addEventListener('scroll', resetTimer, true);
-        resetTimer();
-        return () => {
-            clearTimeout(timeoutId);
-            window.removeEventListener('mousemove', resetTimer);
-            window.removeEventListener('keydown', resetTimer);
-            window.removeEventListener('click', resetTimer);
-            window.removeEventListener('touchstart', resetTimer);
-            window.removeEventListener('scroll', resetTimer, true);
-        };
-    }, [onLogout]);
-
-    const verifyAdminStatus = useCallback(async () => {
-        if (!auth.currentUser) return false;
-        try {
-            const idTokenResult = await auth.currentUser.getIdTokenResult();
-            return !!idTokenResult.claims.admin;
-        } catch (e) { return false; }
-    }, []);
-    useEffect(() => { verifyAdminStatus().then(res => setIsVipAdmin(res)); }, [verifyAdminStatus]);
-
-    // Database Listener: Reminders, Notifications, Admin Logs
-    useEffect(() => {
-        const qPersonal = query(collection(db, "reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false));
-        const unsubPersonal = onSnapshot(qPersonal, (snapshot) => setActiveReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-        const qAlerts = query(collection(db, "notifications"), where("userId", "==", user.uid), where("isRead", "==", false));
-        const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
-            const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
-            setGenericNotifications(sorted);
-        });
-
-        let unsubAdmin = () => {}; let unsubAudit = () => {};
-        if (currentUserData?.isAdmin || isVipAdmin) {
-            const qAdmin = query(collection(db, "reminders"), orderBy("remindAt", "desc"));
-            unsubAdmin = onSnapshot(qAdmin, (snapshot) => setAllAdminReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
-            const qAudit = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"));
-            unsubAudit = onSnapshot(qAudit, (snapshot) => {
-                setImmutableAuditLogs(snapshot.docs.map(d => {
-                    const data = d.data();
-                    return { id: d.id, ...data, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '' };
-                }));
-            });
-        }
-        return () => { unsubPersonal(); unsubAlerts(); unsubAdmin(); unsubAudit(); };
-    }, [user.uid, currentUserData?.isAdmin, isVipAdmin]);
-
-    // Database Listener: Users & Departments
-    useEffect(() => {
-        const heartbeatInterval = setInterval(() => { updateDoc(doc(db, "users", user.uid), { lastActive: serverTimestamp() }).catch(() => {}); }, 60000);
-        const unsubCurrent = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
-            if (docSnapshot.exists()) {
-                const data = docSnapshot.data(); setCurrentUserData(data);
-                if(!profileForm.name && data.name) setProfileForm({ name: (data.name || "").split('@')[0], fontSize: data.fontSize || "text-[14.2px]", fontFamily: data.fontFamily || "font-sans" });
-                if (data.toolPreferences) setToolPreferences(prev => ({ ...prev, ...data.toolPreferences }));
-            }
-        });
-        const unsubUsers = onSnapshot(query(collection(db, "users"), orderBy("email", "asc")), (snapshot) => setDbUsers(snapshot.docs.map(document => document.data())));
-        const unsubGroups = onSnapshot(collection(db, "groups"), (snapshot) => {
-            const fetchedGroups = snapshot.docs.map(document => ({ id: document.id, ...document.data() }));
-            setGroups(fetchedGroups);
-        });
-        return () => { clearInterval(heartbeatInterval); unsubCurrent(); unsubUsers(); unsubGroups(); };
-    }, [user, currentUserData?.isAdmin, isVipAdmin]);
-
-    // Sound Execution Functions
-    const playAlertSound = useCallback(() => {
-        const audioUrls = {
-            classic: "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3",
-            soft: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3",
-            subtle: "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3"
-        };
-        const audioEl = document.getElementById('app-sound');
-        if (audioEl && window.audioPrimed) {
-            audioEl.src = audioUrls[toolPreferences.soundProfile || 'classic'] || audioUrls.classic;
-            audioEl.currentTime = 0; audioEl.volume = 1.0;
-            audioEl.play().catch(e => console.warn("Browser blocked audio:", e));
-        }
-    }, [toolPreferences.soundProfile]);
-
-    const playTaskSound = useCallback(() => {
-        try {
-            const audio = new Audio("https://cdn.pixabay.com/download/audio/2021/08/09/audio_9ed1023bc2.mp3?filename=correct-2-46134.mp3");
-            audio.volume = 0.8;
-            audio.play().catch(()=>{});
-        } catch(e) {}
-    }, []);
-
-    // Database Listener: Real-time Messages Sync
-    useEffect(() => {
-        const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const loadedMessages = snapshot.docs.map(docSnapshot => {
-                const data = docSnapshot.data();
-                return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
-            });
-            setMessages(loadedMessages);
-            if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
-                const newMsg = loadedMessages[loadedMessages.length - 1];
-                if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
-                    playAlertSound();
-                    if (document.hidden && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-                        navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `New Message from ${(newMsg.sender || "").split('@')[0]}`, body: newMsg.text || 'Sent an attachment' });
-                    }
-                }
-            }
-            prevMessagesCountRef.current = loadedMessages.length;
-            
-            if(!pendingScrollTarget) {
-                setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 150);
-            }
-        });
-
-        const unsubTyping = onSnapshot(collection(db, "typing"), (snapshot) => {
-            const typingData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            const currentTyping = typingData.filter(t => t.groupId === activeGroup?.id && t.name && Date.now() - t.timestamp < 3000);
-            setTypingStatus(currentTyping);
-        });
-
-        return () => { unsubscribe(); unsubTyping(); };
-    }, [user.uid, activeGroup?.id, playAlertSound, isWorkspaceLoading, pendingScrollTarget]);
-
-    // Database Updater: Seen status marking
-    useEffect(() => {
-        if (!activeGroup?.id || !user.email) return;
-        const unseenMsgs = messages.filter(m => m.groupId === activeGroup.id && !m.isMine && !(m.seenBy || []).includes(user.email));
-        if (unseenMsgs.length === 0) return;
-        const batchUpdate = async () => {
-            for (const msg of unseenMsgs) {
-                try {
-                    const updatedSeenBy = [...(msg.seenBy || []), user.email];
-                    await updateDoc(doc(db, "messages", msg.id), { seenBy: updatedSeenBy, deliveredTo: [...new Set([...(msg.deliveredTo || []), user.email])] });
-                } catch (e) {}
-            }
-        };
-        batchUpdate();
-    }, [activeGroup?.id, messages, user.email]);
-
-    // UI Listeners: Click outside to close emoji picker
-    useEffect(() => {
-        const handleClickOutside = (e) => { if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) { setEmojiPickerOpen(false); } };
-        if (emojiPickerOpen) { document.addEventListener('mousedown', handleClickOutside); document.addEventListener('touchstart', handleClickOutside); }
-        return () => { document.removeEventListener('mousedown', handleClickOutside); document.removeEventListener('touchstart', handleClickOutside); };
-    }, [emojiPickerOpen]);
-
-    useEffect(() => { return () => { if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current); }; }, []);
-    
-    // ── F1 + F6: Scheduled Messages Firestore listener + heartbeat sender ──
-    useEffect(() => {
-        if (!user?.email) return;
-        const q = query(collection(db, "scheduled_messages"), where("senderEmail", "==", user.email));
-        const unsub = onSnapshot(q, snap => {
-            setScheduledMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        // heartbeat: every 30s check if any scheduled messages are due
-        const hb = setInterval(async () => {
-            const now = new Date();
-            const dueQ = query(collection(db, "scheduled_messages"), where("senderEmail", "==", user.email), where("status", "==", "pending"));
-            const dueSnap = await getDocs(dueQ);
-            for (const d of dueSnap.docs) {
-                const sm = d.data();
-                if (new Date(sm.scheduledFor) <= now) {
-                    try {
-                        const mentions = [];
-                        (dbUsers || []).forEach(u => { if ((sm.text||"").toLowerCase().includes(`@${(u.name||"").toLowerCase()}`)) mentions.push(u.email); });
-                        const isPrivate = mentions.length > 0 && sm.groupId && !sm.isDM;
-                        if (sm.isTask) {
-                            await addDoc(collection(db, "messages"), {
-                                text: sm.text, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(),
-                                isTask: true, isPrivateMention: false, allowedUsers: [], seenBy: [user.email], deliveredTo: [user.email],
-                                isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null,
-                                groupId: sm.groupId, reactions: {},
-                                taskData: { deadline: sm.taskDeadline, assignees: sm.taskAssignees || [], status: "Pending", isArchived: false, dismissedBy: [],
-                                    trail: [{ action: "Task Created (Scheduled)", by: user.email, time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + ', ' + new Date().toLocaleDateString(), to: (sm.taskAssignees||[]).map(a=>(a||"").split('@')[0]).join(', ') }] }
-                            });
-                        } else {
-                            await addDoc(collection(db, "messages"), {
-                                text: sm.text, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(),
-                                isTask: false, hasReminder: false, isPrivateMention: isPrivate, allowedUsers: isPrivate ? [...new Set([user.email, ...mentions])] : [],
-                                seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null,
-                                groupId: sm.groupId, reactions: {}
-                            });
-                        }
-                        await updateDoc(doc(db, "scheduled_messages", d.id), { status: "sent" });
-                        logImmutableAction("SCHEDULED_SENT", `Scheduled ${sm.isTask ? 'task' : 'message'} delivered: "${sm.text}"`, `Group ID: ${sm.groupId}`);
-                        playTaskSound();
-                    } catch(e) {}
-                }
-            }
-        }, 30000);
-        return () => { unsub(); clearInterval(hb); };
-    }, [user?.email, user?.uid, dbUsers]);
-
-    // ── F3: Task Templates Firestore listener ──
-    useEffect(() => {
-        if (!user?.uid) return;
-        const unsub = onSnapshot(collection(db, "task_templates"), snap => {
-            setTaskTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        return () => unsub();
-    }, [user?.uid]);
-
-    // ── F4: Offline Draft Queue (IndexedDB) ──
-    useEffect(() => {
-        const goOnline = () => {
-            setIsOnline(true);
-            flushOfflineDrafts();
-        };
-        const goOffline = () => setIsOnline(false);
-        window.addEventListener('online', goOnline);
-        window.addEventListener('offline', goOffline);
-        loadOfflineDrafts();
-        return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
-    }, []);
-
-    // ── F5: Inactivity Warning (warn at 4 min, logout at 5 min) ──
-    useEffect(() => {
-        const IDLE_WARN = 4 * 60 * 1000;
-        const IDLE_LOGOUT = 60; // seconds after warning
-        const resetInactivity = () => {
-            lastActivityRef.current = Date.now();
-            if (showInactivityWarning) return;
-            clearTimeout(inactivityTimerRef.current);
-            inactivityTimerRef.current = setTimeout(() => {
-                setShowInactivityWarning(true);
-                setInactivityCountdown(IDLE_LOGOUT);
-                let cnt = IDLE_LOGOUT;
-                clearInterval(inactivityCountdownRef.current);
-                inactivityCountdownRef.current = setInterval(() => {
-                    cnt -= 1;
-                    setInactivityCountdown(cnt);
-                    if (cnt <= 0) {
-                        clearInterval(inactivityCountdownRef.current);
-                        signOut(auth);
-                    }
-                }, 1000);
-            }, IDLE_WARN);
-        };
-        const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
-        events.forEach(ev => window.addEventListener(ev, resetInactivity));
-        resetInactivity();
-        return () => {
-            events.forEach(ev => window.removeEventListener(ev, resetInactivity));
-            clearTimeout(inactivityTimerRef.current);
-            clearInterval(inactivityCountdownRef.current);
-        };
-    }, [showInactivityWarning]);
-    
-    // Animation Helper: Triggers message highlight pulse
-    const triggerHighlight = useCallback((msgId) => {
-        setHighlightedMsgId(msgId);
-        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 3100);
-    }, []);
-
-    // Handle Smart Scrolling for Notifications (DOM Polling)
-    useEffect(() => {
-        if (pendingScrollTarget && activeGroup) {
-            const el = document.getElementById(`msg-${pendingScrollTarget}`);
-            if (el) {
-                setTimeout(() => {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    triggerHighlight(pendingScrollTarget);
-                    setPendingScrollTarget(null);
-                }, 200);
-            }
-        The requested enhancements have been fully integrated into the enterprise coordination portal to ensure a robust and accountable workspace. The modifications introduce essential tracking, filtering, and rich-formatting capabilities tailored for our staff.
-
-### **System Upgrades Overview**
-
-| **Enhancement Feature** | **Integration Status** | **Implementation Details** |
-| :--- | :--- | :--- |
-| **Task Hub Sidebar** | **✅ Integrated** | Restored the right sidebar interface for tracking both assigned and delegated tasks efficiently. |
-| **Filter Menu** | **✅ Integrated** | Added the dropdown menu to filter the active view by pending tasks, saved messages, and specific dates. |
-| **Admin Controls** | **✅ Verified** | Confirmed `handleToggleApprove`, `handleEditUserSubmit`, and archive triggers are perfectly mapped to the Admin Console UI. |
-| **Schedule Dispatch** | **✅ Integrated** | Attached the UI modal for selecting precise future dates and dispatching scheduled alerts/messages. |
-| **Rich Text Formatting** | **✅ Integrated** | Implemented `formatMessageText` for markdown rendering and added a one-click formatting action toolbar above the input box. |
-
----
-
-### **Updated Core Application Code (`ChatApp.jsx`)**
-```jsx
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, setPersistence, inMemoryPersistence } from 'firebase/auth';
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, setDoc, getDocs, where, deleteDoc } from 'firebase/firestore';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-
-// Initialize Firebase directly from your original config
-const firebaseConfig = {
-    apiKey: "AIzaSyAoOsog2NP6Pf8YNSxn0rRYK4MSLEVNNZc",
-    authDomain: "niltask.firebaseapp.com",
-    projectId: "niltask",
-    storageBucket: "niltask.firebasestorage.app",
-    messagingSenderId: "868641827920",
-    appId: "1:868641827920:web:70d9db79a361a76468f555"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-const toSentenceCase = (str) => {
-    if (!str) return "";
-    return str.toLowerCase().replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
-};
-
-const formatMessageText = (text) => {
-    if (!text) return '';
     // Basic sanitization to prevent XSS before parsing formatting
     const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return safeText
@@ -696,7 +178,7 @@ export function ChatApp({ user, onLogout }) {
     const [pendingScheduledText, setPendingScheduledText] = useState("");
 
     // F2: Task Analytics
-    const [analyticsView, setAnalyticsView] = useState("overview"); // overview | staff | overdue
+    const [analyticsView, setAnalyticsView] = useState("overview");
 
     // F3: Recurring Task Templates
     const [taskTemplates, setTaskTemplates] = useState([]);
@@ -821,9 +303,9 @@ export function ChatApp({ user, onLogout }) {
     // Sound Execution Functions
     const playAlertSound = useCallback(() => {
         const audioUrls = {
-            classic: "[https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3](https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3)",
-            soft: "[https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3](https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3)",
-            subtle: "[https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3](https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3)"
+            classic: "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3",
+            soft: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3",
+            subtle: "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3"
         };
         const audioEl = document.getElementById('app-sound');
         if (audioEl && window.audioPrimed) {
@@ -835,7 +317,7 @@ export function ChatApp({ user, onLogout }) {
 
     const playTaskSound = useCallback(() => {
         try {
-            const audio = new Audio("[https://cdn.pixabay.com/download/audio/2021/08/09/audio_9ed1023bc2.mp3?filename=correct-2-46134.mp3](https://cdn.pixabay.com/download/audio/2021/08/09/audio_9ed1023bc2.mp3?filename=correct-2-46134.mp3)");
+            const audio = new Audio("https://cdn.pixabay.com/download/audio/2021/08/09/audio_9ed1023bc2.mp3?filename=correct-2-46134.mp3");
             audio.volume = 0.8;
             audio.play().catch(()=>{});
         } catch(e) {}
@@ -1839,33 +1321,32 @@ export function ChatApp({ user, onLogout }) {
     return (
         <div className="flex h-screen w-full bg-[#f3f4f6] text-[#111b21] overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100">
             
-            <audio id="app-sound" src="[https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3](https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3)" preload="auto" className="hidden"></audio>
+            <audio id="app-sound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3" preload="auto" className="hidden"></audio>
 
-
-{viewMode === "admin" ? (
-  <AdminPanel
-    setViewMode={setViewMode}
-    setActiveModal={setActiveModal}
-    dbUsers={dbUsers}
-    groups={groups}
-    filteredAuditLogs={filteredAuditLogs}
-    adminFilterUser={adminFilterUser}
-    setAdminFilterUser={setAdminFilterUser}
-    adminFilterDate={adminFilterDate}
-    setAdminFilterDate={setAdminFilterDate}
-    adminFilterType={adminFilterType}
-    setAdminFilterType={setAdminFilterType}
-    adminFilterGroup={adminFilterGroup}
-    setAdminFilterGroup={setAdminFilterGroup}
-    handleDownloadAudit={handleDownloadAudit}
-    handleToggleApprove={handleToggleApprove}
-    setAdminForm={setAdminForm}
-    setGroupForm={setGroupForm}
-    setEditingGroup={setEditingGroup}
-    handleAdminArchiveGroup={handleAdminArchiveGroup}
-    handleAdminRecoverGroup={handleAdminRecoverGroup}
-  />
-) : (
+            {viewMode === "admin" ? (
+              <AdminPanel
+                setViewMode={setViewMode}
+                setActiveModal={setActiveModal}
+                dbUsers={dbUsers}
+                groups={groups}
+                filteredAuditLogs={filteredAuditLogs}
+                adminFilterUser={adminFilterUser}
+                setAdminFilterUser={setAdminFilterUser}
+                adminFilterDate={adminFilterDate}
+                setAdminFilterDate={setAdminFilterDate}
+                adminFilterType={adminFilterType}
+                setAdminFilterType={setAdminFilterType}
+                adminFilterGroup={adminFilterGroup}
+                setAdminFilterGroup={setAdminFilterGroup}
+                handleDownloadAudit={handleDownloadAudit}
+                handleToggleApprove={handleToggleApprove}
+                setAdminForm={setAdminForm}
+                setGroupForm={setGroupForm}
+                setEditingGroup={setEditingGroup}
+                handleAdminArchiveGroup={handleAdminArchiveGroup}
+                handleAdminRecoverGroup={handleAdminRecoverGroup}
+              />
+            ) : (
             
                 <div className="flex h-full w-full relative">
                     {mobileSidebarOpen && <div className="mobile-sidebar-overlay md:hidden" onClick={() => setMobileSidebarOpen(false)}></div>}
@@ -1874,7 +1355,7 @@ export function ChatApp({ user, onLogout }) {
                     <div className={`hidden md:flex w-[30%] min-w-[300px] max-w-[400px] bg-white border-r border-slate-200 flex-col shrink-0 z-20 shadow-[2px_0_15px_rgba(0,0,0,0.03)] ${mobileSidebarOpen ? 'mobile-sidebar-panel open flex' : 'mobile-sidebar-panel'}`}>
                         <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 border-b border-slate-200/60 group relative safe-top">
                             <div className="flex items-center gap-3">
-                                <MemoizedAvatar uid="{user.uid}" url="{currentUserData?.profilePicUrl}" name="{currentUserData?.name" || user.email.split('@')[0]} sizeClass="w-10 h-10 cursor-pointer hover:opacity-80 transition-opacity"/>
+                                <MemoizedAvatar uid={user.uid} url={currentUserData?.profilePicUrl} name={currentUserData?.name || user.email.split('@')[0]} sizeClass="w-10 h-10 cursor-pointer hover:opacity-80 transition-opacity" />
                                 <span className="font-semibold text-[14px] text-[#111b21] truncate max-w-[140px] hidden sm:block">{currentUserData?.name || user.email.split('@')[0]}</span>
                             </div>
                             <div className="flex items-center gap-3">
@@ -1900,7 +1381,7 @@ export function ChatApp({ user, onLogout }) {
                                 const hasUnread = messages.some(m => m.groupId === g.id && !m.isMine && !(m.seenBy || []).includes(user.email));
                                 return (
                                     <div key={g.id} onClick={() => { setActiveGroup(g); setShowRightSidebar(false); setMobileSidebarOpen(false); }} className={`flex items-center h-[72px] cursor-pointer transition-colors relative ${activeGroup?.id === g.id ? 'bg-[#f0f2f5]' : 'hover:bg-[#f5f6f6]'} pl-3 pr-4`}>
-                                        <MemoizedAvatar uid="{g.id}" url="{g.profilePicUrl}" name="{g.name}" sizeClass="w-[49px] h-[49px]" isGroup="{true}" extraClasses="mr-3 shrink-0"/>
+                                        <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-[49px] h-[49px]" isGroup={true} extraClasses="mr-3 shrink-0" />
                                         <div className="flex-1 overflow-hidden border-b border-slate-100 h-full flex flex-col justify-center pr-2">
                                             <div className="flex justify-between items-center mb-[2px]">
                                                 <span className={`font-bold text-[16px] truncate text-[#800020]`}>{g.name}</span>
@@ -1921,7 +1402,7 @@ export function ChatApp({ user, onLogout }) {
                                 return (
                                     <div key={u.uid} onClick={() => { setActiveGroup({id: dmIdStr, name: u.name, isDM: true, members: [user.email, u.email]}); setShowRightSidebar(false); setMobileSidebarOpen(false); }} className={`flex items-center h-[72px] cursor-pointer transition-colors relative ${activeGroup?.id === dmIdStr ? 'bg-[#f0f2f5]' : 'hover:bg-[#f5f6f6]'} pl-3 pr-4`}>
                                         <div className="relative mr-3 shrink-0">
-                                            <MemoizedAvatar uid="{u.uid}" url="{u.profilePicUrl}" name="{u.name}" sizeClass="w-[49px] h-[49px]"/>
+                                            <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-[49px] h-[49px]" />
                                             {isOnline && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#25d366] border-[3px] border-white rounded-full online-dot"></div>}
                                         </div>
                                         <div className="flex-1 overflow-hidden border-b border-slate-100 h-full flex flex-col justify-center pr-2">
@@ -2016,7 +1497,7 @@ export function ChatApp({ user, onLogout }) {
                                 <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-black/5 flex items-center justify-center text-[#54656f] mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
                                 
                                 <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) setActiveModal('group_settings'); }}>
-                                    {activeGroup.isDM ? <MemoizedAvatar uid="{activeGroup.id}" url="{null}" name="{activeGroup.name}" sizeClass="w-10 h-10"/> : activeGroup.profilePicUrl ? <MemoizedAvatar uid="{activeGroup.id}" url="{activeGroup.profilePicUrl}" name="{activeGroup.name}" sizeClass="w-10 h-10"/> : <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-[#800020] shadow-sm"><i className="fa-solid fa-users"></i></div>}
+                                    {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-[#800020] shadow-sm"><i className="fa-solid fa-users"></i></div>}
                                     <div className="flex flex-col min-w-0 flex-1">
                                         <span className={`text-[16px] font-bold leading-tight truncate ${activeGroup.isDM ? 'text-[#111b21]' : 'text-[#800020]'}`}>{activeGroup.name}</span>
                                         <span className="text-[13px] text-[#54656f] truncate max-w-[150px] lg:max-w-[400px]">
@@ -2105,7 +1586,6 @@ export function ChatApp({ user, onLogout }) {
                                 </div>
                             </div>
 
-                            
                             <div className="md:hidden px-3 py-2 bg-[#f0f2f5] border-b border-slate-200/60">
                                 <div className="bg-white rounded-full flex items-center px-4 py-1.5 shadow-sm border border-slate-200 focus-within:ring-2 focus-within:ring-[#00a884]/30 transition-all">
                                     <i className="fa-solid fa-search text-[14px] text-[#54656f] mr-2"></i>
@@ -2152,7 +1632,7 @@ export function ChatApp({ user, onLogout }) {
                                                     {typingStatus.map(t => {
                                                         const uidPart = t.id.split('_')[1] || t.id;
                                                         const typist = dbUsers.find(u => u.uid === uidPart || u.name === t.name) || {};
-                                                        return <MemoizedAvatar key="{t.id}" uid="{uidPart}" url="{typist.profilePicUrl}" name="{t.name}" sizeClass="w-7 h-7 typing-avatar-pulse border-2 border-white relative z-10"/>
+                                                        return <MemoizedAvatar key={t.id} uid={uidPart} url={typist.profilePicUrl} name={t.name} sizeClass="w-7 h-7 typing-avatar-pulse border-2 border-white relative z-10" />
                                                     })}
                                                 </div>
                                                 <span className="typing-gradient-text text-[13px] tracking-wide">
@@ -2189,25 +1669,25 @@ export function ChatApp({ user, onLogout }) {
                                     <div className="px-4 py-1 text-[12px] font-bold text-[#00a884] tracking-wide mb-1">Users</div>
                                     {dbUsers.filter(u => (u.name||"").toLowerCase().includes(inputText.split(/\s+/).pop().substring(1).toLowerCase())).map(u => (
                                         <div key={u.uid} onMouseDown={(e) => e.preventDefault()} onClick={() => { const words = inputText.split(/\s+/); words[words.length - 1] = `@${u.name} `; setInputText(words.join(' ')); chatInputRef.current?.focus(); }} className="px-4 py-2 hover:bg-[#f5f6f6] cursor-pointer text-[14px] flex items-center gap-3 text-[#111b21] transition-colors">
-                                            <MemoizedAvatar uid="{u.uid}" url="{u.profilePicUrl}" name="{u.name}" sizeClass="w-8 h-8"/>
+                                            <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
                                             {u.name}
                                         </div>
                                     ))}
                                     <div className="px-4 py-1 text-[12px] font-bold text-[#00a884] tracking-wide border-t border-slate-100 my-1 pt-2">Teams</div>
                                     {groups.filter(g => (g.name||"").toLowerCase().includes(inputText.split(/\s+/).pop().substring(1).toLowerCase()) && !g.isArchived).map(g => (
                                         <div key={g.id} onMouseDown={(e) => e.preventDefault()} onClick={() => { const words = inputText.split(/\s+/); words[words.length - 1] = `@${g.name.replace(/\s+/g, '')} `; setInputText(words.join(' ')); chatInputRef.current?.focus(); }} className="px-4 py-2 hover:bg-[#f5f6f6] cursor-pointer text-[14px] flex items-center gap-3 text-[#111b21] transition-colors">
-                                            <MemoizedAvatar uid="{g.id}" url="{g.profilePicUrl}" name="{g.name}" sizeClass="w-8 h-8" isGroup="{true}"/>
+                                            <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-8 h-8" isGroup={true} />
                                             {g.name}
                                         </div>
                                     ))}
                                 </div>
                             )}
 
-                            
+                            {/* Message Input Area with Emoji Picker & Toolbar */}
                             <div className="bg-[#f0f2f5] px-3 md:px-4 py-3 shrink-0 z-10 flex items-end gap-2 safe-bottom relative w-full">
                                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
                                 <button className="w-[42px] h-[42px] flex items-center justify-center text-[#54656f] hover:text-[#111b21] transition-colors shrink-0 text-[22px]" onClick={() => fileInputRef.current.click()} disabled={isUploading}><i className="fa-solid fa-plus"></i></button>
-                                
+                                {/* Emoji Picker */}
                                 <div className="relative shrink-0" ref={emojiPickerRef}>
                                     <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-[#54656f] hover:text-[#111b21] transition-colors text-[22px]" title="Emoji"><i className="fa-regular fa-face-smile"></i></button>
                                     {emojiPickerOpen && (
@@ -2226,9 +1706,9 @@ export function ChatApp({ user, onLogout }) {
                                     </div>
                                     <textarea ref={chatInputRef} rows={1} placeholder={isOnline ? "Type or Paste a message..." : "⚡ Offline — message will be queued"} className="bg-transparent flex-1 outline-none text-[15px] text-[#111b21] resize-none py-[10px] px-4 w-full" style={{ minHeight: '42px', maxHeight: '120px' }} value={inputText} onPaste={handlePaste} onChange={(e) => { setInputText(e.target.value); handleTypingEvent(); e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendOfflineAware(); } }} />
                                 </div>
-                                
+                                {/* Schedule Send Button */}
                                 <button onClick={() => { if (!inputText.trim()) return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-[#54656f] hover:text-amber-500 transition-colors" title="Schedule this message"><i className="fa-regular fa-clock text-[20px]"></i></button>
-                                
+                                {/* Offline Drafts indicator */}
                                 {offlineDrafts.length > 0 && (
                                     <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-[42px] h-[42px] flex justify-center items-center text-amber-500 hover:text-amber-600 transition-colors" title={`${offlineDrafts.length} offline draft(s)`}>
                                         <i className="fa-solid fa-inbox text-[20px]"></i>
@@ -2244,16 +1724,16 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
+                    {/* RIGHT SIDEBAR - TASKS */}
                     {showRightSidebar && (
                         <div className="absolute right-0 md:relative w-80 h-full bg-[#f8fafc] border-l border-slate-200 flex flex-col shrink-0 z-40 animate-in slide-in-from-right shadow-[rgba(0,0,0,0.08)_-2px_0_15px]">
-                            
+                            {/* Header */}
                             <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 z-10 border-b border-slate-200/60 safe-top">
                                 <div className="font-medium text-[16px] text-[#111b21] flex items-center gap-2"><i className="fa-solid fa-list-check text-[#54656f]"></i> Task Hub</div>
                                 <button onClick={() => setShowRightSidebar(false)} className="w-10 h-10 rounded-full hover:bg-black/5 text-[#54656f] transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-xmark"></i></button>
                             </div>
                             <div className="flex-1 overflow-y-auto flex flex-col p-3 gap-4 bg-white">
-                                
+                                {/* Assigned to Me */}
                                 <div className="rounded-xl overflow-hidden flex flex-col flex-1 min-h-0">
                                     <div className="px-3 py-2 text-[12px] font-bold text-[#00a884] uppercase tracking-wider flex items-center gap-2"><i className="fa-solid fa-inbox"></i> Assigned To Me</div>
                                     <div className="overflow-y-auto flex-1 space-y-1">
@@ -2285,7 +1765,7 @@ export function ChatApp({ user, onLogout }) {
                                         )}
                                     </div>
                                 </div>
-                                
+                                {/* Assigned By Me */}
                                 <div className="rounded-xl overflow-hidden flex flex-col flex-1 min-h-0 border-t border-slate-100 pt-3">
                                     <div className="px-3 py-2 text-[12px] font-bold text-[#00a884] uppercase tracking-wider flex items-center gap-2"><i className="fa-solid fa-paper-plane"></i> Assigned By Me</div>
                                     <div className="overflow-y-auto flex-1 space-y-1">
@@ -2318,12 +1798,12 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
-                    
-                    
-                    
+                    {/* ========================================================================= */}
+                    {/* === SECTION 5.F : MODALS & OVERLAYS                                    === */}
+                    {/* Purpose: Floating windows for Context Menus, Profile, Tasks, etc.      */}
+                    {/* ========================================================================= */}
 
-                    
+                    {/* Beautiful Context Menu Modal */}
                     {activeModal === 'context' && selectedMessage && (
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setActiveModal(null)}>
                             <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl animate-in zoom-in-95 transform-gpu overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -2345,7 +1825,7 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
+                    {/* Schedule Send Modal */}
                     {activeModal === 'schedule_send' && (
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
                             <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu" onClick={e => e.stopPropagation()}>
@@ -2365,7 +1845,7 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
+                    {/* Profile Edit Modal with Tool Preferences */}
                     {activeModal === 'edit_profile' && (
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setActiveModal(null)}>
                             <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-in zoom-in-95 overflow-hidden transform-gpu max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -2383,7 +1863,7 @@ export function ChatApp({ user, onLogout }) {
                                         <label className="text-[11px] text-[#008069] font-bold uppercase tracking-widest absolute -top-2.5 left-3 bg-white px-1">Display Name</label>
                                         <input required type="text" value={profileForm.name} onChange={(e) => setProfileForm({...profileForm, name: e.target.value})} className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[15px] outline-none bg-white focus:border-[#008069] focus:ring-2 focus:ring-[#008069]/20 transition-all font-semibold text-slate-800" />
                                     </div>
-                                    
+                                    {/* Tool Preferences */}
                                     <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
                                         <div className="text-[12px] font-bold text-slate-600 uppercase tracking-wider mb-3">Preferences</div>
                                         <div className="space-y-2">
@@ -2391,7 +1871,7 @@ export function ChatApp({ user, onLogout }) {
                                             
                                             <label className="flex flex-col gap-1 cursor-pointer p-2 mt-1 hover:bg-white rounded-lg transition-colors">
                                                 <span className="text-[12px] font-bold text-slate-600 uppercase tracking-wider"><i className="fa-solid fa-music mr-1 text-[#54656f]"></i> Alert Sound</span>
-                                                <select value={toolPreferences.soundProfile || 'classic'} onChange={e => { setToolPreferences(prev => ({...prev, soundProfile: e.target.value})); setTimeout(()=>{ const audioUrls = { classic: "[https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3](https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3)", soft: "[https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3](https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3)", subtle: "[https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3](https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3)" }; const a = new Audio(audioUrls[e.target.value]); a.play().catch(()=>{}); }, 100); }} className="w-full p-2 border border-slate-200 rounded text-[13px] bg-slate-50 outline-none focus:ring-2 focus:ring-[#008069]/20 text-slate-700">
+                                                <select value={toolPreferences.soundProfile || 'classic'} onChange={e => { setToolPreferences(prev => ({...prev, soundProfile: e.target.value})); setTimeout(()=>{ const audioUrls = { classic: "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3", soft: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3", subtle: "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3" }; const a = new Audio(audioUrls[e.target.value]); a.play().catch(()=>{}); }, 100); }} className="w-full p-2 border border-slate-200 rounded text-[13px] bg-slate-50 outline-none focus:ring-2 focus:ring-[#008069]/20 text-slate-700">
                                                     <option value="classic">Classic Chime</option>
                                                     <option value="soft">Soft Pulse</option>
                                                     <option value="subtle">Subtle Pop</option>
@@ -2411,12 +1891,12 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
+                    {/* Admin Edit User Modal */}
                     {activeModal === 'admin_edit_user' && (
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4"><div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu"><div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4"><h3 className="font-bold text-xl text-slate-800 flex items-center gap-3"><div className="w-10 h-10 bg-teal-50 text-[#008069] rounded-xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-user-pen"></i></div> Edit Staff Role</h3><button onClick={() => setActiveModal(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 flex items-center justify-center"><i className="fa-solid fa-xmark"></i></button></div><form onSubmit={handleEditUserSubmit} className="space-y-4"><input disabled type="email" value={adminForm.email} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm bg-slate-50 text-slate-400 font-medium" /><input required type="text" value={adminForm.name} onChange={(e) => setAdminForm({...adminForm, name: e.target.value})} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#008069]/20 focus:border-[#008069] transition-all font-medium" /><div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4"><label className="flex items-center gap-3 text-[13px] font-bold text-slate-800 cursor-pointer"><input type="checkbox" checked={adminForm.isAdmin} onChange={(e) => setAdminForm({...adminForm, isAdmin: e.target.checked})} className="w-5 h-5 accent-[#008069] rounded"/> Grant Full Admin Rights</label><label className="flex items-center gap-3 text-[13px] font-bold text-slate-800 cursor-pointer"><input type="checkbox" checked={adminForm.canCreateGroups} onChange={(e) => setAdminForm({...adminForm, canCreateGroups: e.target.checked})} className="w-5 h-5 accent-[#008069] rounded"/> Allow Department Creation</label></div><button type="submit" className="w-full bg-[#008069] text-white py-3.5 mt-2 rounded-xl font-bold shadow-[0_4px_15px_rgba(0,128,105,0.3)] hover:bg-[#006e5a] transition-all">Save Changes</button></form></div></div>
                     )}
 
-                    
+                    {/* Group Form Modal */}
                     {activeModal === 'group_form_modal' && (
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
                             <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -2444,7 +1924,7 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
+                    {/* Group Settings Modal */}
                     {activeModal === 'group_settings' && (
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
                             <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -2466,12 +1946,12 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
+                    {/* CORPORATE SIMPLIFIED Task Trail Modal */}
                     {activeModal === 'task_trail' && selectedMessage?.taskData && (
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center md:p-4 animate-in fade-in" onClick={() => setActiveModal(null)}>
                             <div className="bg-slate-50 w-full h-full md:h-auto md:max-h-[90vh] md:max-w-3xl md:rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 transform-gpu modal-mobile-full" onClick={e => e.stopPropagation()}>
                                 
-                                
+                                {/* Corporate Header */}
                                 <div className="bg-white p-5 flex items-center justify-between shrink-0 border-b border-slate-200 z-10">
                                     <div className="flex items-center gap-4">
                                         <button className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors" onClick={() => setActiveModal(null)}><i className="fa-solid fa-arrow-left"></i></button>
@@ -2480,9 +1960,9 @@ export function ChatApp({ user, onLogout }) {
                                     <div className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-md text-xs font-bold border border-slate-200 uppercase tracking-widest shadow-sm">{selectedMessage.taskData.status}</div>
                                 </div>
 
-                                
+                                {/* Body */}
                                 <div className="flex-1 overflow-y-auto p-5 md:p-8 space-y-6">
-                                    
+                                    {/* Task Objective Card */}
                                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                         <div className="flex items-start gap-3">
                                             {isEditingTaskTitle ? (
@@ -2505,13 +1985,13 @@ export function ChatApp({ user, onLogout }) {
                                         </div>
                                     </div>
 
-                                    
+                                    {/* Grid Info */}
                                     <div className="grid grid-cols-2 gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                                         <div className="flex flex-col"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1"><i className="fa-solid fa-users mr-1"></i> Assigned To</span><span className="text-[13px] font-bold text-slate-700 truncate">{(selectedMessage.taskData.assignees||[]).map(a=>(a||"").split('@')[0]).join(', ')}</span></div>
                                         <div className="flex flex-col items-end"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1"><i className="fa-regular fa-calendar mr-1"></i> Deadline</span><span className="text-[13px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">{new Date(selectedMessage.taskData.deadline).toLocaleDateString()}</span></div>
                                     </div>
 
-                                    
+                                    {/* Timeline Trail */}
                                     <div className="relative pl-5 space-y-5 before:absolute before:inset-y-0 before:left-[27px] before:w-px before:bg-slate-300">
                                         {selectedMessage.taskData.trail.map((item, idx) => (
                                             <div key={idx} className="flex gap-4 relative z-10">
@@ -2527,12 +2007,12 @@ export function ChatApp({ user, onLogout }) {
                                     </div>
                                 </div>
 
-                                
+                                {/* Footer Actions */}
                                 {selectedMessage.taskData.status !== "Completed" && (selectedMessage.taskData.assignees?.includes(user.email) || currentUserData?.isAdmin || isVipAdmin || selectedMessage.senderEmail === user.email) && (
                                     <div className="bg-white p-5 flex flex-col gap-3 shrink-0 border-t border-slate-200 z-20">
                                         
                                         <div className="flex flex-col md:flex-row gap-3">
-                                            
+                                            {/* Reassign / Transfer */}
                                             <div className="flex-1 relative">
                                                 <button onClick={() => setShowDelegateDropdown(!showDelegateDropdown)} className="w-full bg-slate-50 border border-slate-200 text-left px-4 py-3 rounded-xl flex justify-between items-center text-[13px] font-semibold text-slate-700 hover:bg-slate-100 transition-all"><span className="truncate pr-2">{delegateAssignees.length === 0 ? "Transfer Task..." : (delegateAssignees||[]).map(a=>(a||"").split('@')[0]).join(', ')}</span><i className={`fa-solid fa-chevron-${showDelegateDropdown ? 'up' : 'down'} text-slate-400`}></i></button>
                                                 {showDelegateDropdown && (
@@ -2541,7 +2021,7 @@ export function ChatApp({ user, onLogout }) {
                                                             <label key={u.uid} className="flex items-center gap-3 cursor-pointer px-4 py-2.5 hover:bg-slate-50 transition-colors">
                                                                 <input type="checkbox" checked={delegateAssignees.includes(u.email)} onChange={(e) => { if (e.target.checked) setDelegateAssignees([...delegateAssignees, u.email]); else setDelegateAssignees(delegateAssignees.filter(email => email !== u.email)); }} className="absolute opacity-0 w-0 h-0" />
                                                                 <div className="w-5 h-5 rounded border-2 border-slate-300 flex items-center justify-center transition-colors"><i className="fa-solid fa-check text-white text-[10px] opacity-0 transition-opacity"></i></div>
-                                                                <MemoizedAvatar uid="{u.uid}" url="{u.profilePicUrl}" name="{u.name}" sizeClass="w-6 h-6"/>
+                                                                <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-6 h-6" />
                                                                 <span className="text-[14px] font-semibold text-slate-700 truncate">{u.name}</span>
                                                             </label>
                                                         ))}
@@ -2574,48 +2054,7 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
-                    {activeModal === 'reminder' && (
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu" onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4"><div className="w-10 h-10 bg-yellow-50 text-yellow-600 rounded-xl flex items-center justify-center shadow-inner"><i className="fa-regular fa-clock text-xl"></i></div><h3 className="text-xl font-bold text-slate-800">Set Reminder</h3></div>
-                                <div className="space-y-6">
-                                    <div className="relative"><label className="text-[10px] text-yellow-600 font-bold uppercase tracking-widest absolute -top-2.5 left-3 bg-white px-1">Alert Time</label><input type="datetime-local" value={reminderDateTime} onChange={(e) => setReminderDateTime(e.target.value)} className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[14px] font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" /></div>
-                                    <div className="flex justify-end gap-3"><button onClick={()=>setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl transition-colors">Cancel</button><button onClick={setReminder} className="flex-1 bg-yellow-500 text-white py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(234,179,8,0.3)] hover:bg-yellow-600 transition-all">Save Alert</button></div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    
-                    {activeModal === 'task_convert' && (
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4"><div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner"><i className="fa-regular fa-square-check text-xl"></i></div><h3 className="text-xl font-bold text-slate-800">Convert to Task</h3></div>
-                                <div className="space-y-5">
-                                    <div>
-                                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Select Assignees</div>
-                                        <div className="h-40 overflow-y-auto space-y-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl shadow-inner custom-checkbox">
-                                            {(activeGroup.id === 'demo' ? dbUsers : dbUsers.filter(u=>activeGroup.members?.includes(u.email))).map(u => (
-                                                <label key={u.uid} className="flex items-center gap-3 cursor-pointer p-2.5 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200 hover:shadow-sm relative">
-                                                    <input type="checkbox" checked={taskAssignees.includes(u.email)} onChange={(e) => { if (e.target.checked) setTaskAssignees([...taskAssignees, u.email]); else setTaskAssignees(taskAssignees.filter(email => email !== u.email)); }} className="absolute opacity-0 w-0 h-0" />
-                                                    <div className="w-5 h-5 rounded border-2 border-slate-300 flex items-center justify-center transition-colors"><i className="fa-solid fa-check text-white text-[10px] opacity-0 transition-opacity"></i></div>
-                                                    <span className="text-[14px] font-semibold text-slate-700">{u.name}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="relative mt-2">
-                                        <label className="text-[10px] text-blue-600 font-bold uppercase tracking-widest absolute -top-2.5 left-3 bg-white px-1">Set Deadline</label>
-                                        <input type="datetime-local" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)} className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[14px] font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
-                                    </div>
-                                    <div className="flex justify-end gap-3 pt-2"><button onClick={()=>setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl transition-colors">Cancel</button><button onClick={convertToTask} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(37,99,235,0.3)] hover:bg-blue-700 transition-all">Assign Task</button></div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    
+                    {/* Uploading Overlay */}
                     {isUploading && (
                         <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in">
                             <div className="bg-white w-full max-w-xs rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center transform-gpu">
@@ -2626,21 +2065,21 @@ export function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
-                    
+                    {/* Task Analytics Modal */}
                     {activeModal === 'task_analytics' && (
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setActiveModal(null)}>
                             <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl animate-in zoom-in-95 overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                                 
-                                
+                                {/* Header */}
                                 <div className="bg-gradient-to-r from-[#008069] to-teal-500 text-white px-6 py-5 flex items-center gap-4 shrink-0">
                                     <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/20 rounded-full transition-colors"><i className="fa-solid fa-arrow-left"></i></button>
                                     <div><h3 className="font-bold text-lg tracking-wide">Task Analytics</h3><p className="text-sm opacity-90">Real‑time performance dashboard</p></div>
                                 </div>
 
-                                
+                                {/* Body */}
                                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                                     
-                                    
+                                    {/* Overview Cards */}
                                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                                         {[
                                             { label: 'Total', value: analyticsData.total, color: 'bg-blue-500' },
@@ -2657,7 +2096,7 @@ export function ChatApp({ user, onLogout }) {
                                         ))}
                                     </div>
 
-                                    
+                                    {/* Completion Rate Bar */}
                                     <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
                                         <p className="text-sm font-bold text-slate-600 mb-2">Completion Rate</p>
                                         <div className="w-full bg-slate-200 rounded-full h-4">
@@ -2666,7 +2105,7 @@ export function ChatApp({ user, onLogout }) {
                                         <p className="text-right text-xs font-bold text-green-600 mt-1">{analyticsData.completionRate}% completed</p>
                                     </div>
 
-                                    
+                                    {/* Weekly Trend (simple CSS bars) */}
                                     <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
                                         <p className="text-sm font-bold text-slate-600 mb-2">Weekly Trend (Last 7 Days)</p>
                                         <div className="flex items-end gap-2 h-40">
@@ -2682,7 +2121,7 @@ export function ChatApp({ user, onLogout }) {
                                         </div>
                                     </div>
 
-                                    
+                                    {/* Staff Breakdown */}
                                     <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
                                         <p className="text-sm font-bold text-slate-600 mb-3">Staff Performance</p>
                                         <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -2699,7 +2138,7 @@ export function ChatApp({ user, onLogout }) {
                                         </div>
                                     </div>
 
-                                    
+                                    {/* Group Breakdown */}
                                     <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
                                         <p className="text-sm font-bold text-slate-600 mb-3">By Department</p>
                                         <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -2715,7 +2154,7 @@ export function ChatApp({ user, onLogout }) {
                                         </div>
                                     </div>
 
-                                    
+                                    {/* Overdue List */}
                                     {analyticsData.overdueList.length > 0 && (
                                         <div className="bg-red-50 rounded-xl p-5 border border-red-200">
                                             <p className="text-sm font-bold text-red-600 mb-2">⚠ Overdue Tasks</p>
@@ -2828,7 +2267,7 @@ export default function App() {
                     <form className="space-y-5">
                         <div className="pt-2">
                             <button onClick={handleGoogleLogin} className="w-full bg-white border border-[#00a884] text-[#00a884] py-3.5 rounded shadow-sm hover:bg-[#f0f2f5] font-semibold text-[14px] transition-all flex items-center justify-center gap-3">
-                                <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 48 48" width="20px" height="20px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="20px" height="20px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
                                 Sign in with Google
                             </button>
                         </div>
@@ -2837,5 +2276,5 @@ export default function App() {
             </div>
         );
     }
-    return <ErrorBoundary><ChatApp user="{user}" onLogout="{()"> signOut(auth)} /></ChatApp></ErrorBoundary>;
+    return <ErrorBoundary><ChatApp user={user} onLogout={() => signOut(auth)} /></ErrorBoundary>;
 }
