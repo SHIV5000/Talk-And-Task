@@ -2160,7 +2160,7 @@ function ChatApp({ user, onLogout }) {
             <div className="...">Sending File...</div>
         )}
     </div>
-            }
+            )
 }
 
 export default ChatApp;
