@@ -1184,7 +1184,7 @@ export function ChatApp({ user, onLogout }) {
             <div className="hidden md:flex opacity-0 group-hover/msg:opacity-100 transition-opacity items-center gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-200 rounded-full px-2 py-0.5 shrink-0 z-20 mx-1">
                 {toolPreferences.reply && <button onClick={(e)=>{e.stopPropagation(); setReplyingTo(msg); setTimeout(()=>chatInputRef.current?.focus(), 100);}} className="text-slate-400 hover:text-[#008069] text-[13px] p-1.5 transition-colors" title="Reply"><i className="fa-solid fa-reply"></i></button>}
                 {toolPreferences.react && ['👍', '❤️', '😂', '😮'].map(e => <button key={e} onClick={(ev)=>{ev.stopPropagation(); handleReaction(msg.id, e);}} className="hover:scale-125 transition-transform text-[16px] ml-0.5">{e}</button>)}
-                {toolPreferences.bookmark && <button onClick={(e)=>{e.stopPropagation(); handleToggleBookmark(msg);}} className={`${isBookmarked ? 'text-[#008069]' : 'text-slate-400 hover:text-[#008069]'} text-[13px] p-1.5 transition-colors`} title="Save for later"><i className="fa-solid fa-bookmark"></i></button>}
+                {toolPreferences.bookmark && <button onClick={(e)=>{e.stopPropagation(); handleToggleBookmark(msg);}} className={`${isBookmarked ? 'text-[#008069]' : 'textslate-400 hover:text-[#008069]'} text-[13px] p-1.5 transition-colors`} title="Save for later"><i className="fa-solid fa-bookmark"></i></button>}
                 {toolPreferences.pin && (currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(user.email)) && <button onClick={(e)=>{e.stopPropagation(); handleTogglePin(msg);}} className={`${msg.isPinned ? 'text-[#008069]' : 'text-slate-400 hover:text-[#008069]'} text-[13px] p-1.5 transition-colors`} title="Pin"><i className="fa-solid fa-thumbtack"></i></button>}
                 {canModify && toolPreferences.edit && <button onClick={(e)=>{e.stopPropagation(); setEditingMessageId(msg.id); setEditMessageText(msg.text);}} className="text-slate-400 hover:text-[#008069] text-[13px] p-1.5 transition-colors" title="Edit"><i className="fa-solid fa-pen"></i></button>}
                 {canModify && toolPreferences.delete && <button onClick={(e)=>{e.stopPropagation(); handleDeleteMessage(msg);}} className="text-slate-400 hover:text-red-500 text-[13px] p-1.5 transition-colors" title="Delete"><i className="fa-solid fa-trash"></i></button>}
@@ -1665,25 +1665,6 @@ export function ChatApp({ user, onLogout }) {
                                             </div>
                                         )}
                                     </div>
-
-                                    <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-black/10 text-[#111b21]' : 'hover:bg-black/5 text-[#54656f]'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
-                                    
-                                    {/* Filter Menu */}
-                                    {showFilterMenu && (
-                                        <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-100">
-                                            {['all', 'tasks-pending', 'tasks-completed', 'messages', 'today', 'bookmarked'].map(f => (
-                                                <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-[#f0f2f5] text-[#111b21]' : 'text-[#3b4a54] hover:bg-[#f5f6f6]'}`}>
-                                                    {f === 'all' && <i className="fa-solid fa-layer-group w-5 text-center"></i>}
-                                                    {f === 'tasks-pending' && <i className="fa-regular fa-clock w-5 text-center"></i>}
-                                                    {f === 'tasks-completed' && <i className="fa-regular fa-square-check w-5 text-center"></i>}
-                                                    {f === 'messages' && <i className="fa-regular fa-comment w-5 text-center"></i>}
-                                                    {f === 'today' && <i className="fa-regular fa-calendar-day w-5 text-center"></i>}
-                                                    {f === 'bookmarked' && <i className="fa-solid fa-bookmark w-5 text-center"></i>}
-                                                    {f === 'bookmarked' ? 'Saved Messages' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
@@ -1902,8 +1883,8 @@ export function ChatApp({ user, onLogout }) {
                     )}
 
                     {/* ========================================================================= */}
-                    {/* === SECTION 5.F : MODALS & OVERLAYS                               === */}
-                    {/* Purpose: Floating windows for Context Menus, Profile, Tasks, etc. */}
+                    {/* === SECTION 5.F : MODALS & OVERLAYS                                   === */}
+                    {/* Purpose: Floating windows for Context Menus, Profile, Tasks, etc.     */}
                     {/* ========================================================================= */}
 
                     {/* Beautiful Context Menu Modal */}
@@ -2188,21 +2169,114 @@ export function ChatApp({ user, onLogout }) {
                             </div>
                         </div>
                     )}
+
+                    {/* Task Analytics Modal */}
+                    {activeModal === 'task_analytics' && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setActiveModal(null)}>
+                            <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl animate-in zoom-in-95 overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                                
+                                {/* Header */}
+                                <div className="bg-gradient-to-r from-[#008069] to-teal-500 text-white px-6 py-5 flex items-center gap-4 shrink-0">
+                                    <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/20 rounded-full transition-colors"><i className="fa-solid fa-arrow-left"></i></button>
+                                    <div><h3 className="font-bold text-lg tracking-wide">Task Analytics</h3><p className="text-sm opacity-90">Real‑time performance dashboard</p></div>
+                                </div>
+
+                                {/* Body */}
+                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                    
+                                    {/* Overview Cards */}
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                        {[
+                                            { label: 'Total', value: analyticsData.total, color: 'bg-blue-500' },
+                                            { label: 'Completed', value: analyticsData.completed, color: 'bg-green-500' },
+                                            { label: 'In Progress', value: analyticsData.inProgress, color: 'bg-amber-500' },
+                                            { label: 'Pending', value: analyticsData.pending, color: 'bg-purple-500' },
+                                            { label: 'Overdue', value: analyticsData.overdue, color: 'bg-red-500' },
+                                        ].map(item => (
+                                            <div key={item.label} className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-shadow">
+                                                <div className={`${item.color} w-3 h-3 rounded-full mb-2`}></div>
+                                                <p className="text-2xl font-extrabold text-slate-800">{item.value}</p>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{item.label}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Completion Rate Bar */}
+                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                                        <p className="text-sm font-bold text-slate-600 mb-2">Completion Rate</p>
+                                        <div className="w-full bg-slate-200 rounded-full h-4">
+                                            <div className="bg-green-500 h-4 rounded-full" style={{ width: `${analyticsData.completionRate}%` }}></div>
+                                        </div>
+                                        <p className="text-right text-xs font-bold text-green-600 mt-1">{analyticsData.completionRate}% completed</p>
+                                    </div>
+
+                                    {/* Weekly Trend (simple CSS bars) */}
+                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                                        <p className="text-sm font-bold text-slate-600 mb-2">Weekly Trend (Last 7 Days)</p>
+                                        <div className="flex items-end gap-2 h-40">
+                                            {analyticsData.trend.map((day, idx) => (
+                                                <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                                                    <div className="w-full flex flex-col items-center gap-1" style={{ height: '100%' }} title={`${day.label}: ${day.created} tasks`}>
+                                                        <div className="w-5 bg-blue-400 rounded-t" style={{ height: `${(day.created / (Math.max(...analyticsData.trend.map(d => d.created), 1))) * 80}%` }}></div>
+                                                        <p className="text-[10px] font-bold text-slate-500">{day.created}</p>
+                                                    </div>
+                                                    <span className="text-[10px] font-semibold text-slate-600 mt-1">{day.label}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Staff Breakdown */}
+                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                                        <p className="text-sm font-bold text-slate-600 mb-3">Staff Performance</p>
+                                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                                            {Object.entries(analyticsData.staffMap).map(([email, stats]) => (
+                                                <div key={email} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100">
+                                                    <span className="text-sm font-semibold text-slate-700">{(email||'').split('@')[0]}</span>
+                                                    <div className="flex gap-3 text-xs font-bold">
+                                                        <span className="text-slate-500">🗂 {stats.assigned}</span>
+                                                        <span className="text-green-600">✓ {stats.completed}</span>
+                                                        <span className="text-red-500">⚠ {stats.overdue}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Group Breakdown */}
+                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                                        <p className="text-sm font-bold text-slate-600 mb-3">By Department</p>
+                                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                                            {Object.entries(analyticsData.groupMap).map(([group, stats]) => (
+                                                <div key={group} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100">
+                                                    <span className="text-sm font-semibold text-[#800020]">{group}</span>
+                                                    <div className="flex gap-3 text-xs font-bold">
+                                                        <span className="text-slate-500">🗂 {stats.total}</span>
+                                                        <span className="text-green-600">✓ {stats.completed}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Overdue List */}
+                                    {analyticsData.overdueList.length > 0 && (
+                                        <div className="bg-red-50 rounded-xl p-5 border border-red-200">
+                                            <p className="text-sm font-bold text-red-600 mb-2">⚠ Overdue Tasks</p>
+                                            {analyticsData.overdueList.map(task => (
+                                                <div key={task.id} className="text-sm text-slate-700 truncate">🔹 {task.text}</div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
     );
 }
-
-
-
-
-
-
-
-
-
-
 
 // =========================================================================
 // === SECTION 6 : AUTHENTICATION & ENTRY POINT                          ===
