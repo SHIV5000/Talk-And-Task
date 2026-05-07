@@ -1,9 +1,3 @@
-import AdminPanel from './Admin/AdminPanel.jsx';
-import LeftSidebar from './Sidebar/LeftSidebar.jsx';
-import TaskTrailModal from './Modals/TaskTrailModal.jsx';
-import ProfileSettingsModal from './Modals/ProfileSettingsModal.jsx';
-import GroupFormModal from './Modals/GroupFormModal.jsx';
-import ContextMenuModal from './Modals/ContextMenuModal.jsx';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, setPersistence, inMemoryPersistence } from 'firebase/auth';
@@ -11,6 +5,23 @@ import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTim
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+
+import AdminPanel from './Admin/AdminPanel.jsx';
+import LeftSidebar from './Sidebar/LeftSidebar.jsx';
+import RightSidebar from './Sidebar/RightSidebar.jsx';
+import ContextMenuModal from './Modals/ContextMenuModal.jsx';
+import ProfileSettingsModal from './Modals/ProfileSettingsModal.jsx';
+import GroupFormModal from './Modals/GroupFormModal.jsx';
+import GroupSettingsModal from './Modals/GroupSettingsModal.jsx';
+import TaskTrailModal from './Modals/TaskTrailModal.jsx';
+import TaskConvertModal from './Modals/TaskConvertModal.jsx';
+import ReminderModal from './Modals/ReminderModal.jsx';
+import ScheduleSendModal from './Modals/ScheduleSendModal.jsx';
+import AdminEditUserModal from './Modals/AdminEditUserModal.jsx';
+import TaskAnalyticsModal from './Modals/TaskAnalyticsModal.jsx';
+import UploadOverlay from './Common/UploadOverlay.jsx';
+import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
+import ErrorBoundary from './ErrorBoundary.jsx';
 
 // Initialize Firebase directly from your original config
 const firebaseConfig = {
@@ -42,45 +53,6 @@ const formatMessageText = (text) => {
         .replace(/~(.*?)~/g, '<del>$1</del>')
         .replace(/\n/g, '<br/>');
 };
-
-// Component 4.1: MemoizedAvatar
-const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", isGroup = false, extraClasses = "" }) => {
-    const cachedUrl = useMemo(() => {
-        if (!url) return null;
-        try {
-            const existing = localStorage.getItem(`avatar_${uid}`);
-            if (existing === url) return url;
-            localStorage.setItem(`avatar_${uid}`, url);
-        } catch (e) {}
-        return url;
-    }, [uid, url]);
-
-    if (cachedUrl) return <img src={cachedUrl} loading="lazy" className={`${sizeClass} rounded-full object-cover shadow-sm ${extraClasses}`} alt={name} />;
-    return (
-        <div className={`${sizeClass} rounded-full ${isGroup ? 'bg-rose-50 text-[#800020] border border-rose-100' : 'bg-[#dfe5e7] text-[#54656f]'} flex items-center justify-center font-bold text-sm shadow-sm ${extraClasses}`}>
-            {isGroup ? <i className="fa-solid fa-users"></i> : (name || '').substring(0,2).toUpperCase()}
-        </div>
-    );
-});
-
-// Component 4.2: ErrorBoundary
-class ErrorBoundary extends React.Component {
-    constructor(props) { super(props); this.state = { hasError: false, error: null, errorInfo: null }; }
-    static getDerivedStateFromError(error) { return { hasError: true }; }
-    componentDidCatch(error, errorInfo) { this.setState({ error, errorInfo }); }
-    render() {
-        if (this.state.hasError) {
-            return (
-                <div className="p-8 bg-red-50 text-red-800 h-screen w-full flex flex-col items-center justify-center overflow-auto z-50 absolute inset-0">
-                    <h1 className="text-2xl font-bold mb-4">React Compilation Error Detected</h1>
-                    <pre className="text-sm bg-white p-4 rounded-xl border border-red-200 shadow-sm max-w-2xl w-full">{this.state.error && this.state.error.toString()}</pre>
-                    <button className="mt-6 bg-red-600 text-white px-8 py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(220,38,38,0.3)] hover:scale-105 transition-transform" onClick={() => window.location.reload()}>Reload Application</button>
-                </div>
-            );
-        }
-        return this.props.children;
-    }
-}
 
 const EMOJI_LIST = ['😀','😂','🤣','😍','🥰','😘','😜','🤪','😎','🤩','😇','🙂','😊','🥳','😡','🤬','💀','👻','👍','👎','❤️','🔥','⭐','✨','🎉','💯','✅','❌','🤔','🙏','💪','🤝','👋','🙌','🤲','🫶','👀','🗣️','💬','📎','📌','🗑️','✏️','📷','🎵','🌈','🍕'];
 
@@ -1675,119 +1647,27 @@ export function ChatApp({ user, onLogout }) {
 
                     {/* RIGHT SIDEBAR - TASKS */}
                     {showRightSidebar && (
-                        <div className="absolute right-0 md:relative w-80 h-full bg-[#f8fafc] border-l border-slate-200 flex flex-col shrink-0 z-40 animate-in slide-in-from-right shadow-[rgba(0,0,0,0.08)_-2px_0_15px]">
-                            {/* Header */}
-                            <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 z-10 border-b border-slate-200/60 safe-top">
-                                <div className="font-medium text-[16px] text-[#111b21] flex items-center gap-2"><i className="fa-solid fa-list-check text-[#54656f]"></i> Task Hub</div>
-                                <button onClick={() => setShowRightSidebar(false)} className="w-10 h-10 rounded-full hover:bg-black/5 text-[#54656f] transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-xmark"></i></button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto flex flex-col p-3 gap-4 bg-white">
-                                {/* Assigned to Me */}
-                                <div className="rounded-xl overflow-hidden flex flex-col flex-1 min-h-0">
-                                    <div className="px-3 py-2 text-[12px] font-bold text-[#00a884] uppercase tracking-wider flex items-center gap-2"><i className="fa-solid fa-inbox"></i> Assigned To Me</div>
-                                    <div className="overflow-y-auto flex-1 space-y-1">
-                                        {tasksAssignedToMe.length === 0 ? (
-                                            <div className="text-[13px] font-medium text-slate-400 text-center p-6 mt-4">Inbox zero!</div>
-                                        ) : (
-                                            tasksAssignedToMe.map(task => {
-                                                const groupObj = groups.find(g=>g.id===task.groupId);
-                                                const isTaskDM = !groupObj;
-                                                const groupNameStr = isTaskDM ? 'Direct Message' : groupObj.name;
-                                                return (
-                                                    <div key={task.id} onClick={() => { 
-                                                        if(groupObj) setActiveGroup(groupObj); 
-                                                        else {
-                                                            const otherUid = task.groupId.replace(user.uid, '').replace('_', '');
-                                                            const otherUser = dbUsers.find(u => u.uid === otherUid);
-                                                            if (otherUser) setActiveGroup({ id: task.groupId, name: otherUser.name, isDM: true, members: [user.email, otherUser.email] });
-                                                        }
-                                                        setSelectedMessage(task); setIsEditingTaskTitle(false); setActiveModal('task_trail'); 
-                                                    }} className="p-3 bg-white hover:bg-[#f5f6f6] rounded-lg cursor-pointer border-b border-slate-100 transition-all">
-                                                        <div className="font-medium text-[14px] text-[#111b21] truncate mb-1">{task.text || 'File Task'}</div>
-                                                        <div className="flex justify-between items-center mt-1.5">
-                                                            <span className={`text-[12px] truncate max-w-[120px] font-semibold ${isTaskDM ? 'text-[#54656f]' : 'text-[#800020]'}`}>{groupNameStr}</span>
-                                                            <span className="text-[11px] font-semibold text-[#ea0038]">Due {new Date(task.taskData.deadline).toLocaleDateString()}</span>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })
-                                        )}
-                                    </div>
-                                </div>
-                                {/* Assigned By Me */}
-                                <div className="rounded-xl overflow-hidden flex flex-col flex-1 min-h-0 border-t border-slate-100 pt-3">
-                                    <div className="px-3 py-2 text-[12px] font-bold text-[#00a884] uppercase tracking-wider flex items-center gap-2"><i className="fa-solid fa-paper-plane"></i> Assigned By Me</div>
-                                    <div className="overflow-y-auto flex-1 space-y-1">
-                                        {tasksAssignedByMe.length === 0 ? (
-                                            <div className="text-[13px] font-medium text-slate-400 text-center p-6 mt-4">No active delegations</div>
-                                        ) : (
-                                            tasksAssignedByMe.map(task => {
-                                                const groupObj = groups.find(g=>g.id===task.groupId);
-                                                const isTaskDM = !groupObj;
-                                                return (
-                                                    <div key={task.id} onClick={() => { 
-                                                        if(groupObj) setActiveGroup(groupObj); 
-                                                        else {
-                                                            const otherUid = task.groupId.replace(user.uid, '').replace('_', '');
-                                                            const otherUser = dbUsers.find(u => u.uid === otherUid);
-                                                            if (otherUser) setActiveGroup({ id: task.groupId, name: otherUser.name, isDM: true, members: [user.email, otherUser.email] });
-                                                        }
-                                                        setSelectedMessage(task); setIsEditingTaskTitle(false); setActiveModal('task_trail'); 
-                                                    }} className="p-3 bg-white hover:bg-[#f5f6f6] rounded-lg cursor-pointer border-b border-slate-100 transition-all">
-                                                        <div className="font-medium text-[14px] text-[#111b21] truncate mb-1">{task.text || 'File Task'}</div>
-                                                        <div className="text-[12px] text-[#54656f] truncate mb-1.5">To: {(task.taskData.assignees||[]).map(a=>(a||"").split('@')[0]).join(', ')}</div>
-                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm ${task.taskData.status==='Pending'?'bg-amber-100 text-amber-700':'bg-[#d1e8ff] text-blue-700'}`}>{task.taskData.status}</span>
-                                                    </div>
-                                                )
-                                            })
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <RightSidebar
+                          showRightSidebar={showRightSidebar}
+                          setShowRightSidebar={setShowRightSidebar}
+                          tasksAssignedToMe={tasksAssignedToMe}
+                          tasksAssignedByMe={tasksAssignedByMe}
+                          groups={groups}
+                          dbUsers={dbUsers}
+                          user={user}
+                          setActiveGroup={setActiveGroup}
+                          setSelectedMessage={setSelectedMessage}
+                          setIsEditingTaskTitle={setIsEditingTaskTitle}
+                          setActiveModal={setActiveModal}
+                        />
                     )}
 
                     {/* ========================================================================= */}
                     {/* === SECTION 5.F : MODALS & OVERLAYS                                   === */}
-                    {/* Purpose: Floating windows for Context Menus, Profile, Tasks, etc.      */}
                     {/* ========================================================================= */}
 
-                    {/* Beautiful Context Menu Modal */}
-
-                    {activeModal === 'context' && selectedMessage && (
-                      <ContextMenuModal
-                    selectedMessage={selectedMessage}
-                    setActiveModal={setActiveModal}
-                    setReplyingTo={setReplyingTo}
-                    chatInputRef={chatInputRef}
-                      />
-                        )}
-
-
-
-
+                    {activeModal === 'context' && <ContextMenuModal selectedMessage={selectedMessage} setActiveModal={setActiveModal} setReplyingTo={setReplyingTo} chatInputRef={chatInputRef} />}
                     
-                    {/* Schedule Send Modal */}
-                    {activeModal === 'schedule_send' && (
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu" onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4"><div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shadow-inner"><i className="fa-regular fa-clock text-xl"></i></div><h3 className="text-xl font-bold text-slate-800">Schedule Message</h3></div>
-                                <div className="space-y-6">
-                                    <div className="relative">
-                                        <label className="text-[10px] text-amber-600 font-bold uppercase tracking-widest absolute -top-2.5 left-3 bg-white px-1">Pick Date & Time</label>
-                                        <input type="datetime-local" value={scheduleDateTime} onChange={(e) => setScheduleDateTime(e.target.value)} className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[14px] font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all" />
-                                    </div>
-                                    <p className="text-sm text-slate-500">Message: <span className="font-medium text-slate-700">"{pendingScheduledText}"</span></p>
-                                    <div className="flex justify-end gap-6">
-                                        <button onClick={() => setActiveModal(null)} className="text-slate-600 font-semibold">Cancel</button>
-                                        <button onClick={() => handleScheduleMessage(false)} className="bg-amber-500 text-white px-6 py-2 rounded-xl font-bold shadow-md hover:bg-amber-600">Schedule</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Profile Edit Modal with Tool Preferences */}
                     {activeModal === 'edit_profile' && (
                       <ProfileSettingsModal
                         setActiveModal={setActiveModal}
@@ -1804,12 +1684,6 @@ export function ChatApp({ user, onLogout }) {
                       />
                     )}
 
-                    {/* Admin Edit User Modal */}
-                    {activeModal === 'admin_edit_user' && (
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4"><div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu"><div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4"><h3 className="font-bold text-xl text-slate-800 flex items-center gap-3"><div className="w-10 h-10 bg-teal-50 text-[#008069] rounded-xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-user-pen"></i></div> Edit Staff Role</h3><button onClick={() => setActiveModal(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 flex items-center justify-center"><i className="fa-solid fa-xmark"></i></button></div><form onSubmit={handleEditUserSubmit} className="space-y-4"><input disabled type="email" value={adminForm.email} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm bg-slate-50 text-slate-400 font-medium" /><input required type="text" value={adminForm.name} onChange={(e) => setAdminForm({...adminForm, name: e.target.value})} className="w-full p-3.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#008069]/20 focus:border-[#008069] transition-all font-medium" /><div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4"><label className="flex items-center gap-3 text-[13px] font-bold text-slate-800 cursor-pointer"><input type="checkbox" checked={adminForm.isAdmin} onChange={(e) => setAdminForm({...adminForm, isAdmin: e.target.checked})} className="w-5 h-5 accent-[#008069] rounded"/> Grant Full Admin Rights</label><label className="flex items-center gap-3 text-[13px] font-bold text-slate-800 cursor-pointer"><input type="checkbox" checked={adminForm.canCreateGroups} onChange={(e) => setAdminForm({...adminForm, canCreateGroups: e.target.checked})} className="w-5 h-5 accent-[#008069] rounded"/> Allow Department Creation</label></div><button type="submit" className="w-full bg-[#008069] text-white py-3.5 mt-2 rounded-xl font-bold shadow-[0_4px_15px_rgba(0,128,105,0.3)] hover:bg-[#006e5a] transition-all">Save Changes</button></form></div></div>
-                    )}
-
-                    {/* Group Form Modal */}
                     {activeModal === 'group_form_modal' && (
                       <GroupFormModal
                         setActiveModal={setActiveModal}
@@ -1825,29 +1699,20 @@ export function ChatApp({ user, onLogout }) {
                       />
                     )}
 
-                    {/* Group Settings Modal */}
                     {activeModal === 'group_settings' && (
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-5">
-                                    {activeGroup.profilePicUrl ? <img src={activeGroup.profilePicUrl} className="w-14 h-14 rounded-full object-cover shadow-sm border border-slate-100"/> : <div className="w-14 h-14 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-xl shadow-inner"><i className="fa-solid fa-people-group"></i></div>}
-                                    <div className="overflow-hidden"><div className="text-xl font-bold text-slate-800 truncate">{activeGroup.name}</div><div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Department Info</div></div>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Directory</div>
-                                    <div className="h-56 overflow-y-auto space-y-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl shadow-inner">
-                                        {dbUsers.map(u => { const isAdmin = activeGroup.admins?.includes(user.email) || currentUserData?.isAdmin || isVipAdmin; const isMember = activeGroup.members?.includes(u.email); return (<label key={u.uid} className={`flex items-center gap-3 p-2 rounded-lg transition-colors border border-transparent ${isAdmin ? 'hover:bg-white hover:border-slate-200 hover:shadow-sm cursor-pointer' : ''}`}><input type="checkbox" disabled={!isAdmin || activeGroup.admins?.includes(u.email)} checked={groupForm.members.includes(u.email) || isMember} onChange={(e) => { if(!isAdmin) return; const newMembers = e.target.checked ? [...groupForm.members, u.email] : groupForm.members.filter(m => m !== u.email); setGroupForm({...groupForm, members: newMembers}); }} className="w-4 h-4 accent-[#008069] disabled:opacity-40"/><span className="text-[14px] font-semibold text-slate-700 flex-1 truncate">{u.name}</span>{activeGroup.admins?.includes(u.email) && <span className="text-[9px] font-bold text-[#008069] bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded uppercase tracking-wider">Admin</span>}</label>)} )}
-                                    </div>
-                                    <div className="flex gap-3 mt-4 pt-2">
-                                        <button onClick={()=>setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl transition-colors">Close</button>
-                                        {(activeGroup.admins?.includes(user.email) || currentUserData?.isAdmin || isVipAdmin) && (<button onClick={handleUpdateGroupMembers} className="flex-1 bg-[#008069] text-white py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(0,128,105,0.3)] hover:bg-[#006e5a] transition-all">Save Matrix</button>)}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                      <GroupSettingsModal
+                        setActiveModal={setActiveModal}
+                        activeGroup={activeGroup}
+                        groupForm={groupForm}
+                        setGroupForm={setGroupForm}
+                        dbUsers={dbUsers}
+                        user={user}
+                        currentUserData={currentUserData}
+                        isVipAdmin={isVipAdmin}
+                        handleUpdateGroupMembers={handleUpdateGroupMembers}
+                      />
                     )}
 
-                    {/* CORPORATE SIMPLIFIED Task Trail Modal */}
                     {activeModal === 'task_trail' && selectedMessage?.taskData && (
                       <TaskTrailModal
                         selectedMessage={selectedMessage}
@@ -1879,119 +1744,52 @@ export function ChatApp({ user, onLogout }) {
                       />
                     )}
 
-                    {/* Uploading Overlay */}
-                    {isUploading && (
-                        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in">
-                            <div className="bg-white w-full max-w-xs rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center transform-gpu">
-                                <div className="w-14 h-14 border-4 border-[#008069] border-t-transparent rounded-full animate-spin mb-5 shadow-sm"></div>
-                                <h3 className="font-bold text-lg text-slate-800 tracking-wide">Sending File...</h3>
-                                <div className="text-[11px] font-bold text-[#008069] uppercase tracking-widest mt-1">{Math.round(uploadProgress)}% Complete</div>
-                            </div>
-                        </div>
+                    {activeModal === 'task_convert' && (
+                      <TaskConvertModal
+                        setActiveModal={setActiveModal}
+                        taskAssignees={taskAssignees}
+                        setTaskAssignees={setTaskAssignees}
+                        taskDeadline={taskDeadline}
+                        setTaskDeadline={setTaskDeadline}
+                        convertToTask={convertToTask}
+                        activeGroup={activeGroup}
+                        dbUsers={dbUsers}
+                      />
                     )}
 
-                    {/* Task Analytics Modal */}
+                    {activeModal === 'reminder' && (
+                      <ReminderModal
+                        setActiveModal={setActiveModal}
+                        reminderDateTime={reminderDateTime}
+                        setReminderDateTime={setReminderDateTime}
+                        setReminder={setReminder}
+                      />
+                    )}
+
+                    {activeModal === 'schedule_send' && (
+                      <ScheduleSendModal
+                        setActiveModal={setActiveModal}
+                        scheduleDateTime={scheduleDateTime}
+                        setScheduleDateTime={setScheduleDateTime}
+                        pendingScheduledText={pendingScheduledText}
+                        handleScheduleMessage={handleScheduleMessage}
+                      />
+                    )}
+
+                    {activeModal === 'admin_edit_user' && (
+                      <AdminEditUserModal
+                        setActiveModal={setActiveModal}
+                        adminForm={adminForm}
+                        setAdminForm={setAdminForm}
+                        handleEditUserSubmit={handleEditUserSubmit}
+                      />
+                    )}
+
                     {activeModal === 'task_analytics' && (
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setActiveModal(null)}>
-                            <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl animate-in zoom-in-95 overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                                
-                                {/* Header */}
-                                <div className="bg-gradient-to-r from-[#008069] to-teal-500 text-white px-6 py-5 flex items-center gap-4 shrink-0">
-                                    <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/20 rounded-full transition-colors"><i className="fa-solid fa-arrow-left"></i></button>
-                                    <div><h3 className="font-bold text-lg tracking-wide">Task Analytics</h3><p className="text-sm opacity-90">Real‑time performance dashboard</p></div>
-                                </div>
-
-                                {/* Body */}
-                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                                    
-                                    {/* Overview Cards */}
-                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                        {[
-                                            { label: 'Total', value: analyticsData.total, color: 'bg-blue-500' },
-                                            { label: 'Completed', value: analyticsData.completed, color: 'bg-green-500' },
-                                            { label: 'In Progress', value: analyticsData.inProgress, color: 'bg-amber-500' },
-                                            { label: 'Pending', value: analyticsData.pending, color: 'bg-purple-500' },
-                                            { label: 'Overdue', value: analyticsData.overdue, color: 'bg-red-500' },
-                                        ].map(item => (
-                                            <div key={item.label} className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-shadow">
-                                                <div className={`${item.color} w-3 h-3 rounded-full mb-2`}></div>
-                                                <p className="text-2xl font-extrabold text-slate-800">{item.value}</p>
-                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{item.label}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Completion Rate Bar */}
-                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                                        <p className="text-sm font-bold text-slate-600 mb-2">Completion Rate</p>
-                                        <div className="w-full bg-slate-200 rounded-full h-4">
-                                            <div className="bg-green-500 h-4 rounded-full" style={{ width: `${analyticsData.completionRate}%` }}></div>
-                                        </div>
-                                        <p className="text-right text-xs font-bold text-green-600 mt-1">{analyticsData.completionRate}% completed</p>
-                                    </div>
-
-                                    {/* Weekly Trend (simple CSS bars) */}
-                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                                        <p className="text-sm font-bold text-slate-600 mb-2">Weekly Trend (Last 7 Days)</p>
-                                        <div className="flex items-end gap-2 h-40">
-                                            {analyticsData.trend.map((day, idx) => (
-                                                <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-                                                    <div className="w-full flex flex-col items-center gap-1" style={{ height: '100%' }} title={`${day.label}: ${day.created} tasks`}>
-                                                        <div className="w-5 bg-blue-400 rounded-t" style={{ height: `${(day.created / (Math.max(...analyticsData.trend.map(d => d.created), 1))) * 80}%` }}></div>
-                                                        <p className="text-[10px] font-bold text-slate-500">{day.created}</p>
-                                                    </div>
-                                                    <span className="text-[10px] font-semibold text-slate-600 mt-1">{day.label}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Staff Breakdown */}
-                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                                        <p className="text-sm font-bold text-slate-600 mb-3">Staff Performance</p>
-                                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                                            {Object.entries(analyticsData.staffMap).map(([email, stats]) => (
-                                                <div key={email} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100">
-                                                    <span className="text-sm font-semibold text-slate-700">{(email||'').split('@')[0]}</span>
-                                                    <div className="flex gap-3 text-xs font-bold">
-                                                        <span className="text-slate-500">🗂 {stats.assigned}</span>
-                                                        <span className="text-green-600">✓ {stats.completed}</span>
-                                                        <span className="text-red-500">⚠ {stats.overdue}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Group Breakdown */}
-                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                                        <p className="text-sm font-bold text-slate-600 mb-3">By Department</p>
-                                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                                            {Object.entries(analyticsData.groupMap).map(([group, stats]) => (
-                                                <div key={group} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100">
-                                                    <span className="text-sm font-semibold text-[#800020]">{group}</span>
-                                                    <div className="flex gap-3 text-xs font-bold">
-                                                        <span className="text-slate-500">🗂 {stats.total}</span>
-                                                        <span className="text-green-600">✓ {stats.completed}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Overdue List */}
-                                    {analyticsData.overdueList.length > 0 && (
-                                        <div className="bg-red-50 rounded-xl p-5 border border-red-200">
-                                            <p className="text-sm font-bold text-red-600 mb-2">⚠ Overdue Tasks</p>
-                                            {analyticsData.overdueList.map(task => (
-                                                <div key={task.id} className="text-sm text-slate-700 truncate">🔹 {task.text}</div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+                      <TaskAnalyticsModal setActiveModal={setActiveModal} analyticsData={analyticsData} />
                     )}
+
+                    {isUploading && <UploadOverlay uploadProgress={uploadProgress} fileName="" />}
                 </div>
             )}
         </div>
