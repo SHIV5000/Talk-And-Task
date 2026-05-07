@@ -67,7 +67,7 @@ class ErrorBoundary extends React.Component {
 
 const EMOJI_LIST = ['😀','😂','🤣','😍','🥰','😘','😜','🤪','😎','🤩','😇','🙂','😊','🥳','😡','🤬','💀','👻','👍','👎','❤️','🔥','⭐','✨','🎉','💯','✅','❌','🤔','🙏','💪','🤝','👋','🙌','🤲','🫶','👀','🗣️','💬','📎','📌','🗑️','✏️','📷','🎵','🌈','🍕'];
 
-function ChatApp({ user, onLogout }) {
+export function ChatApp({ user, onLogout }) {
     // --- 5.1 View & Modal States ---
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [activeModal, setActiveModal] = useState(null);
@@ -2061,7 +2061,7 @@ function ChatApp({ user, onLogout }) {
                                                     <div className="flex justify-between items-center mb-1"><span className="text-[11px] font-bold text-[#008069] uppercase tracking-wider">{item.action}</span><span className="text-[11px] font-medium text-slate-400">{item.time.split(',')[0]}</span></div>
                                                     <div className="text-[13px] font-bold text-slate-700">{(item.by||'').split('@')[0]} {item.to && item.to !== 'System' && <span className="text-slate-400 font-medium mx-1">→</span>} {item.to && item.to !== 'System' && <span className="text-slate-700">{(item.to||'').split('@')[0]}</span>}</div>
                                                     {item.comment && <div className="mt-2 text-[13px] text-slate-600 font-medium bg-slate-50 p-3 rounded-lg border border-slate-100 break-words">"{item.comment}"</div>}
-                                                    {item.fileUrl && (<a href={item.fileUrl} target="_blank" className="mt-2 text-[12px] font-bold text-[#008069] hover:underline flex items-center w-max gap-2 transition-colors"><i className="fa-solid fa-download"></i> Download Attached Resource</a>)}
+                                                    {item.fileUrl && (<a href={item.fileUrl} target="_blank" rel="noreferrer" className="mt-2 text-[12px] font-bold text-[#008069] hover:underline flex items-center w-max gap-2 transition-colors"><i className="fa-solid fa-download"></i> Download Attached Resource</a>)}
                                                 </div>
                                             </div>
                                         ))}
@@ -2156,126 +2156,124 @@ function ChatApp({ user, onLogout }) {
                         </div>
                     )}
 
+                    {/* Uploading Overlay */}
                     {isUploading && (
-            <div className="...">Sending File...</div>
-        )}
-    </div>
-            )
+                        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in">
+                            <div className="bg-white w-full max-w-xs rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center transform-gpu">
+                                <div className="w-14 h-14 border-4 border-[#008069] border-t-transparent rounded-full animate-spin mb-5 shadow-sm"></div>
+                                <h3 className="font-bold text-lg text-slate-800 tracking-wide">Sending File...</h3>
+                                <div className="text-[11px] font-bold text-[#008069] uppercase tracking-widest mt-1">{Math.round(uploadProgress)}% Complete</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
 
-export default ChatApp;
+// =========================================================================
+// === SECTION 6 : AUTHENTICATION & ENTRY POINT                          ===
+// =========================================================================
+export default function App() {
+    const [user, setUser] = useState(null);
+    const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
+    const [authChecked, setAuthChecked] = useState(false);
+    const [authError, setAuthError] = useState("");
 
-        // =========================================================================
-        // === SECTION 6 : AUTHENTICATION & ENTRY POINT                          ===
-        // =========================================================================
-        function App() {
-            const [user, setUser] = useState(null);
-            const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
-            const [authChecked, setAuthChecked] = useState(false);
-            const [authError, setAuthError] = useState("");
+    useEffect(() => {
+        const setupAuth = () => {
+            onAuthStateChanged(auth, (u) => {
+                setUser(u);
+                setTimeout(() => setAuthChecked(true), 300);
+            });
+            setIsFirebaseLoaded(true);
+        };
+        setupAuth();
+    }, []);
 
-            useEffect(() => {
-                const setupAuth = () => {
-                    window.onAuthStateChanged(window.auth, (u) => {
-                        setUser(u);
-                        setTimeout(() => setAuthChecked(true), 300);
-                    });
-                    setIsFirebaseLoaded(true);
-                };
-                if (window.auth) setupAuth();
-                else window.addEventListener('firebaseReady', setupAuth);
-                return () => window.removeEventListener('firebaseReady', setupAuth);
-            }, []);
+    const handleGoogleLogin = async (e) => {
+        e.preventDefault();
+        setAuthError("");
+        if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
 
-            const handleGoogleLogin = async (e) => {
-                e.preventDefault();
-                setAuthError("");
-                if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
+        const primeAllAudio = () => {
+            if(!window.audioPrimed) {
+                const a1 = document.getElementById('app-sound');
+                const a2 = document.getElementById('task-sound');
+                if (a1) { a1.volume=0; a1.play().then(()=>{a1.pause(); a1.currentTime=0; a1.volume=1.0;}).catch(()=>{}); }
+                if (a2) { a2.volume=0; a2.play().then(()=>{a2.pause(); a2.currentTime=0; a2.volume=1.0;}).catch(()=>{}); }
+                window.audioPrimed = true;
+            }
+        };
+        primeAllAudio();
 
-                const primeAllAudio = () => {
-                    if(!window.audioPrimed) {
-                        const a1 = document.getElementById('app-sound');
-                        const a2 = document.getElementById('task-sound');
-                        if (a1) { a1.volume=0; a1.play().then(()=>{a1.pause(); a1.currentTime=0; a1.volume=1.0;}).catch(()=>{}); }
-                        if (a2) { a2.volume=0; a2.play().then(()=>{a2.pause(); a2.currentTime=0; a2.volume=1.0;}).catch(()=>{}); }
-                        window.audioPrimed = true;
-                    }
-                };
-                primeAllAudio();
+        try {
+            await setPersistence(auth, inMemoryPersistence);
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            const result = await signInWithPopup(auth, provider);
+            const loggedInUser = result.user;
 
-                try {
-                    await window.setPersistence(window.auth, window.inMemoryPersistence);
-                    const provider = new window.GoogleAuthProvider();
-                    provider.setCustomParameters({ prompt: 'select_account' });
-                    const result = await window.signInWithPopup(window.auth, provider);
-                    const loggedInUser = result.user;
+            const userDoc = await getDocs(query(collection(db, "users"), where("uid", "==", loggedInUser.uid)));
+            const isMaster = (loggedInUser.email || '').toLowerCase() === 'shivsuri1@gmail.com';
 
-                    const userDoc = await window.getDocs(window.query(window.collection(window.db, "users"), window.where("uid", "==", loggedInUser.uid)));
-                    const isMaster = (loggedInUser.email || '').toLowerCase() === 'shivsuri1@gmail.com';
+            if (userDoc.empty) {
+                const allUsers = await getDocs(collection(db, "users"));
+                const isFirstUser = allUsers.empty;
+                await setDoc(doc(db, "users", loggedInUser.uid), {
+                    uid: loggedInUser.uid,
+                    email: loggedInUser.email,
+                    name: (loggedInUser.email || '').split('@')[0],
+                    isApproved: isFirstUser || isMaster,
+                    isAdmin: isFirstUser || isMaster,
+                    canCreateGroups: isFirstUser || isMaster,
+                    profilePicUrl: loggedInUser.photoURL || null,
+                    toolPreferences: { reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic' }
+                });
+            } else if (isMaster) {
+                await setDoc(doc(db, "users", loggedInUser.uid), {
+                    isApproved: true,
+                    isAdmin: true,
+                    canCreateGroups: true
+                }, { merge: true });
+            }
+        } catch (err) {
+            setAuthError("Google Sign-In Cancelled or Failed.");
+        }
+    };
 
-                    if (userDoc.empty) {
-                        const allUsers = await window.getDocs(window.collection(window.db, "users"));
-                        const isFirstUser = allUsers.empty;
-                        await window.setDoc(window.doc(window.db, "users", loggedInUser.uid), {
-                            uid: loggedInUser.uid,
-                            email: loggedInUser.email,
-                            name: (loggedInUser.email || '').split('@')[0],
-                            isApproved: isFirstUser || isMaster,
-                            isAdmin: isFirstUser || isMaster,
-                            canCreateGroups: isFirstUser || isMaster,
-                            profilePicUrl: loggedInUser.photoURL || null,
-                            toolPreferences: { reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic' }
-                        });
-                    } else if (isMaster) {
-                        await window.setDoc(window.doc(window.db, "users", loggedInUser.uid), {
-                            isApproved: true,
-                            isAdmin: true,
-                            canCreateGroups: true
-                        }, { merge: true });
-                    }
-                } catch (err) {
-                    setAuthError("Google Sign-In Cancelled or Failed.");
-                }
-            };
+    if (!isFirebaseLoaded || !authChecked) return (
+        <div className="flex flex-col justify-center items-center h-screen bg-[#f3f4f6] text-[#008069]">
+            <div className="w-12 h-12 border-4 border-[#008069] border-t-transparent rounded-full animate-spin mb-4"></div>
+            <span className="font-bold tracking-widest uppercase text-sm">Initializing Enterprise Portal...</span>
+        </div>
+    );
 
-            if (!isFirebaseLoaded || !authChecked) return (
-                <div className="flex flex-col justify-center items-center h-screen bg-[#f3f4f6] text-[#008069]">
-                    <div className="w-12 h-12 border-4 border-[#008069] border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <span className="font-bold tracking-widest uppercase text-sm">Initializing Enterprise Portal...</span>
-                </div>
-            );
-
-            if (!user) {
-                return (
-                    <div className="flex flex-col items-center justify-center min-h-screen bg-[#f0f2f5] p-4 relative app-entrance">
-                        <div className="absolute top-0 left-0 w-full h-[40vh] bg-[#00a884] z-0 transition-all duration-1000"></div>
-                        <div className="w-full max-w-sm bg-white rounded-xl shadow-[0_17px_50px_0_rgba(11,20,26,.19),0_12px_15px_0_rgba(11,20,26,.24)] p-8 z-10 transform-gpu transition-all">
-                            <div className="flex justify-center mb-8 mt-2">
-                                <div className="w-20 h-20 bg-gradient-to-br from-[#00a884] to-teal-600 rounded-2xl flex items-center justify-center text-white text-3xl shadow-inner border-2 border-white ring-1 ring-slate-200">
-                                    <i className="fa-solid fa-list-check"></i>
-                                </div>
-                            </div>
-                            <h1 className="text-2xl font-normal text-center text-[#111b21] mb-2">Talk & Task</h1>
-                            <p className="text-[12px] text-[#54656f] text-center mb-8 font-medium">Enterprise Coordination Portal</p>
-                            {authError && <div className="bg-red-50 text-red-600 p-3 rounded mb-6 text-[13px] font-semibold border border-red-100 text-center">{authError}</div>}
-                            <form className="space-y-5">
-                                <div className="pt-2">
-                                    <button onClick={handleGoogleLogin} className="w-full bg-white border border-[#00a884] text-[#00a884] py-3.5 rounded shadow-sm hover:bg-[#f0f2f5] font-semibold text-[14px] transition-all flex items-center justify-center gap-3">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="20px" height="20px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
-                                        Sign in with Google
-                                    </button>
-                                </div>
-                            </form>
+    if (!user) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#f0f2f5] p-4 relative app-entrance">
+                <div className="absolute top-0 left-0 w-full h-[40vh] bg-[#00a884] z-0 transition-all duration-1000"></div>
+                <div className="w-full max-w-sm bg-white rounded-xl shadow-[0_17px_50px_0_rgba(11,20,26,.19),0_12px_15px_0_rgba(11,20,26,.24)] p-8 z-10 transform-gpu transition-all">
+                    <div className="flex justify-center mb-8 mt-2">
+                        <div className="w-20 h-20 bg-gradient-to-br from-[#00a884] to-teal-600 rounded-2xl flex items-center justify-center text-white text-3xl shadow-inner border-2 border-white ring-1 ring-slate-200">
+                            <i className="fa-solid fa-list-check"></i>
                         </div>
                     </div>
-                );
-            }
-            return <ErrorBoundary><ChatApp user={user} onLogout={() => window.signOut(window.auth)} /></ErrorBoundary>;
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                    <h1 className="text-2xl font-normal text-center text-[#111b21] mb-2">Talk & Task</h1>
+                    <p className="text-[12px] text-[#54656f] text-center mb-8 font-medium">Enterprise Coordination Portal</p>
+                    {authError && <div className="bg-red-50 text-red-600 p-3 rounded mb-6 text-[13px] font-semibold border border-red-100 text-center">{authError}</div>}
+                    <form className="space-y-5">
+                        <div className="pt-2">
+                            <button onClick={handleGoogleLogin} className="w-full bg-white border border-[#00a884] text-[#00a884] py-3.5 rounded shadow-sm hover:bg-[#f0f2f5] font-semibold text-[14px] transition-all flex items-center justify-center gap-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="20px" height="20px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+                                Sign in with Google
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        );
+    }
+    return <ErrorBoundary><ChatApp user={user} onLogout={() => signOut(auth)} /></ErrorBoundary>;
 }
