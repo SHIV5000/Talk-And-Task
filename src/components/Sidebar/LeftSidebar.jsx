@@ -1,5 +1,5 @@
 import React from 'react';
-import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import MemoizedAvatar from 'src/components/Common/MemoizedAvatar.jsx';
 
 export default function LeftSidebar({
   user,
