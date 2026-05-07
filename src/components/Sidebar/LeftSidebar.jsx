@@ -14,7 +14,21 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
             <MemoizedAvatar uid={user.uid} url={currentUserData?.profilePicUrl} name={currentUserData?.name || user.email.split('@')[0]} sizeClass="w-10 h-10 cursor-pointer hover:opacity-80 transition-opacity" />
             <span className="font-semibold text-[14px] text-[#111b21] truncate max-w-[140px] hidden sm:block">{currentUserData?.name || user.email.split('@')[0]}</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Create Department (always visible for admins) */}
+            {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
+              <button
+                onClick={() => {
+                  setGroupForm({ name: '', members: [], profilePicUrl: null });
+                  setEditingGroup(null);
+                  setActiveModal('group_form_modal');
+                }}
+                className="text-[#54656f] hover:bg-black/5 w-10 h-10 rounded-full transition-colors flex items-center justify-center text-[19px]"
+                title="Create Department"
+              >
+                <i className="fa-solid fa-plus"></i>
+              </button>
+            )}
             <button onClick={() => setActiveModal('edit_profile')} className="text-[#54656f] hover:bg-black/5 w-10 h-10 rounded-full transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-gear"></i></button>
             <button onClick={onLogout} className="text-[#54656f] hover:bg-black/5 w-10 h-10 rounded-full transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-power-off"></i></button>
           </div>
