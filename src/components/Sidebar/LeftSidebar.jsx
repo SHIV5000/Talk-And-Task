@@ -1,26 +1,8 @@
 import React from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
-export default function LeftSidebar({
-  user,
-  currentUserData,
-  myGroups,
-  dmUsers,
-  activeGroup,
-  setActiveGroup,
-  setShowRightSidebar,
-  setMobileSidebarOpen,
-  getUnreadInfoForUser,
-  messages,
-  onLogout,
-  setActiveModal,
-  setGroupForm,
-  setEditingGroup,
-  sidebarSearch,
-  setSidebarSearch,
-  mobileSidebarOpen,
-  isVipAdmin,
-}) {
+export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, activeGroup, setActiveGroup, setShowRightSidebar, setMobileSidebarOpen, getUnreadInfoForUser, messages, onLogout, setActiveModal, setGroupForm, setEditingGroup, sidebarSearch, setSidebarSearch, mobileSidebarOpen, isVipAdmin, setViewMode }) 
+{
   return (
     <>
       {mobileSidebarOpen && <div className="mobile-sidebar-overlay md:hidden" onClick={() => setMobileSidebarOpen(false)}></div>}
