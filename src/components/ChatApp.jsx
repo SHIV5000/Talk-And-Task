@@ -1770,15 +1770,21 @@ export function ChatApp({ user, onLogout }) {
 
                             {/* Multi-file Rename Card */}
                             {showFileRename && pendingFiles.length > 0 && (
-                              <div className="bg-white border border-[#00a884] shadow-lg rounded-2xl p-4 mx-3 mb-2 animate-in slide-in-from-bottom-2 z-20 space-y-3">
+                              <div className="bg-white border border-[#00a884] shadow-xl rounded-2xl p-4 mx-3 mb-2 animate-in slide-in-from-bottom-2 z-20 space-y-3">
                                 {pendingFiles.map((pf) => (
-                                  <div key={pf.id} className="flex items-start gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                                    <i className="fa-solid fa-file-lines text-[#00a884] text-xl mt-1"></i>
-                                    <div className="flex-1 space-y-1.5">
+                                  <div key={pf.id} className="flex items-start gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                                    
+                                    {/* File Icon */}
+                                    <div className="mt-1 w-10 h-10 rounded-lg bg-[#e8fbf6] flex items-center justify-center shrink-0 border border-[#00a884]/20">
+                                        <i className="fa-solid fa-file-lines text-[#00a884] text-xl"></i>
+                                    </div>
+                                    
+                                    <div className="flex-1 space-y-2.5">
+                                      {/* Top Row: File Name & Size */}
                                       <div className="flex items-center gap-2">
                                         <input
                                           type="text"
-                                          value={pf.customName.replace(/\.[^/.]+$/, '')}   // show only base name
+                                          value={pf.customName.replace(/\.[^/.]+$/, '')}
                                           onChange={(e) => {
                                             const baseName = e.target.value;
                                             const newName = lockExtension(pf.file.name, baseName);
@@ -1786,37 +1792,50 @@ export function ChatApp({ user, onLogout }) {
                                               prev.map(f => f.id === pf.id ? { ...f, customName: newName } : f)
                                             );
                                           }}
-                                          className="flex-1 text-sm font-medium text-slate-800 outline-none border-b border-slate-200 focus:border-[#00a884] bg-transparent"
+                                          className="flex-1 text-[15px] font-bold text-slate-800 outline-none border-b border-transparent focus:border-[#00a884] bg-transparent transition-colors py-0.5"
                                           placeholder="File name"
                                         />
-                                        <span className="text-xs text-slate-400">.{pf.file.name.split('.').pop()}</span>
+                                        <span className="text-[13px] font-bold text-slate-400">.{pf.file.name.split('.').pop()}</span>
+                                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full ml-auto shrink-0 border border-slate-200">
+                                            {(pf.file.size / 1024 / 1024).toFixed(2)} MB
+                                        </span>
                                       </div>
-                                      <input
-                                        type="text"
+
+                                      {/* Bottom Row: Prominent Message Input */}
+                                      <textarea
+                                        rows={1}
                                         value={pf.caption}
-                                        onChange={(e) => setPendingFiles(prev =>
-                                          prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)
-                                        )}
-                                        placeholder="Add a caption (optional)..."
-                                        className="w-full text-xs text-slate-600 outline-none border-b border-slate-100 focus:border-[#00a884] bg-transparent"
+                                        onChange={(e) => {
+                                            e.target.style.height = 'auto';
+                                            e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px';
+                                            setPendingFiles(prev =>
+                                              prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)
+                                            );
+                                        }}
+                                        placeholder="Add a message..."
+                                        className="w-full text-[14.2px] text-[#111b21] outline-none bg-[#f0f2f5] border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-[#00a884] focus:ring-1 focus:ring-[#00a884] transition-all placeholder-[#8696a0]"
                                       />
-                                      <div className="text-[10px] text-slate-400">{(pf.file.size / 1024 / 1024).toFixed(2)} MB</div>
                                     </div>
+
+                                    {/* Delete Button */}
                                     <button
                                       onClick={() => {
                                         setPendingFiles(prev => prev.filter(f => f.id !== pf.id));
                                         if (pendingFiles.length === 1) setShowFileRename(false);
                                       }}
-                                      className="text-slate-400 hover:text-red-500 p-2"
+                                      className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-2.5 rounded-xl mt-1 transition-colors"
+                                      title="Remove file"
                                     >
-                                      <i className="fa-solid fa-trash-can"></i>
+                                      <i className="fa-solid fa-trash-can text-lg"></i>
                                     </button>
                                   </div>
                                 ))}
-                                <div className="flex justify-end gap-2 pt-1">
+                                
+                                {/* Action Buttons */}
+                                <div className="flex justify-end gap-3 pt-2">
                                   <button
                                     onClick={() => { setPendingFiles([]); setShowFileRename(false); }}
-                                    className="text-slate-500 font-semibold text-sm px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors"
+                                    className="text-slate-600 font-bold text-[14.2px] px-5 py-2.5 rounded-xl hover:bg-slate-100 transition-colors"
                                   >
                                     Cancel
                                   </button>
@@ -1829,9 +1848,9 @@ export function ChatApp({ user, onLogout }) {
                                       pendingFiles.forEach(pf => uploadFileDirectly(pf));
                                       setShowFileRename(false);
                                     }}
-                                    className="bg-[#008069] text-white px-5 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-[#006e5a] transition-colors"
+                                    className="bg-[#008069] text-white px-6 py-2.5 rounded-xl text-[14.2px] font-bold shadow-sm hover:bg-[#006e5a] transition-colors flex items-center gap-2"
                                   >
-                                    Upload All ({pendingFiles.length})
+                                    <i className="fa-solid fa-paper-plane"></i> Send {pendingFiles.length > 1 ? `All (${pendingFiles.length})` : ''}
                                   </button>
                                 </div>
                               </div>
