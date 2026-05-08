@@ -2167,7 +2167,7 @@ export default function App() {
     if (!isFirebaseLoaded || !authChecked) return (
         <div className="flex flex-col justify-center items-center h-screen bg-[#f3f4f6] text-[#008069]">
             <div className="w-12 h-12 border-4 border-[#008069] border-t-transparent rounded-full animate-spin mb-4"></div>
-            <span className="font-bold tracking-widest uppercase text-sm">Initializing Enterprise Portal...</span>
+            <span className="font-bold tracking-widest uppercase text-sm"> i am  Initializing Enterprise Portal...</span>
         </div>
     );
 
