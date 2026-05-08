@@ -301,7 +301,7 @@ export function ChatApp({ user, onLogout }) {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const loadedMessages = snapshot.docs.map(docSnapshot => {
                 const data = docSnapshot.data();
-                return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
+                return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [], forwardedFromGroup: data.forwardedFromGroup, isPrivateForward: data.isPrivateForward };
             });
             setMessages(loadedMessages);
             if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
@@ -855,8 +855,26 @@ export function ChatApp({ user, onLogout }) {
                         const dmIdList = [user.uid, mentionedUser.uid].sort();
                         const dmIdStr = dmIdList.join('_');
                         await addDoc(collection(db, "messages"), {
-                            text: `[Forwarded from ${activeGroup.name}]\n\n${messageText}`, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(),
-                            isTask: false, hasReminder: false, isPrivateMention: false, allowedUsers: [user.email, mentionedEmail], seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: dmIdStr, reactions: {}
+                            text: `[Forwarded from ${activeGroup.name}]\n\n${messageText}`, 
+                            senderUid: user.uid, 
+                            senderEmail: user.email, 
+                            timestamp: serverTimestamp(),
+                            isTask: false, 
+                            hasReminder: false, 
+                            isPrivateMention: false, 
+                            allowedUsers: [user.email, mentionedEmail], 
+                            seenBy: [user.email], 
+                            deliveredTo: [user.email], 
+                            isPinned: false, 
+                            bookmarkedBy: [], 
+                            fileUrl: null, 
+                            fileName: null, 
+                            fileType: null, 
+                            groupId: dmIdStr, 
+                            reactions: {},
+                            // NEW FIELDS
+                            forwardedFromGroup: activeGroup.name,
+                            isPrivateForward: true
                         });
                         await addDoc(collection(db, "notifications"), { userId: mentionedUser.uid, type: "mention", text: `${(user.email||"").split('@')[0]} mentioned you in ${activeGroup.name}.`, messageId: null, groupId: dmIdStr, timestamp: serverTimestamp(), isRead: false });
                     }
@@ -997,7 +1015,6 @@ export function ChatApp({ user, onLogout }) {
             } else {
                 await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
             }
-            
             setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
         } catch (error) { alert("Failed to save group."); }
     };
@@ -1233,6 +1250,16 @@ export function ChatApp({ user, onLogout }) {
                                     </div>
                                 )}
                                 {msg.isPrivateMention && <div className="text-[11px] font-semibold flex items-center gap-1.5 mb-1.5 pb-1 border-b border-black/5 text-purple-700 tracking-tight"><i className="fa-solid fa-lock"></i> {msg.text.startsWith('[Forwarded') ? 'FORWARDED DM' : 'PRIVATE'}</div>}
+                                
+                                {msg.isPrivateForward && (
+                                    <div className="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-black/5">
+                                        <i className="fa-solid fa-lock text-purple-700 text-[11px]"></i>
+                                        <span className="text-[11px] font-semibold text-purple-700 tracking-tight">
+                                            Private from {msg.forwardedFromGroup}
+                                        </span>
+                                    </div>
+                                )}
+
                                 {msg.fileUrl ? (
                                     <div className="flex flex-col gap-1 my-1">
                                         {msg.fileType?.startsWith('image/') ? <img src={msg.fileUrl} alt="Shared" className="rounded max-w-full max-h-64 object-cover cursor-pointer shadow-sm" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}/> :
@@ -1376,7 +1403,7 @@ export function ChatApp({ user, onLogout }) {
                             <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
                             {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                                 <button
-                                    onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }}
+                                    onClick={() => { setGroupForm({name: "", members: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }}
                                     className="w-full max-w-xs bg-[#008069] text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-[#006e5a] transition-all"
                                 >
                                     <i className="fa-solid fa-layer-group mr-2"></i> Create Department
