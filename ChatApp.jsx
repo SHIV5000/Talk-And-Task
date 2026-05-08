@@ -142,11 +142,11 @@ export function ChatApp({ user, onLogout }) {
     const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
 
     const loaderTips = [
-        "Tip: Type '@' to instantly mention your peers or entire departments.",
-        "Tip: Convert any message into an official trackable Task using the context menu.",
-        "Tip: Your session will automatically secure and log out after 5 minutes of inactivity.",
-        "Tip: Admins can download Immutable Audit Logs in PDF format from the Dashboard.",
-        "Tip: Pressing 'Enter' instantly submits your Task Updates."
+        "A Tip: Type '@' to instantly mention your peers or entire departments.",
+        "A Tip: Convert any message into an official trackable Task using the context menu.",
+        "A Tip: Your session will automatically secure and log out after 5 minutes of inactivity.",
+        "A Tip: Admins can download Immutable Audit Logs in PDF format from the Dashboard.",
+        "A Tip: Pressing 'Enter' instantly submits your Task Updates."
     ];
     const [currentTip, setCurrentTip] = useState(loaderTips[0]);
 
