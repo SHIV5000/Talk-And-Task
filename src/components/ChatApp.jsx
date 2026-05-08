@@ -601,7 +601,6 @@ export function ChatApp({ user, onLogout }) {
     }, [user.email, activeGroup]);
 
 
-
 // Notification routing function
 const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId) => {
     const targetGroup = groups.find(g => g.id === targetGroupId);
@@ -1017,38 +1016,29 @@ const scrollToMessage = (msgId) => {
       );
     };
 
-   const handleFileUpload = (e) => {
-  const files = Array.from(e.target.files).slice(0, 3);   // max 3 files
-  if (files.length === 0) return;
-  e.target.value = '';
+    const handleFileUpload = (e) => {
+        const files = Array.from(e.target.files).slice(0, 3);
+        if (files.length === 0) return;
+        e.target.value = '';
 
-  const currentInput = inputText.trim();   // ← grab what the user typed
+        const currentInput = inputText.trim();
 
-  const newPending = files.map((file, index) => ({
-    id: Date.now() + Math.random(),
-    file,
-    customName: file.name,
-    caption: index === 0 ? currentInput : ''   // first file gets the chat text
-  }));
+        const newPending = files.map((file, index) => ({
+            id: Date.now() + Math.random(),
+            file,
+            customName: file.name,
+            caption: index === 0 ? currentInput : ''
+        }));
 
-  // TEMPORARY CONSOLE LOG – we’ll remove after testing
-  console.log('✅ Captured input for upload:', currentInput);
+        console.log('✅ Captured input for upload:', currentInput);
+        console.log('📦 New pending files:', newPending);
 
-  setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
-  setShowFileRename(true);
+        setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
+        setShowFileRename(true);
 
-  if (currentInput) setInputText('');   // clear the main chat bar
-};
+        if (currentInput) setInputText('');
+    };
 
-  // 🔍 TEMPORARY DEBUG – check what we captured
-  console.log('😎 Captured input for upload:', currentInput);
-  console.log('📦 New pending files:', newPending);
-
-  setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
-  setShowFileRename(true);
-
-  if (currentInput) setInputText('');   // clear main bar
-};
     const handlePaste = (e) => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let index in items) {
@@ -1056,31 +1046,23 @@ const scrollToMessage = (msgId) => {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const blob = item.getAsFile();
                 if (blob) {
-  const pastedName = `pasted_image_${Date.now()}.png`;
-  const currentInput = inputText.trim();
+                    const pastedName = `pasted_image_${Date.now()}.png`;
+                    const currentInput = inputText.trim();
 
-  const newItem = {
-    id: Date.now() + Math.random(),
-    file: blob,
-    customName: pastedName,
-    caption: currentInput   // ← pasted image gets the chat text
-  };
+                    const newItem = {
+                        id: Date.now() + Math.random(),
+                        file: blob,
+                        customName: pastedName,
+                        caption: currentInput
+                    };
 
-  console.log('📋 Pasted file with caption:', currentInput);
+                    console.log('📋 Pasted file with caption:', currentInput);
 
-  setPendingFiles(prev => [...prev, newItem].slice(0, 3));
-  setShowFileRename(true);
+                    setPendingFiles(prev => [...prev, newItem].slice(0, 3));
+                    setShowFileRename(true);
 
-  if (currentInput) setInputText('');
-}
-  // Optional debug
-  console.log('📋 Pasted file with caption:', currentInput);
-
-  setPendingFiles(prev => [...prev, newItem].slice(0, 3));
-  setShowFileRename(true);
-
-  if (currentInput) setInputText('');
-}
+                    if (currentInput) setInputText('');
+                }
             }
         }
     };
