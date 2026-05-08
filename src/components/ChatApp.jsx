@@ -102,7 +102,7 @@ export function ChatApp({ user, onLogout }) {
     // --- Admin/Form Management States ---
     const [adminForm, setAdminForm] = useState({ uid: '', name: '', email: '', password: '', isAdmin: false, canCreateGroups: false });
     const [profileForm, setProfileForm] = useState({ name: "", fontSize: "text-[14.2px]", fontFamily: "font-sans" });
-    const [groupForm, setGroupForm] = useState({ name: "", members: [], profilePicUrl: null });
+    const [groupForm, setGroupForm] = useState({ name: "", members: [], admins: [], profilePicUrl: null });
     const [editingGroup, setEditingGroup] = useState(null);
     const [adminFilterUser, setAdminFilterUser] = useState("");
     const [adminFilterDate, setAdminFilterDate] = useState("");
@@ -997,7 +997,8 @@ export function ChatApp({ user, onLogout }) {
             } else {
                 await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
             }
-            setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], profilePicUrl: null});
+            
+            setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
         } catch (error) { alert("Failed to save group."); }
     };
     
@@ -1375,7 +1376,7 @@ export function ChatApp({ user, onLogout }) {
                             <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
                             {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                                 <button
-                                    onClick={() => { setGroupForm({name: "", members: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }}
+                                    onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }}
                                     className="w-full max-w-xs bg-[#008069] text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-[#006e5a] transition-all"
                                 >
                                     <i className="fa-solid fa-layer-group mr-2"></i> Create Department
