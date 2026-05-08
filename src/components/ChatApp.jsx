@@ -142,11 +142,11 @@ export function ChatApp({ user, onLogout }) {
     const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
 
     const loaderTips = [
-        "Tip: Type '@' to instantly mention your peers or entire departments.",
-        "Tip: Convert any message into an official trackable Task using the context menu.",
-        "Tip: Your session will automatically secure and log out after 5 minutes of inactivity.",
-        "Tip: Admins can download Immutable Audit Logs in PDF format from the Dashboard.",
-        "Tip: Pressing 'Enter' instantly submits your Task Updates."
+        "A Tip: Type '@' to instantly mention your peers or entire departments.",
+        "A Tip: Convert any message into an official trackable Task using the context menu.",
+        "A Tip: Your session will automatically secure and log out after 5 minutes of inactivity.",
+        "A Tip: Admins can download Immutable Audit Logs in PDF format from the Dashboard.",
+        "A Tip: Pressing 'Enter' instantly submits your Task Updates."
     ];
     const [currentTip, setCurrentTip] = useState(loaderTips[0]);
 
@@ -600,6 +600,27 @@ export function ChatApp({ user, onLogout }) {
         } catch(e) {}
     }, [user.email, activeGroup]);
 
+
+
+// Notification routing function
+const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId) => {
+    const targetGroup = groups.find(g => g.id === targetGroupId);
+    if (targetGroup) {
+        setActiveGroup(targetGroup);
+        setShowRightSidebar(false);
+        setMobileSidebarOpen(false);
+        setShowNotifications(false);
+        setPendingScrollTarget(msgId);
+        setActiveModal(null);
+    }
+}, [groups]);
+
+// Fix the pinned‑message click
+const scrollToMessage = (msgId) => {
+    scrollToMessageDirect(msgId);
+};
+    
+
     const handleScheduleMessage = async (isTask = false, taskData = null) => {
         const text = pendingScheduledText || inputText.trim();
         const dt = scheduleDateTime || msgScheduleDateTime;
@@ -996,20 +1017,38 @@ export function ChatApp({ user, onLogout }) {
       );
     };
 
-    const handleFileUpload = (e) => {
-      const files = Array.from(e.target.files).slice(0, 3);   // max 3 files
-      if (files.length === 0) return;
-      e.target.value = '';
-      const newPending = files.map(file => ({
-        id: Date.now() + Math.random(),
-        file,
-        customName: file.name,
-        caption: ''
-      }));
-      setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
-      setShowFileRename(true);
-    };
+   const handleFileUpload = (e) => {
+  const files = Array.from(e.target.files).slice(0, 3);   // max 3 files
+  if (files.length === 0) return;
+  e.target.value = '';
 
+  const currentInput = inputText.trim();   // ← grab what the user typed
+
+  const newPending = files.map((file, index) => ({
+    id: Date.now() + Math.random(),
+    file,
+    customName: file.name,
+    caption: index === 0 ? currentInput : ''   // first file gets the chat text
+  }));
+
+  // TEMPORARY CONSOLE LOG – we’ll remove after testing
+  console.log('✅ Captured input for upload:', currentInput);
+
+  setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
+  setShowFileRename(true);
+
+  if (currentInput) setInputText('');   // clear the main chat bar
+};
+
+  // 🔍 TEMPORARY DEBUG – check what we captured
+  console.log('😎 Captured input for upload:', currentInput);
+  console.log('📦 New pending files:', newPending);
+
+  setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
+  setShowFileRename(true);
+
+  if (currentInput) setInputText('');   // clear main bar
+};
     const handlePaste = (e) => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let index in items) {
@@ -1017,16 +1056,31 @@ export function ChatApp({ user, onLogout }) {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const blob = item.getAsFile();
                 if (blob) {
-                  const pastedName = `pasted_image_${Date.now()}.png`;
-                  const newItem = {
-                    id: Date.now() + Math.random(),
-                    file: blob,
-                    customName: pastedName,
-                    caption: ''
-                  };
-                  setPendingFiles(prev => [...prev, newItem].slice(0, 3));
-                  setShowFileRename(true);
-                }
+  const pastedName = `pasted_image_${Date.now()}.png`;
+  const currentInput = inputText.trim();
+
+  const newItem = {
+    id: Date.now() + Math.random(),
+    file: blob,
+    customName: pastedName,
+    caption: currentInput   // ← pasted image gets the chat text
+  };
+
+  console.log('📋 Pasted file with caption:', currentInput);
+
+  setPendingFiles(prev => [...prev, newItem].slice(0, 3));
+  setShowFileRename(true);
+
+  if (currentInput) setInputText('');
+}
+  // Optional debug
+  console.log('📋 Pasted file with caption:', currentInput);
+
+  setPendingFiles(prev => [...prev, newItem].slice(0, 3));
+  setShowFileRename(true);
+
+  if (currentInput) setInputText('');
+}
             }
         }
     };
@@ -2113,7 +2167,7 @@ export default function App() {
     if (!isFirebaseLoaded || !authChecked) return (
         <div className="flex flex-col justify-center items-center h-screen bg-[#f3f4f6] text-[#008069]">
             <div className="w-12 h-12 border-4 border-[#008069] border-t-transparent rounded-full animate-spin mb-4"></div>
-            <span className="font-bold tracking-widest uppercase text-sm">Initializing Enterprise Portal...</span>
+            <span className="font-bold tracking-widest uppercase text-sm"> i am  Initializing Enterprise Portal...</span>
         </div>
     );
 
