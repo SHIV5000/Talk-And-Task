@@ -514,6 +514,13 @@ export default function ChatApp({ user, onLogout }) {
             const groupMsgRef = await addDoc(collection(db, "messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, hasReminder: false, isPrivateMention: isPrivate, allowedUsers: allowedUsers, seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: activeGroup.id, reactions: {}, ...(replyData || {}) });
             logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, isPrivate ? `Private: ${uniqueMentions.join(', ')}` : "Public");
             setReplyingTo(null);
+            // Immediately scroll to bottom so the sender sees their own message
+            if (chatContainerRef.current) 
+                {
+                  chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                  setIsAtBottom(true);
+                }
+            
         } catch (error) { alert("Failed to send message."); }
     };
 
