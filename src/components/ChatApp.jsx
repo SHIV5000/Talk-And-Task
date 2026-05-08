@@ -39,6 +39,12 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+const lockExtension = (originalName, newName) => {
+  const originalExt = originalName.split('.').pop().toLowerCase();
+  const baseName = newName.replace(/\.[^/.]+$/, '');  // remove any existing extension
+  return `${baseName}.${originalExt}`;
+};
+
 const toSentenceCase = (str) => {
     if (!str) return "";
     return str.toLowerCase().replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
@@ -117,8 +123,7 @@ export function ChatApp({ user, onLogout }) {
     const [profileUploadProgress, setProfileUploadProgress] = useState(0);
     const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
     
-    const [pendingFile, setPendingFile] = useState(null);
-    const [pendingFileName, setPendingFileName] = useState('');
+    const [pendingFiles, setPendingFiles] = useState([]);   // { id, file, customName, caption }
     const [showFileRename, setShowFileRename] = useState(false);
     const MAX_FILE_SIZE_MB = 10;
 
@@ -922,90 +927,87 @@ export function ChatApp({ user, onLogout }) {
         } catch (err) {}
     };
 
-    const uploadFileDirectly = async (file, customName = null) => {
-        if (!file || !activeGroup) return;
-        
-        // Size limit
-        const maxSizeBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
-        if (file.size > maxSizeBytes) {
-            alert(`File size exceeds ${MAX_FILE_SIZE_MB} MB limit. Please choose a smaller file.`);
-            return;
+    const uploadFileDirectly = async (pendingFileObj) => {
+      const { file, customName, caption } = pendingFileObj;
+      if (!file || !activeGroup) return;
+      const maxSizeBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        alert(`File "${customName}" exceeds ${MAX_FILE_SIZE_MB} MB limit.`);
+        return;
+      }
+      // Remove this file from pending list immediately (optimistic)
+      setPendingFiles(prev => prev.filter(f => f.id !== pendingFileObj.id));
+      setIsUploading(true);
+      setUploadProgress(0);
+      // Compress images
+      let processedFile = file;
+      try {
+        if (file.type.startsWith('image/')) {
+          const compressedBlob = await compressImage(file);
+          // Keep the same extension as the custom name
+          const ext = customName.split('.').pop().toLowerCase();
+          processedFile = new File([compressedBlob], customName, { type: `image/${ext === 'png' ? 'png' : 'jpeg'}` });
         }
-        
-        setIsUploading(true);
-        setUploadProgress(0);
-        
-        // Compress image if possible, otherwise use original
-        let processedFile = file;
-        try {
-            if (file.type.startsWith('image/')) {
-                const compressedBlob = await compressImage(file);
-                processedFile = new File([compressedBlob], customName || file.name, { type: 'image/jpeg' });
-            }
-        } catch (e) {
-            // If compression fails, fallback to original file
-            console.warn('Compression failed, using original file', e);
+      } catch (e) {
+        console.warn('Compression failed, using original', e);
+      }
+      const finalName = customName;
+      const uniqueFileName = `${Date.now()}_${finalName}`;
+      const uploadTask = uploadBytesResumable(ref(storage, `chat_uploads/${uniqueFileName}`), processedFile);
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+        (error) => {
+          setIsUploading(false);
+          alert('File upload failed.');
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            const messageText = caption.trim()
+              ? `${caption}\n\n📎 ${finalName}`
+              : `Shared a file: ${finalName}`;
+            await addDoc(collection(db, "messages"), {
+              text: messageText,
+              senderUid: user.uid,
+              senderEmail: user.email,
+              timestamp: serverTimestamp(),
+              isTask: false,
+              hasReminder: false,
+              isPrivateMention: false,
+              allowedUsers: [],
+              seenBy: [user.email],
+              deliveredTo: [user.email],
+              isPinned: false,
+              bookmarkedBy: [],
+              fileUrl: downloadURL,
+              fileName: finalName,
+              fileType: processedFile.type,
+              groupId: activeGroup.id,
+              reactions: {},
+            });
+            logImmutableAction("FILE_UPLOAD", `Uploaded file: ${finalName}`, "Public");
+          } catch (err) { console.error(err); }
+          finally {
+            setIsUploading(false);
+            setUploadProgress(0);
+          }
         }
-        
-        const finalName = customName || processedFile.name;
-        const uniqueFileName = `${Date.now()}_${finalName}`;
-        const uploadTask = uploadBytesResumable(ref(storage, `chat_uploads/${uniqueFileName}`), processedFile);
-        
-        uploadTask.on(
-            'state_changed',
-            (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-            (error) => {
-                setIsUploading(false);
-                alert('File upload failed.');
-            },
-            async () => {
-                try {
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    await addDoc(collection(db, "messages"), {
-                        text: `Shared a file: ${finalName}`,
-                        senderUid: user.uid,
-                        senderEmail: user.email,
-                        timestamp: serverTimestamp(),
-                        isTask: false,
-                        hasReminder: false,
-                        isPrivateMention: false,
-                        allowedUsers: [],
-                        seenBy: [user.email],
-                        deliveredTo: [user.email],
-                        isPinned: false,
-                        bookmarkedBy: [],
-                        fileUrl: downloadURL,
-                        fileName: finalName,
-                        fileType: processedFile.type,
-                        groupId: activeGroup.id,
-                        reactions: {},
-                    });
-                    logImmutableAction("FILE_UPLOAD", `Uploaded file: ${finalName}`, "Public");
-                } catch (err) {
-                    console.error(err);
-                } finally {
-                    setIsUploading(false);
-                    setUploadProgress(0);
-                    setPendingFile(null);
-                    setShowFileRename(false);
-                }
-            }
-        );
+      );
     };
 
     const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        // Reset file input so the same file can be selected again
-        e.target.value = '';
-        // Check size immediately
-        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-            alert(`File size exceeds ${MAX_FILE_SIZE_MB} MB limit.`);
-            return;
-        }
-        setPendingFile(file);
-        setPendingFileName(file.name);
-        setShowFileRename(true);
+      const files = Array.from(e.target.files).slice(0, 3);   // max 3 files
+      if (files.length === 0) return;
+      e.target.value = '';
+      const newPending = files.map(file => ({
+        id: Date.now() + Math.random(),
+        file,
+        customName: file.name,
+        caption: ''
+      }));
+      setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
+      setShowFileRename(true);
     };
 
     const handlePaste = (e) => {
@@ -1015,11 +1017,15 @@ export function ChatApp({ user, onLogout }) {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const blob = item.getAsFile();
                 if (blob) {
-                    // For pasted images we can auto‑generate a name
-                    const pastedName = `pasted_image_${Date.now()}.png`;
-                    setPendingFile(blob);
-                    setPendingFileName(pastedName);
-                    setShowFileRename(true);
+                  const pastedName = `pasted_image_${Date.now()}.png`;
+                  const newItem = {
+                    id: Date.now() + Math.random(),
+                    file: blob,
+                    customName: pastedName,
+                    caption: ''
+                  };
+                  setPendingFiles(prev => [...prev, newItem].slice(0, 3));
+                  setShowFileRename(true);
                 }
             }
         }
@@ -1762,41 +1768,77 @@ export function ChatApp({ user, onLogout }) {
                                 </div>
                             )}
 
-                            {/* File Rename Card */}
-                            {showFileRename && pendingFile && (
-                                <div className="bg-white border border-[#00a884] shadow-lg rounded-2xl p-4 mx-3 mb-2 animate-in slide-in-from-bottom-2 z-20">
-                                    <div className="flex items-center gap-3">
-                                    <i className="fa-solid fa-file-lines text-[#00a884] text-xl"></i>
-                                    <div className="flex-1">
+                            {/* Multi-file Rename Card */}
+                            {showFileRename && pendingFiles.length > 0 && (
+                              <div className="bg-white border border-[#00a884] shadow-lg rounded-2xl p-4 mx-3 mb-2 animate-in slide-in-from-bottom-2 z-20 space-y-3">
+                                {pendingFiles.map((pf) => (
+                                  <div key={pf.id} className="flex items-start gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                                    <i className="fa-solid fa-file-lines text-[#00a884] text-xl mt-1"></i>
+                                    <div className="flex-1 space-y-1.5">
+                                      <div className="flex items-center gap-2">
                                         <input
-                                        type="text"
-                                        value={pendingFileName}
-                                        onChange={(e) => setPendingFileName(e.target.value)}
-                                        className="w-full text-sm font-medium text-slate-800 outline-none border-b border-slate-200 focus:border-[#00a884] bg-transparent"
-                                        placeholder="File name"
+                                          type="text"
+                                          value={pf.customName.replace(/\.[^/.]+$/, '')}   // show only base name
+                                          onChange={(e) => {
+                                            const baseName = e.target.value;
+                                            const newName = lockExtension(pf.file.name, baseName);
+                                            setPendingFiles(prev =>
+                                              prev.map(f => f.id === pf.id ? { ...f, customName: newName } : f)
+                                            );
+                                          }}
+                                          className="flex-1 text-sm font-medium text-slate-800 outline-none border-b border-slate-200 focus:border-[#00a884] bg-transparent"
+                                          placeholder="File name"
                                         />
-                                        <div className="text-[11px] text-slate-400 mt-1">
-                                        {(pendingFile.size / 1024 / 1024).toFixed(1)} MB · {pendingFile.type || 'unknown'}
-                                        </div>
+                                        <span className="text-xs text-slate-400">.{pf.file.name.split('.').pop()}</span>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={pf.caption}
+                                        onChange={(e) => setPendingFiles(prev =>
+                                          prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)
+                                        )}
+                                        placeholder="Add a caption (optional)..."
+                                        className="w-full text-xs text-slate-600 outline-none border-b border-slate-100 focus:border-[#00a884] bg-transparent"
+                                      />
+                                      <div className="text-[10px] text-slate-400">{(pf.file.size / 1024 / 1024).toFixed(2)} MB</div>
                                     </div>
                                     <button
-                                        onClick={() => uploadFileDirectly(pendingFile, pendingFileName)}
-                                        className="bg-[#008069] text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-[#006e5a] transition-colors"
+                                      onClick={() => {
+                                        setPendingFiles(prev => prev.filter(f => f.id !== pf.id));
+                                        if (pendingFiles.length === 1) setShowFileRename(false);
+                                      }}
+                                      className="text-slate-400 hover:text-red-500 p-2"
                                     >
-                                        Upload
+                                      <i className="fa-solid fa-trash-can"></i>
                                     </button>
-                                    <button
-                                        onClick={() => { setPendingFile(null); setShowFileRename(false); }}
-                                        className="text-slate-400 hover:text-slate-600 p-2"
-                                    >
-                                        <i className="fa-solid fa-xmark"></i>
-                                    </button>
-                                    </div>
+                                  </div>
+                                ))}
+                                <div className="flex justify-end gap-2 pt-1">
+                                  <button
+                                    onClick={() => { setPendingFiles([]); setShowFileRename(false); }}
+                                    className="text-slate-500 font-semibold text-sm px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (pendingFiles.length === 0) {
+                                        setShowFileRename(false);
+                                        return;
+                                      }
+                                      pendingFiles.forEach(pf => uploadFileDirectly(pf));
+                                      setShowFileRename(false);
+                                    }}
+                                    className="bg-[#008069] text-white px-5 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-[#006e5a] transition-colors"
+                                  >
+                                    Upload All ({pendingFiles.length})
+                                  </button>
                                 </div>
+                              </div>
                             )}
 
                             <div className="bg-[#f0f2f5] px-3 md:px-4 py-3 shrink-0 z-10 flex items-end gap-2 safe-bottom relative w-full">
-                                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
+                                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple/>
                                 <button className="w-[42px] h-[42px] flex items-center justify-center text-[#54656f] hover:text-[#111b21] transition-colors shrink-0 text-[22px]" onClick={() => fileInputRef.current.click()} disabled={isUploading}><i className="fa-solid fa-plus"></i></button>
                                 <div className="relative shrink-0" ref={emojiPickerRef}>
                                     <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-[#54656f] hover:text-[#111b21] transition-colors text-[22px]" title="Emoji"><i className="fa-regular fa-face-smile"></i></button>
