@@ -117,11 +117,11 @@ const MessageBubble = React.memo(({
 
               {/* Dropdown menu */}
               {menuOpen && (
-                <div
-                  ref={menuRef}
-                  className="absolute right-0 top-8 z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-56 animate-in fade-in slide-in-from-top-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
+  <div
+    ref={menuRef}
+    className="absolute bottom-full right-0 mb-2 z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-56 animate-in fade-in slide-in-from-bottom-2"
+    onClick={(e) => e.stopPropagation()}
+  >
                   {/* Reply */}
                   <button
                     onClick={() => { setMenuOpen(false); setReplyingTo(msg); setTimeout(() => chatInputRef.current?.focus(), 100); }}
