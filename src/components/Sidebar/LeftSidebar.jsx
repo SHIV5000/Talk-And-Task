@@ -9,11 +9,18 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
       
       <div className={`hidden md:flex w-[30%] min-w-[300px] max-w-[400px] bg-white border-r border-slate-200 flex-col shrink-0 z-20 shadow-[2px_0_15px_rgba(0,0,0,0.03)] ${mobileSidebarOpen ? 'mobile-sidebar-panel open flex' : 'mobile-sidebar-panel'}`}>
         {/* Header */}
-        <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 border-b border-slate-200/60 group relative safe-top">
-          <div className="flex items-center gap-3">
-            <MemoizedAvatar uid={user.uid} url={currentUserData?.profilePicUrl} name={currentUserData?.name || user.email.split('@')[0]} sizeClass="w-10 h-10 cursor-pointer hover:opacity-80 transition-opacity" />
-            <span className="font-semibold text-[14px] text-[#111b21] truncate max-w-[140px] hidden sm:block">{currentUserData?.name || user.email.split('@')[0]}</span>
-          </div>
+        <div className="flex items-center gap-2">
+  <MemoizedAvatar
+    uid={user.uid}
+    url={currentUserData?.profilePicUrl}
+    name={currentUserData?.name || user.email.split('@')[0]}
+    sizeClass="w-8 h-8"   // ← was w-10 h-10
+    extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
+  />
+  <span className="font-medium text-[13px] text-[#111b21] truncate max-w-[100px]">
+    {currentUserData?.name || user.email.split('@')[0]}
+  </span>
+</div>
           <div className="flex items-center gap-2">
             {/* Create Department (always visible for admins) */}
             {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
