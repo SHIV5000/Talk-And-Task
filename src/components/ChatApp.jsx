@@ -750,29 +750,56 @@ export function ChatApp({ user, onLogout }) {
     };
 
     const onGroupUpdate = useCallback(async (updates) => {
-        if (!activeGroup || !activeGroup.id) return;
+    if (!activeGroup || !activeGroup.id) return;
 
-        // File upload
-        if (updates.profilePicFile) {
-            const file = updates.profilePicFile;
-            setGroupPicUploadProgress(10);
-            const uniqueFileName = `group_${Date.now()}_${file.name}`;
-            const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
-            uploadTask.on(
-                'state_changed',
-                (snapshot) => setGroupPicUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-                (error) => { console.error('Upload failed', error); setGroupPicUploadProgress(0); },
-                async () => {
-                    const url = await getDownloadURL(uploadTask.snapshot.ref);
-                    await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
-                    setGroupPicUploadProgress(0);
-                    setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
-                    setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, profilePicUrl: url } : g));
-                }
-            );
-            return;
-        }
+    // 1. INSTANTLY close the modal
+    setActiveModal(null);
 
+    // 2. BACKGROUND FILE UPLOAD
+    if (updates.profilePicFile) {
+        const file = updates.profilePicFile;
+        const uniqueFileName = `group_${Date.now()}_${file.name}`;
+        const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
+        
+        uploadTask.on(
+            'state_changed',
+            null, // Silently upload in background (no progress bar needed)
+            (error) => { console.error('Background upload failed', error); },
+            async () => {
+                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                // Background sync to DB
+                await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
+                // Update UI once the background upload finishes
+                setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
+                setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, profilePicUrl: url } : g));
+            }
+        );
+        return;
+    }
+
+    // 3. OPTIMISTIC TEXT UPDATES (Name, Members, Admins)
+    const cleanUpdates = {};
+    if (updates.name) cleanUpdates.name = updates.name;
+    if (updates.members) {
+        cleanUpdates.members = updates.members;
+        // Keep admins that are still in the members list
+        cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a));
+    }
+    
+    if (Object.keys(cleanUpdates).length === 0) return;
+
+    // Instantly update the local UI to reflect changes (Optimistic UI)
+    setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
+    setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, ...cleanUpdates } : g));
+
+    // 4. BACKGROUND SYNC TO FIREBASE
+    try {
+        await updateDoc(doc(db, "groups", activeGroup.id), cleanUpdates);
+        logImmutableAction("GROUP_UPDATE", `Updated group: ${activeGroup.name}`, `Fields: ${Object.keys(cleanUpdates).join(', ')}`);
+    } catch (err) { 
+        console.error('Background update failed', err); 
+    }
+}, [activeGroup, storage, db, logImmutableAction, setActiveModal]);
         // Text-based updates (name, members, admins)
         const cleanUpdates = {};
         if (updates.name) cleanUpdates.name = updates.name;
