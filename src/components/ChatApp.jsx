@@ -948,72 +948,89 @@ const scrollToMessage = (msgId) => {
     };
 
     const uploadFileDirectly = async (pendingFileObj) => {
-      const { file, customName, caption } = pendingFileObj;
-      if (!file || !activeGroup) return;
-      const maxSizeBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
-      if (file.size > maxSizeBytes) {
-        alert(`File "${customName}" exceeds ${MAX_FILE_SIZE_MB} MB limit.`);
-        return;
-      }
-      // Remove this file from pending list immediately (optimistic)
-      setPendingFiles(prev => prev.filter(f => f.id !== pendingFileObj.id));
-      setIsUploading(true);
-      setUploadProgress(0);
-      // Compress images
-      let processedFile = file;
-      try {
-        if (file.type.startsWith('image/')) {
-          const compressedBlob = await compressImage(file);
-          // Keep the same extension as the custom name
-          const ext = customName.split('.').pop().toLowerCase();
-          processedFile = new File([compressedBlob], customName, { type: `image/${ext === 'png' ? 'png' : 'jpeg'}` });
+        const { file, customName, caption } = pendingFileObj;
+        if (!file || !activeGroup) throw new Error("Missing file or active group.");
+
+        console.log(`🚀 Starting upload for: ${customName}`);
+
+        const maxSizeBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+        if (file.size > maxSizeBytes) {
+            throw new Error(`File exceeds ${MAX_FILE_SIZE_MB} MB limit.`);
         }
-      } catch (e) {
-        console.warn('Compression failed, using original', e);
-      }
-      const finalName = customName;
-      const uniqueFileName = `${Date.now()}_${finalName}`;
-      const uploadTask = uploadBytesResumable(ref(storage, `chat_uploads/${uniqueFileName}`), processedFile);
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-        (error) => {
-          setIsUploading(false);
-          alert('File upload failed.');
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            const messageText = caption.trim()
-              ? `${caption}\n\n📎 ${finalName}`
-              : `Shared a file: ${finalName}`;
-            await addDoc(collection(db, "messages"), {
-              text: messageText,
-              senderUid: user.uid,
-              senderEmail: user.email,
-              timestamp: serverTimestamp(),
-              isTask: false,
-              hasReminder: false,
-              isPrivateMention: false,
-              allowedUsers: [],
-              seenBy: [user.email],
-              deliveredTo: [user.email],
-              isPinned: false,
-              bookmarkedBy: [],
-              fileUrl: downloadURL,
-              fileName: finalName,
-              fileType: processedFile.type,
-              groupId: activeGroup.id,
-              reactions: {},
-            });
-            logImmutableAction("FILE_UPLOAD", `Uploaded file: ${finalName}`, "Public");
-          } catch (err) { console.error(err); }
-          finally {
-            setIsUploading(false);
-            setUploadProgress(0);
-          }
+
+        let processedFile = file;
+        try {
+            if (file.type.startsWith('image/')) {
+                const compressedBlob = await compressImage(file);
+                const ext = customName.split('.').pop().toLowerCase();
+                processedFile = new File([compressedBlob], customName, { type: `image/${ext === 'png' ? 'png' : 'jpeg'}` });
+            }
+        } catch (e) {
+            console.warn('⚠️ Compression failed, using original', e);
         }
-      );
+
+        const uniqueFileName = `${Date.now()}_${customName}`;
+        const storageRef = ref(storage, `chat_uploads/${uniqueFileName}`);
+        const uploadTask = uploadBytesResumable(storageRef, processedFile);
+
+        uploadTask.on('state_changed', (snapshot) => {
+            setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+        });
+
+        await uploadTask;
+        console.log(`✅ Upload complete for ${customName}, fetching URL...`);
+        
+        const downloadURL = await getDownloadURL(storageRef);
+        console.log(`🔗 URL retrieved: ${downloadURL}`);
+
+        const messageText = caption.trim()
+            ? `${caption}\n\n📎 ${customName}`
+            : `Shared a file: ${customName}`;
+
+        await addDoc(collection(db, "messages"), {
+            text: messageText,
+            senderUid: user.uid,
+            senderEmail: user.email,
+            timestamp: serverTimestamp(),
+            isTask: false,
+            hasReminder: false,
+            isPrivateMention: false,
+            allowedUsers: [],
+            seenBy: [user.email],
+            deliveredTo: [user.email],
+            isPinned: false,
+            bookmarkedBy: [],
+            fileUrl: downloadURL,
+            fileName: customName,
+            fileType: processedFile.type,
+            groupId: activeGroup.id,
+            reactions: {},
+        });
+        
+        console.log(`📝 Firestore message posted for ${customName}`);
+        logImmutableAction("FILE_UPLOAD", `Uploaded file: ${customName}`, "Public");
+    };
+
+    const handleSendPendingFiles = async () => {
+        if (pendingFiles.length === 0) return;
+        
+        const filesToUpload = [...pendingFiles];
+        setPendingFiles([]); 
+        setShowFileRename(false);
+        setIsUploading(true);
+        setUploadProgress(0);
+
+        for (const pf of filesToUpload) {
+            try {
+                await uploadFileDirectly(pf);
+            } catch (error) {
+                console.error("❌ Failed to upload:", pf.customName, error);
+                alert(`Upload failed for ${pf.customName}: ${error.message}`);
+            }
+        }
+
+        setIsUploading(false);
+        setUploadProgress(0);
     };
 
     const handleFileUpload = (e) => {
@@ -1876,14 +1893,7 @@ const scrollToMessage = (msgId) => {
                                     Cancel
                                   </button>
                                   <button
-                                    onClick={() => {
-                                      if (pendingFiles.length === 0) {
-                                        setShowFileRename(false);
-                                        return;
-                                      }
-                                      pendingFiles.forEach(pf => uploadFileDirectly(pf));
-                                      setShowFileRename(false);
-                                    }}
+                                    onClick={handleSendPendingFiles}
                                     className="bg-[#008069] text-white px-6 py-2.5 rounded-xl text-[14.2px] font-bold shadow-sm hover:bg-[#006e5a] transition-colors flex items-center gap-2"
                                   >
                                     <i className="fa-solid fa-paper-plane"></i> Send {pendingFiles.length > 1 ? `All (${pendingFiles.length})` : ''}
