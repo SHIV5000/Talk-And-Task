@@ -310,11 +310,20 @@ export function ChatApp({ user, onLogout }) {
     useEffect(() => {
         const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const loadedMessages = snapshot.docs.map(docSnapshot => {
+            let loadedMessages = snapshot.docs.map(docSnapshot => {
                 const data = docSnapshot.data();
                 return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [], forwardedFromGroup: data.forwardedFromGroup, isPrivateForward: data.isPrivateForward, isMentionNotification: data.isMentionNotification, mentionedInGroup: data.mentionedInGroup, mentionedInGroupId: data.mentionedInGroupId, originalMessageId: data.originalMessageId, originalTextSnippet: data.originalTextSnippet };
             });
+
+            // FIX: Push pending local messages (null timestamp) to the bottom of the chat
+            loadedMessages.sort((a, b) => {
+                const timeA = a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER;
+                const timeB = b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER;
+                return timeA - timeB;
+            });
+
             setMessages(loadedMessages);
+
             if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
                 const newMsg = loadedMessages[loadedMessages.length - 1];
                 if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
@@ -1443,15 +1452,25 @@ const scrollToMessage = (msgId) => {
                                     </div>
                                 )}
 
-                                {msg.fileUrl ? (
+                                {/* Always render text if it exists */}
+                                {msg.text && (
+                                    <p className={`leading-snug whitespace-pre-wrap ${currentUserData?.fontSize || 'text-[14.2px]'} ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }}></p>
+                                )}
+                                
+                                {/* Render file preview if it exists */}
+                                {msg.fileUrl && (
                                     <div className="flex flex-col gap-1 my-1">
-                                        {msg.fileType?.startsWith('image/') ? <img src={msg.fileUrl} alt="Shared" className="rounded max-w-full max-h-64 object-cover cursor-pointer shadow-sm" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}/> :
-                                        <div className="flex items-center gap-3 p-2 rounded bg-black/5 cursor-pointer hover:bg-black/10 transition-colors" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}>
-                                            <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-[#54656f] shadow-sm"><i className="fa-solid fa-file-alt text-lg"></i></div>
-                                            <div className="flex-1 overflow-hidden"><p className="text-[14.2px] truncate text-[#111b21]">{msg.fileName}</p></div>
-                                        </div>}
+                                        {msg.fileType?.startsWith('image/') ? (
+                                            <img src={msg.fileUrl} alt="Shared" className="rounded max-w-full max-h-64 object-cover cursor-pointer shadow-sm" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}/>
+                                        ) : (
+                                            <div className="flex items-center gap-3 p-2 rounded bg-black/5 cursor-pointer hover:bg-black/10 transition-colors" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}>
+                                                <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-[#54656f] shadow-sm"><i className="fa-solid fa-file-lines text-lg"></i></div>
+                                                <div className="flex-1 overflow-hidden"><p className="text-[14.2px] truncate text-[#111b21]">{msg.fileName}</p></div>
+                                            </div>
+                                        )}
                                     </div>
-                                ) : <p className={`leading-snug whitespace-pre-wrap ${currentUserData?.fontSize || 'text-[14.2px]'}`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }}></p>}
+                                )}
+
                                 {msg.isTask && (
                                     <div className="mt-2 bg-white/60 p-2 rounded flex flex-col gap-1 shadow-sm border border-black/5">
                                         <span className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
