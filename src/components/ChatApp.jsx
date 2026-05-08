@@ -22,8 +22,6 @@ import TaskAnalyticsModal from './Modals/TaskAnalyticsModal.jsx';
 import UploadOverlay from './Common/UploadOverlay.jsx';
 import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import ChatView from './Chat/ChatView.jsx';
-import InputArea from './Chat/InputArea.jsx';
 import { compressImage } from '../utils/imageUtils.js';
 
 // Initialize Firebase directly from your original config
@@ -1871,4 +1869,3 @@ export default function App() {
     }
     return <ErrorBoundary><ChatApp user={user} onLogout={() => signOut(auth)} /></ErrorBoundary>;
 }
-```</InputArea></ChatView>
