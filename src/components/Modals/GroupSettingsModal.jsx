@@ -129,8 +129,8 @@ function GroupSettingsModal({
                             <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
                                 <div className="max-h-64 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                                     {dbUsers.filter(u => u.isApproved || u.isAdmin).map(u => {
-                                        const isAdmin = groupForm.admins.includes(u.email);
-                                        const isChecked = groupForm.members.includes(u.email) || isAdmin;
+                                        const isAdmin = groupForm.admins?.includes(u.email) || false;
+                                        const isChecked = groupForm.members?.includes(u.email) || isAdmin;
                                         
                                         return (
                                             <label key={u.uid} className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${isChecked ? 'bg-white shadow-sm border border-slate-200/60' : 'hover:bg-slate-100 border border-transparent'}`}>
