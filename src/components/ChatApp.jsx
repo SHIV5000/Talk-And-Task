@@ -2176,5 +2176,4 @@ const scrollToMessage = (msgId) => {
             </div>
         );
     }
-    return <ErrorBoundary><ChatApp user={user} onLogout={() => signOut(auth)} /></ErrorBoundary>;
-}
+  
