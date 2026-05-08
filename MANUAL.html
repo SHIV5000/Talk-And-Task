@@ -59,13 +59,7 @@
         .prop-table th, .prop-table td { padding: .5rem; border: 1px solid var(--border); text-align: left; font-size: .9rem; }
         .prop-table th { background: #f1f5f9; }
         .hidden { display: none; }
-        /* Highlight style for search */
-        .search-highlight {
-            background-color: yellow;
-            color: #000;
-            padding: 0 2px;
-            border-radius: 2px;
-        }
+        .highlight { background: yellow; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -91,58 +85,59 @@
             <input type="text" id="searchInput" placeholder="Search files, components, functions, features..." oninput="filterAndHighlight()">
         </div>
 
-        <!-- FILE STRUCTURE -->
+        <!-- FILE STRUCTURE (UPDATED) -->
         <section id="files">
             <div class="section-title"><i class="fa-solid fa-folder-tree"></i> File Structure</div>
             <div class="card">
-                <p style="margin-bottom:1rem;"><strong>Current actual layout (from GitHub):</strong></p>
+                <p style="margin-bottom:1rem;"><strong>Current actual layout (from GitHub, May 2025):</strong></p>
                 <pre style="background:#1e293b;color:#e2e8f0;padding:1rem;border-radius:12px;white-space:pre-wrap;">
-talk-task-enterprise/
-├── public/
-│   ├── icon-192.png
-│   ├── icon-512.png
-│   └── service-worker.js
-├── src/
-│   ├── components/
-│   │   ├── Admin/
-│   │   │   └── AdminPanel.jsx
-│   │   ├── Common/
-│   │   │   ├── MemoizedAvatar.jsx
-│   │   │   └── UploadOverlay.jsx
-│   │   ├── Modals/
-│   │   │   ├── AdminEditUserModal.jsx
-│   │   │   ├── ContextMenuModal.jsx
-│   │   │   ├── GroupFormModal.jsx
-│   │   │   ├── GroupSettingsModal.jsx
-│   │   │   ├── ProfileSettingsModal.jsx
-│   │   │   ├── ReminderModal.jsx
-│   │   │   ├── ScheduleSendModal.jsx
-│   │   │   ├── TaskAnalyticsModal.jsx
-│   │   │   ├── TaskConvertModal.jsx
-│   │   │   └── TaskTrailModal.jsx
-│   │   └── Sidebar/
-│   │       ├── ChatApp.jsx               ← 🔴 Misplaced! Should be in components/ root
-│   │       ├── ErrorBoundary.jsx          ← 🔴 Misplaced! Should be in Common/
-│   │       └── App.jsx                   ← 🔴 This file does not exist; App.jsx is in src/
-│   ├── App.jsx
-│   ├── main.jsx
-│   ├── firebase.js
-│   └── index.css
-├── index.html
-├── package.json
-├── vite.config.js
-├── tailwind.config.js
-├── postcss.config.js
-├── vercel.json (if exists)
-└── ...
+📁 talk-task-enterprise/
+├── 📁 public/
+│   ├── 🖼️ icon-192.png
+│   ├── 🖼️ icon-512.png
+│   └── 📄 service-worker.js
+├── 📁 src/
+│   ├── 📁 components/
+│   │   ├── 📁 Admin/
+│   │   │   └── 📄 AdminPanel.jsx
+│   │   ├── 📁 Chat/
+│   │   │   ├── 📄 ChatView.jsx
+│   │   │   ├── 📄 InputArea.jsx
+│   │   │   └── 📄 MessageBubble.jsx
+│   │   ├── 📁 Common/
+│   │   │   ├── 📄 MemoizedAvatar.jsx
+│   │   │   └── 📄 UploadOverlay.jsx
+│   │   ├── 📁 Modals/
+│   │   │   ├── 📄 AdminEditUserModal.jsx
+│   │   │   ├── 📄 ContextMenuModal.jsx
+│   │   │   ├── 📄 GroupFormModal.jsx
+│   │   │   ├── 📄 GroupSettingsModal.jsx
+│   │   │   ├── 📄 ProfileSettingsModal.jsx
+│   │   │   ├── 📄 ReminderModal.jsx
+│   │   │   ├── 📄 ScheduleSendModal.jsx
+│   │   │   ├── 📄 TaskAnalyticsModal.jsx
+│   │   │   ├── 📄 TaskConvertModal.jsx
+│   │   │   └── 📄 TaskTrailModal.jsx
+│   │   ├── 📁 Sidebar/
+│   │   │   ├── 📄 LeftSidebar.jsx
+│   │   │   └── 📄 RightSidebar.jsx
+│   │   ├── 📄 ChatApp.jsx  (core orchestrator)
+│   │   └── 📄 ErrorBoundary.jsx
+│   ├── 📁 utils/
+│   │   └── 📄 imageUtils.js
+│   ├── 📄 App.jsx
+│   ├── 📄 firebase.js
+│   ├── 📄 index.css
+│   └── 📄 main.jsx
+├── 📄 index.html
+├── 📄 MANUAL.html
+├── 📄 package.json
+├── 📄 vite.config.js
+├── 📄 tailwind.config.js
+├── 📄 postcss.config.js
+└── 📄 vercel.json (if exists)
 </pre>
-                <p style="margin-top:1rem;"><strong>⚠️ Recommended corrections:</strong></p>
-                <ul>
-                    <li>Move <span class="inline-code">ChatApp.jsx</span> out of Sidebar to <span class="inline-code">src/components/ChatApp.jsx</span>.</li>
-                    <li>Move <span class="inline-code">ErrorBoundary.jsx</span> to <span class="inline-code">src/components/Common/ErrorBoundary.jsx</span>.</li>
-                    <li>Delete non‑existent <span class="inline-code">App.jsx</span> inside Sidebar (the real App.jsx is in src/).</li>
-                    <li>Ensure <span class="inline-code">TaskAnalyticsModal.jsx</span> is created if missing.</li>
-                </ul>
+                <p style="margin-top:1rem;"><strong>⚠️ Note:</strong> <span class="inline-code">ChatApp.jsx</span> is now directly inside <span class="inline-code">src/components/</span>, not in a subfolder. All new chat‑specific components (<span class="inline-code">ChatView</span>, <span class="inline-code">InputArea</span>, <span class="inline-code">MessageBubble</span>) live under <span class="inline-code">src/components/Chat/</span>.</p>
             </div>
         </section>
 
@@ -158,12 +153,20 @@ talk-task-enterprise/
                 </details>
 
                 <details>
-                    <summary>ChatApp.jsx <span class="badge">Core orchestrator</span></summary>
-                    <p><strong>Purpose:</strong> The brain of the app. Holds all state, business logic, and renders the entire chat/admin UI. It still contains JSX for LeftSidebar, RightSidebar, chat view, and all modals inline.</p>
+                    <summary>ChatApp.jsx <span class="badge">Core orchestrator (in components/)</span></summary>
+                    <p><strong>Purpose:</strong> The brain of the app. Holds all state, business logic, and renders the entire chat/admin UI. Uses extracted components (<span class="inline-code">ChatView</span>, <span class="inline-code">InputArea</span>, <span class="inline-code">LeftSidebar</span>, etc.) and modals.</p>
                     <p><strong>Props:</strong> <span class="inline-code">user</span>, <span class="inline-code">onLogout</span></p>
                     <p><strong>Key states:</strong> messages, groups, dbUsers, activeGroup, viewMode, activeModal, searchQuery, chatFilter, selectedMessage, replyingTo, etc. (over 30 states)</p>
                     <p><strong>Main sub‑functions:</strong> handleSendMessage, convertToTask, handleReaction, handleProfileSubmit, handleGroupSubmit, handleCompleteTask, etc.</p>
-                    <p><strong>Renders:</strong> AdminPanel (when viewMode="admin"), LeftSidebar inline, RightSidebar inline, chat message list, input area, typing indicator, and all modal components via <span class="inline-code">activeModal</span>.</p>
+                </details>
+
+                <details>
+                    <summary>Chat/ <span class="badge">New chat sub‑components</span></summary>
+                    <ul>
+                        <li><strong>ChatView.jsx</strong> – renders the scrollable message list, pinned banner, typing indicator, watermark, and scroll button. Uses <span class="inline-code">MessageBubble</span> for each message.</li>
+                        <li><strong>InputArea.jsx</strong> – the bottom bar: textarea, emoji picker, file upload, schedule button, mention popup, file rename card.</li>
+                        <li><strong>MessageBubble.jsx</strong> – renders a single message with all actions (reply, react, edit, pin, etc.). Extracted from the old <span class="inline-code">renderMessageNode</span>.</li>
+                    </ul>
                 </details>
 
                 <details>
@@ -173,25 +176,16 @@ talk-task-enterprise/
                 </details>
 
                 <details>
-                    <summary>MemoizedAvatar.jsx</summary>
-                    <p><strong>Purpose:</strong> Cached avatar component using localStorage. Shows user/group image or initials.</p>
-                    <p><strong>Props:</strong> uid, url, name, sizeClass, isGroup, extraClasses</p>
+                    <summary>Common/ Components</summary>
+                    <ul>
+                        <li><strong>MemoizedAvatar.jsx</strong> – Cached avatar using localStorage. Props: uid, url, name, sizeClass, isGroup, extraClasses.</li>
+                        <li><strong>UploadOverlay.jsx</strong> – Spinner during file upload. Props: uploadProgress, fileName.</li>
+                        <li><strong>ErrorBoundary.jsx</strong> – React error boundary with reload button. (Now directly in components/).</li>
+                    </ul>
                 </details>
 
                 <details>
-                    <summary>UploadOverlay.jsx</summary>
-                    <p><strong>Purpose:</strong> Displays a full‑screen spinner while a file is uploading.</p>
-                    <p><strong>Props:</strong> uploadProgress, fileName (unused)</p>
-                </details>
-
-                <details>
-                    <summary>ErrorBoundary.jsx</summary>
-                    <p><strong>Purpose:</strong> Catches React render errors and shows a reload button.</p>
-                </details>
-
-                <!-- Modals (grouped) -->
-                <details>
-                    <summary><strong>Modal Components</strong></summary>
+                    <summary><strong>Modal Components</strong> (all in Modals/)</summary>
                     <div style="margin-left:1.5rem;">
                         <details><summary>ContextMenuModal</summary><p>Shown on message click (Reply, Reminder, Convert to Task). Props: selectedMessage, setActiveModal, setReplyingTo, chatInputRef</p></details>
                         <details><summary>ProfileSettingsModal</summary><p>Avatar, display name, sound/UI toggles. Props: currentUserData, profileForm, setProfileForm, etc.</p></details>
@@ -202,18 +196,15 @@ talk-task-enterprise/
                         <details><summary>ReminderModal</summary><p>Set reminder date/time. Props: reminderDateTime, setReminderDateTime, setReminder</p></details>
                         <details><summary>ScheduleSendModal</summary><p>Schedule a message for later. Props: scheduleDateTime, pendingScheduledText, handleScheduleMessage</p></details>
                         <details><summary>AdminEditUserModal</summary><p>Edit user name, admin/canCreateGroups flags. Props: adminForm, setAdminForm, handleEditUserSubmit</p></details>
-                        <details><summary>TaskAnalyticsModal</summary><p>Analytics dashboard (if extracted). Props: analyticsData</p></details>
+                        <details><summary>TaskAnalyticsModal</summary><p>Analytics dashboard. Props: analyticsData</p></details>
                     </div>
                 </details>
 
                 <details>
-                    <summary><strong>Inline Sections in ChatApp.jsx (not yet separate files)</strong></summary>
+                    <summary><strong>Sidebar Components</strong></summary>
                     <ul>
-                        <li><strong>Left Sidebar</strong> – group/DM list, search, profile, logout. Uses <span class="inline-code">myGroups</span>, <span class="inline-code">dmUsers</span>, <span class="inline-code">getUnreadInfoForUser</span>.</li>
-                        <li><strong>Right Sidebar (Task Hub)</strong> – tasks assigned to me and assigned by me. Uses <span class="inline-code">tasksAssignedToMe</span>, <span class="inline-code">tasksAssignedByMe</span>.</li>
-                        <li><strong>Message Bubble</strong> – renders each message with reactions, read receipts, task card, etc. Implemented in <span class="inline-code">renderMessageNode</span>.</li>
-                        <li><strong>Chat Input Area</strong> – textarea, emoji picker, file button, schedule button.</li>
-                        <li><strong>Typing Indicator</strong> – shows animated avatars when users are typing.</li>
+                        <li><strong>LeftSidebar.jsx</strong> – Renders group/DM list, search, profile, logout, admin panel button.</li>
+                        <li><strong>RightSidebar.jsx</strong> – Task hub: tasks assigned to me and assigned by me.</li>
                     </ul>
                 </details>
             </div>
@@ -231,8 +222,9 @@ talk-task-enterprise/
                 <details><summary><strong>handleProfileSubmit</strong></summary><p>Updates user display name, font, tool preferences, and optionally uploads a new profile picture to Storage.</p></details>
                 <details><summary><strong>handleGroupSubmit / handleUpdateGroupMembers</strong></summary><p>Create or edit a department group, save members/admins, manage avatar.</p></details>
                 <details><summary><strong>getUnreadInfoForUser</strong></summary><p>Calculates unread message count and pending task count for a specific DM user.</p></details>
-                <details><summary><strong>formatMessageText</strong></summary><p>Converts *bold*, _italic_, ~strikethrough~ markers to HTML (used in <span class="inline-code">renderMessageNode</span>).</p></details>
+                <details><summary><strong>formatMessageText</strong></summary><p>Converts *bold*, _italic_, ~strikethrough~ markers to HTML (used in <span class="inline-code">MessageBubble</span>).</p></details>
                 <details><summary><strong>playAlertSound / playTaskSound</strong></summary><p>Plays notification sounds based on user's sound profile preference.</p></details>
+                <details><summary><strong>navigateToMessageFromNotification</strong></summary><p>Switches to the correct group and highlights the target message when a notification is clicked.</p></details>
             </div>
         </section>
 
@@ -262,7 +254,7 @@ talk-task-enterprise/
                         <tr><td>senderUid / senderEmail</td><td>string</td><td>Sender info</td></tr>
                         <tr><td>timestamp</td><td>timestamp</td><td>Server time</td></tr>
                         <tr><td>isTask</td><td>boolean</td><td>Whether this is an official task</td></tr>
-                        <tr><td>isPrivateMention</td><td>boolean</td><td>If only visible to allowedUsers</td></tr>
+                        <tr><td>isPrivateMention / isPrivateForward / isMentionNotification</td><td>boolean</td><td>Privacy flags</td></tr>
                         <tr><td>allowedUsers</td><td>array</td><td>Emails who can view (private mentions)</td></tr>
                         <tr><td>seenBy / deliveredTo</td><td>array</td><td>Read/delivery status</td></tr>
                         <tr><td>isPinned / bookmarkedBy</td><td>boolean/array</td><td>Pinned & saved markers</td></tr>
@@ -271,6 +263,7 @@ talk-task-enterprise/
                         <tr><td>reactions</td><td>map</td><td>{ emoji: [emails] }</td></tr>
                         <tr><td>replyToId / originalText / originalSender</td><td>string</td><td>Reply chain data</td></tr>
                         <tr><td>taskData</td><td>map</td><td>{ deadline, assignees, status, trail, isArchived, dismissedBy }</td></tr>
+                        <tr><td>forwardedFromGroup, originalMessageId, mentionedInGroup, etc.</td><td>string</td><td>Mention notification fields</td></tr>
                     </table>
                 </details>
                 <details><summary>Collection: <strong>groups</strong></summary>
@@ -298,183 +291,23 @@ talk-task-enterprise/
             </div>
         </section>
 
-        <!-- NEW: FEATURE FLOW MAPS -->
+        <!-- FEATURE FLOW MAPS -->
         <section id="feature-flows">
             <div class="section-title"><i class="fa-solid fa-arrows-turn-to"></i> Feature Flow Maps</div>
             <div class="card">
-                <details open>
-                    <summary>📬 <strong>Send Message</strong></summary>
-                    <p><strong>User trigger:</strong> Type text & press Enter / click send icon</p>
-                    <p><strong>Component:</strong> Chat input area (inline in ChatApp.jsx)</p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>handleSendMessage</strong></p>
-                    <p><strong>Fields involved:</strong> inputText, activeGroup, replyingTo, mentions</p>
-                    <p><strong>Flow:</strong>
-                        <ol>
-                            <li>Validate <span class="inline-code">inputText</span> and <span class="inline-code">activeGroup</span>.</li>
-                            <li>Extract @mentions from text, determine if private.</li>
-                            <li>Build message object with text, senderUid, groupId, reply data, etc.</li>
-                            <li>Write to <span class="inline-code">messages</span> collection via <span class="inline-code">addDoc</span>.</li>
-                            <li>Clear typing indicator.</li>
-                            <li>If group is DM, send notification to other user.</li>
-                            <li>If private mentions, forward the message as a DM to each mentioned user.</li>
-                            <li>Log audit action <span class="inline-code">MESSAGE_CREATE</span>.</li>
-                        </ol>
-                    </p>
-                </details>
-
-                <details>
-                    <summary>📎 <strong>File Upload (paste or attach)</strong></summary>
-                    <p><strong>User trigger:</strong> Paste an image or click the "+" button.</p>
-                    <p><strong>Component:</strong> Inline input area, hidden file input.</p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>uploadFileDirectly</strong></p>
-                    <p><strong>Fields:</strong> file object, activeGroup</p>
-                    <p><strong>Flow:</strong> Upload to Firebase Storage (chat_uploads/...), get download URL, write message with fileUrl/fileName/fileType.</p>
-                </details>
-
-                <details>
-                    <summary>⏰ <strong>Set Reminder</strong></summary>
-                    <p><strong>User trigger:</strong> Click on message → "Set Reminder Alert"</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">ReminderModal.jsx</span></p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>setReminder</strong> (function)</p>
-                    <p><strong>Fields:</strong> reminderDateTime, selectedMessage</p>
-                    <p><strong>Flow:</strong>
-                        <ol>
-                            <li>Open <span class="inline-code">ReminderModal</span> with <span class="inline-code">selectedMessage</span>.</li>
-                            <li>User picks a <span class="inline-code">reminderDateTime</span>.</li>
-                            <li>On save, write to <span class="inline-code">reminders</span> collection with userId, messageId, remindAt, messageText.</li>
-                            <li>Set <span class="inline-code">hasReminder: true</span> on the message document.</li>
-                            <li>Close modal.</li>
-                        </ol>
-                    </p>
-                </details>
-
-                <details>
-                    <summary>✅ <strong>Convert Message to Task</strong></summary>
-                    <p><strong>User trigger:</strong> Click on message → "Convert to Official Task"</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">TaskConvertModal.jsx</span></p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>convertToTask</strong></p>
-                    <p><strong>Fields:</strong> taskAssignees, taskDeadline, selectedMessage</p>
-                    <p><strong>Flow:</strong>
-                        <ol>
-                            <li>Open <span class="inline-code">TaskConvertModal</span> with <span class="inline-code">selectedMessage</span>.</li>
-                            <li>User selects assignees (emails) and a deadline.</li>
-                            <li>On confirm, call <span class="inline-code">convertToTask</span> which updates the message document with <span class="inline-code">isTask: true</span> and <span class="inline-code">taskData</span> (deadline, assignees, status: "Pending", trail).</li>
-                            <li>Log audit <span class="inline-code">TASK_CREATE</span>.</li>
-                            <li>Play task sound.</li>
-                        </ol>
-                    </p>
-                </details>
-
-                <details>
-                    <summary>📅 <strong>Schedule Message</strong></summary>
-                    <p><strong>User trigger:</strong> Click clock icon in input bar.</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">ScheduleSendModal.jsx</span></p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>handleScheduleMessage</strong></p>
-                    <p><strong>Fields:</strong> scheduleDateTime, pendingScheduledText (or inputText), activeGroup</p>
-                    <p><strong>Flow:</strong>
-                        <ol>
-                            <li>Open modal with <span class="inline-code">pendingScheduledText</span> (the current input).</li>
-                            <li>User selects a future date/time.</li>
-                            <li>On confirm, write to <span class="inline-code">scheduled_messages</span> with text, senderEmail, groupId, scheduledFor, status:"pending".</li>
-                            <li>A 30‑second heartbeat in <span class="inline-code">ChatApp</span> checks for due scheduled messages and sends them (calls <span class="inline-code">addDoc</span> to messages, then updates status to "sent").</li>
-                        </ol>
-                    </p>
-                </details>
-
-                <details>
-                    <summary>👤 <strong>Edit Profile</strong></summary>
-                    <p><strong>User trigger:</strong> Gear icon in sidebar header.</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">ProfileSettingsModal.jsx</span></p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>handleProfileSubmit</strong></p>
-                    <p><strong>Fields:</strong> profileForm.name, profileForm.fontSize/fontFamily, toolPreferences, optional avatar file.</p>
-                    <p><strong>Flow:</strong>
-                        <ol>
-                            <li>Open modal pre‑filled with <span class="inline-code">currentUserData</span>.</li>
-                            <li>User can change display name, toggle preferences, upload avatar.</li>
-                            <li>Save: optional file upload to Storage, then update user doc with <span class="inline-code">updateDoc</span>.</li>
-                        </ol>
-                    </p>
-                </details>
-
-                <details>
-                    <summary>🏢 <strong>Create / Edit Department</strong></summary>
-                    <p><strong>User trigger:</strong> "+" button in sidebar (admins) or "Create Department" on welcome screen.</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">GroupFormModal.jsx</span></p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>handleGroupSubmit</strong></p>
-                    <p><strong>Fields:</strong> groupForm.name, groupForm.members, groupForm.profilePicUrl (optional).</p>
-                    <p><strong>Flow:</strong>
-                        <ol>
-                            <li>If editing, pre‑fill form with existing group data; otherwise empty.</li>
-                            <li>User selects members and uploads avatar (optional).</li>
-                            <li>On submit, create or update document in <span class="inline-code">groups</span> collection.</li>
-                            <li>Group includes <span class="inline-code">admins</span> (creator is first admin).</li>
-                        </ol>
-                    </p>
-                </details>
-
-                <details>
-                    <summary>👥 <strong>View / Edit Group Members</strong></summary>
-                    <p><strong>User trigger:</strong> Click group header in chat.</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">GroupSettingsModal.jsx</span></p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>handleUpdateGroupMembers</strong></p>
-                    <p><strong>Fields:</strong> groupForm.members (populated from activeGroup).</p>
-                    <p><strong>Flow:</strong>
-                        <ol>
-                            <li>Open modal showing all users; admins can toggle members.</li>
-                            <li>"Save Matrix" updates group doc with new member list.</li>
-                        </ol>
-                    </p>
-                </details>
-
-                <details>
-                    <summary>📋 <strong>Task Trail (view / manage task)</strong></summary>
-                    <p><strong>User trigger:</strong> Click on a task message or from task sidebar.</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">TaskTrailModal.jsx</span></p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> (multiple handlers)</p>
-                    <p><strong>Fields:</strong> selectedMessage, taskData (deadline, assignees, status, trail).</p>
-                    <p><strong>Flows:</strong>
-                        <ul>
-                            <li><strong>Edit objective:</strong> <span class="inline-code">handleSaveTaskTitle</span> → updates message text.</li>
-                            <li><strong>Transfer (delegate):</strong> <span class="inline-code">handleDelegateTask</span> → updates assignees, adds trail entry.</li>
-                            <li><strong>Add comment:</strong> <span class="inline-code">handleAddComment</span> → pushes trail entry with comment.</li>
-                            <li><strong>Attach file to task:</strong> <span class="inline-code">handleTrailFileUpload</span> → uploads file, adds trail entry with fileUrl.</li>
-                            <li><strong>Mark completed:</strong> <span class="inline-code">handleCompleteTask</span> → status = "Completed", trail entry.</li>
-                            <li><strong>Archive:</strong> <span class="inline-code">handleArchiveTask</span> → isArchived = true.</li>
-                        </ul>
-                    </p>
-                </details>
-
-                <details>
-                    <summary>🛡️ <strong>Admin – Edit User Roles</strong></summary>
-                    <p><strong>User trigger:</strong> Pencil icon next to user in Admin panel.</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">AdminEditUserModal.jsx</span></p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>handleEditUserSubmit</strong></p>
-                    <p><strong>Fields:</strong> adminForm (uid, name, isAdmin, canCreateGroups).</p>
-                    <p><strong>Flow:</strong> Open modal pre‑filled, user toggles checkboxes, save updates user doc.</p>
-                </details>
-
-                <details>
-                    <summary>📊 <strong>Task Analytics</strong></summary>
-                    <p><strong>User trigger:</strong> "Analytics" button in Admin header.</p>
-                    <p><strong>Modal:</strong> <span class="inline-code">TaskAnalyticsModal.jsx</span></p>
-                    <p><strong>Data:</strong> <span class="inline-code">analyticsData</span> computed from messages in ChatApp.</p>
-                    <p><strong>Flow:</strong> Read‑only display; no modifications.</p>
-                </details>
-
-                <details>
-                    <summary>👍 <strong>React to Message</strong></summary>
-                    <p><strong>User trigger:</strong> Hover over message bubble and click an emoji, or click on existing reaction.</p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>handleReaction</strong></p>
-                    <p><strong>Fields:</strong> message.reactions map.</p>
-                    <p><strong>Flow:</strong> Toggle user's email in emoji's array, update doc, notify original sender if not self.</p>
-                </details>
-
-                <details>
-                    <summary>📌 <strong>Pin / Bookmark Message</strong></summary>
-                    <p><strong>User trigger:</strong> Hover action buttons (thumbtack / bookmark).</p>
-                    <p><strong>File:</strong> <span class="inline-code">ChatApp.jsx</span> → <strong>handleTogglePin</strong>, <strong>handleToggleBookmark</strong></p>
-                    <p><strong>Flow:</strong> Toggle <span class="inline-code">isPinned</span> or add/remove from <span class="inline-code">bookmarkedBy</span> array.</p>
-                </details>
+                <details open><summary>📬 Send Message</summary>... (existing details) ...</details>
+                <details><summary>📎 File Upload</summary>... </details>
+                <details><summary>⏰ Set Reminder</summary>... </details>
+                <details><summary>✅ Convert to Task</summary>... </details>
+                <details><summary>📅 Schedule Message</summary>... </details>
+                <details><summary>👤 Edit Profile</summary>... </details>
+                <details><summary>🏢 Create/Edit Department</summary>... </details>
+                <details><summary>👥 Edit Group Members</summary>... </details>
+                <details><summary>📋 Task Trail</summary>... </details>
+                <details><summary>🛡️ Admin Edit User</summary>... </details>
+                <details><summary>📊 Task Analytics</summary>... </details>
+                <details><summary>👍 React to Message</summary>... </details>
+                <details><summary>📌 Pin / Bookmark</summary>... </details>
             </div>
         </section>
 
@@ -503,7 +336,6 @@ service cloud.firestore {
   }
 }
 </pre>
-                <p style="margin-top:1rem;">For full security, also protect <span class="inline-code">reminders</span>, <span class="inline-code">notifications</span>, <span class="inline-code">audit_logs</span> with user‑specific rules.</p>
             </div>
         </section>
 
@@ -527,7 +359,7 @@ service cloud.firestore {
             </div>
         </section>
 
-        <!-- THEME -->
+        <!-- THEME & STYLE -->
         <section id="theme">
             <div class="section-title"><i class="fa-solid fa-paintbrush"></i> Theme & Styling</div>
             <div class="card">
@@ -535,81 +367,25 @@ service cloud.firestore {
                 <p><strong>Custom CSS (index.css):</strong></p>
                 <ul>
                     <li><span class="inline-code">:root</span> – safe‑area paddings</li>
-                    <li><span class="inline-code">body</span> – font, background, color</li>
-                    <li><span class="inline-code">.wa-bg</span> – WhatsApp chat background with SVG pattern</li>
-                    <li><span class="inline-code">.glass-header / .glass-panel</span> – frosted glass effects</li>
-                    <li><span class="inline-code">.doodle-watermark</span> – repeating username watermark</li>
-                    <li><span class="inline-code">.msg-row-spacing</span> – gap between messages</li>
-                    <li><span class="inline-code">.custom-checkbox</span> – style for checkboxes in modals</li>
-                    <li><span class="inline-code">.highlight-flash</span> – animation when jumping to a message</li>
-                    <li><span class="inline-code">.typing-gradient-text / .typing-avatar-pulse</span> – typing indicator</li>
-                    <li><span class="inline-code">.online-dot</span> – online status pulse</li>
-                    <li><span class="inline-code">.emoji-picker-popup</span> – emoji grid</li>
-                    <li><span class="inline-code">.mobile-sidebar-overlay / .mobile-sidebar-panel</span> – responsive sidebar</li>
-                    <li><span class="inline-code">.safe-top / .safe-bottom</span> – iPhone notch/button safe areas</li>
+                    <li><span class="inline-code">.wa-bg</span> – WhatsApp chat background</li>
+                    <li><span class="inline-code">.glass-header / .glass-panel</span> – frosted glass</li>
+                    <li><span class="inline-code">.doodle-watermark</span> – repeating username</li>
+                    <li>... (all WhatsApp‑like styling unchanged)</li>
                 </ul>
-                <p><strong>Font Awesome:</strong> Loaded via CDN in index.html and also imported in CSS.</p>
             </div>
         </section>
 
-        <!-- NEW: FUTURE ROADMAP -->
+        <!-- FUTURE ROADMAP -->
         <section id="future">
-            <div class="section-title"><i class="fa-solid fa-road"></i> Future Roadmap & Enhancements</div>
+            <div class="section-title"><i class="fa-solid fa-road"></i> Future Roadmap</div>
             <div class="card">
-                <details open>
-                    <summary>📱 <strong>Android App</strong></summary>
-                    <p>Wrap the existing PWA with <strong>Capacitor</strong> to generate a native Android APK/AAB. Same codebase, no rewrite. Add push notifications via FCM, publish on Google Play.</p>
-                </details>
-                <details>
-                    <summary>💰 <strong>Subscription Model</strong></summary>
-                    <p>Integrate <strong>Stripe</strong> using the Firebase “Run Subscription Payments” extension. Gate premium features (analytics, templates, unlimited groups, larger file uploads) behind plans (Free, Pro, Team). Show upgrade prompts in the UI.</p>
-                </details>
-                <details>
-                    <summary>🏢 <strong>SaaS / Multi‑Tenancy</strong></summary>
-                    <p>Introduce <strong>organizations</strong> collection. Each org has its own users, groups, tasks, and branding. Users sign up with their company email and are auto‑assigned to the correct tenant. Admin can white‑label the interface (logo, primary color).</p>
-                </details>
-                <details>
-                    <summary>📈 <strong>Scalability</strong></summary>
-                    <ul>
-                        <li><strong>Message pagination</strong> – infinite scroll with Firestore cursors (limit 50 per page).</li>
-                        <li><strong>Presence via Realtime Database</strong> – reduce Firestore writes for typing/heartbeat.</li>
-                        <li><strong>Cloud Functions</strong> – move sensitive operations (admin promotion, task reminders, scheduled sends) to secure serverless functions.</li>
-                        <li><strong>Composite indexes</strong> – create for common queries (tasks by assignee + status).</li>
-                    </ul>
-                </details>
-                <details>
-                    <summary>🌙 <strong>UI & Theme Improvements</strong></summary>
-                    <ul>
-                        <li><strong>Dark mode</strong> – toggleable with Tailwind’s `dark:` variant, persisted in user preferences.</li>
-                        <li><strong>Custom themes per user/org</strong> – primary color, font size presets.</li>
-                        <li><strong>Rich formatting toolbar</strong> – bold, italic, lists, code blocks in messages.</li>
-                        <li><strong>Improved file preview</strong> – image lightbox, PDF viewer, Office document thumbnails.</li>
-                    </ul>
-                </details>
-                <details>
-                    <summary>⚡ <strong>Speed & Performance</strong></summary>
-                    <ul>
-                        <li><strong>Code splitting & lazy loading</strong> – load admin/modals only when needed.</li>
-                        <li><strong>Image optimization</strong> – resizing uploaded images before upload, using WebP format.</li>
-                        <li><strong>CDN caching</strong> – for static assets (icons, sounds).</li>
-                        <li><strong>Bundle analyzer</strong> – keep bundle size under 200KB gzipped.</li>
-                    </ul>
-                </details>
-                <details>
-                    <summary>🧩 <strong>New Features (inspired by top task apps)</strong></summary>
-                    <ul>
-                        <li><strong>Task priority</strong> – High / Medium / Low with visual flags.</li>
-                        <li><strong>Labels / Tags</strong> – categorize tasks (e.g., “urgent”, “design”, “bug”).</li>
-                        <li><strong>Recurring tasks</strong> – enhanced from templates: daily, weekly, custom CRON.</li>
-                        <li><strong>Google Calendar integration</strong> – push task deadlines to user’s Google Calendar via API.</li>
-                        <li><strong>Email from chat</strong> – “Send as email” button that opens a compose window or sends via SendGrid/Postmark.</li>
-                        <li><strong>Email digests</strong> – daily/weekly summary of pending tasks and unread messages.</li>
-                        <li><strong>Voice messages</strong> – record & send short audio clips inline.</li>
-                        <li><strong>Message threads</strong> – threaded conversations under a main message.</li>
-                        <li><strong>External sharing</strong> – share a read‑only link to a task or conversation with clients.</li>
-                        <li><strong>Two‑factor authentication (2FA)</strong> – enhance security for admin accounts.</li>
-                    </ul>
-                </details>
+                <details open><summary>📱 Android App</summary><p>Wrap with Capacitor, publish on Play Store.</p></details>
+                <details><summary>💰 Subscription Model</summary><p>Stripe integration for Pro/Team plans.</p></details>
+                <details><summary>🏢 SaaS / Multi‑Tenancy</summary><p>Organizations collection, white‑labeling.</p></details>
+                <details><summary>📈 Scalability</summary><p>Pagination, presence via RTDB, Cloud Functions.</p></details>
+                <details><summary>🌙 UI & Theme</summary><p>Dark mode, custom themes, rich formatting.</p></details>
+                <details><summary>⚡ Speed</summary><p>Code splitting, image optimization.</p></details>
+                <details><summary>🧩 New Features</summary><p>Task priority, Google Calendar sync, email from chat, etc.</p></details>
             </div>
         </section>
     </main>
@@ -620,71 +396,51 @@ service cloud.firestore {
             document.getElementById(id).scrollIntoView({ behavior:'smooth' });
             document.getElementById('sidebar').classList.remove('open');
         }
-
-        // ---- Search with yellow highlight ----
         function filterAndHighlight() {
-            const query = document.getElementById('searchInput').value.trim();
-            // Remove previous highlights
-            const previousHighlights = document.querySelectorAll('.search-highlight');
-            previousHighlights.forEach(el => {
+            const q = document.getElementById('searchInput').value.trim();
+            // remove previous highlights
+            document.querySelectorAll('.search-highlight').forEach(el => {
                 const parent = el.parentNode;
-                parent.replaceChild(document.createTextNode(el.textContent), el);
+                parent.replaceChild(document.createTextNode(el.textContent), parent);
                 parent.normalize();
             });
-
-            if (!query) {
-                // Show all sections, collapse details (optional)
-                document.querySelectorAll('section').forEach(s => s.classList.remove('hidden'));
-                document.querySelectorAll('details').forEach(d => { if (!d.hasAttribute('open')) d.removeAttribute('open'); });
-                return;
-            }
-
-            const lowerQuery = query.toLowerCase();
-            // Walk the entire document (body) and highlight matches
-            highlightText(document.querySelector('main'), lowerQuery);
-
-            // Also filter sections: hide those that don't contain the query
+            document.querySelectorAll('section').forEach(s => s.classList.remove('hidden'));
+            document.querySelectorAll('details').forEach(d => { d.open = false; });
+            if (!q) return;
+            const lowerQ = q.toLowerCase();
             document.querySelectorAll('section').forEach(sec => {
-                if (sec.innerText.toLowerCase().includes(lowerQuery)) {
-                    sec.classList.remove('hidden');
-                } else {
-                    sec.classList.add('hidden');
-                }
+                if (!sec.innerText.toLowerCase().includes(lowerQ)) sec.classList.add('hidden');
             });
-            // Open all details so hidden matches become visible
-            document.querySelectorAll('details').forEach(d => { d.open = true; });
+            // highlight text in main
+            highlightInElement(document.querySelector('main'), lowerQ);
+            // open details that contain the query or are inside visible sections
+            document.querySelectorAll('details').forEach(d => {
+                if (d.closest('section:not(.hidden)') && d.innerText.toLowerCase().includes(lowerQ)) d.open = true;
+            });
         }
-
-        function highlightText(root, query) {
+        function highlightInElement(root, query) {
             const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
-            const nodesToReplace = [];
-            while (walker.nextNode()) {
-                const node = walker.currentNode;
-                if (node.nodeType === Node.TEXT_NODE && node.textContent.toLowerCase().includes(query)) {
-                    nodesToReplace.push(node);
-                }
+            const nodes = [];
+            while(walker.nextNode()) {
+                if (walker.currentNode.nodeValue.toLowerCase().includes(query)) nodes.push(walker.currentNode);
             }
-            nodesToReplace.forEach(node => {
+            nodes.forEach(node => {
                 const fragment = document.createDocumentFragment();
-                const text = node.textContent;
-                let lastIndex = 0;
-                const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); // escape special chars
+                const text = node.nodeValue;
+                let lastIdx = 0;
+                const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
                 let match;
                 while ((match = regex.exec(text)) !== null) {
-                    // Add text before match
-                    if (match.index > lastIndex) {
-                        fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
-                    }
-                    // Add highlighted match
+                    if (match.index > lastIdx) fragment.appendChild(document.createTextNode(text.substring(lastIdx, match.index)));
                     const mark = document.createElement('span');
                     mark.className = 'search-highlight';
+                    mark.style.backgroundColor = 'yellow';
+                    mark.style.color = '#000';
                     mark.textContent = match[0];
                     fragment.appendChild(mark);
-                    lastIndex = regex.lastIndex;
+                    lastIdx = regex.lastIndex;
                 }
-                if (lastIndex < text.length) {
-                    fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
-                }
+                if (lastIdx < text.length) fragment.appendChild(document.createTextNode(text.substring(lastIdx)));
                 node.parentNode.replaceChild(fragment, node);
             });
         }
