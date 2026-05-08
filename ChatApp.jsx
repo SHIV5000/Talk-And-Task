@@ -1018,18 +1018,24 @@ const scrollToMessage = (msgId) => {
     };
 
     const handleFileUpload = (e) => {
-      const files = Array.from(e.target.files).slice(0, 3);   // max 3 files
-      if (files.length === 0) return;
-      e.target.value = '';
-      const newPending = files.map(file => ({
-        id: Date.now() + Math.random(),
-        file,
-        customName: file.name,
-        caption: ''
-      }));
-      setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
-      setShowFileRename(true);
-    };
+  const files = Array.from(e.target.files).slice(0, 3);   // max 3 files
+  if (files.length === 0) return;
+  e.target.value = '';
+
+  const currentInput = inputText.trim();   // ← take what the user already typed
+
+  const newPending = files.map((file, index) => ({
+    id: Date.now() + Math.random(),
+    file,
+    customName: file.name,
+    caption: index === 0 ? currentInput : ''   // ← first file gets the typed text
+  }));
+
+  setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
+  setShowFileRename(true);
+
+  if (currentInput) setInputText('');   // ← clear the chat bar so it doesn't double‑send
+};
 
     const handlePaste = (e) => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -1038,16 +1044,21 @@ const scrollToMessage = (msgId) => {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const blob = item.getAsFile();
                 if (blob) {
-                  const pastedName = `pasted_image_${Date.now()}.png`;
-                  const newItem = {
-                    id: Date.now() + Math.random(),
-                    file: blob,
-                    customName: pastedName,
-                    caption: ''
-                  };
-                  setPendingFiles(prev => [...prev, newItem].slice(0, 3));
-                  setShowFileRename(true);
-                }
+  const pastedName = `pasted_image_${Date.now()}.png`;
+  const currentInput = inputText.trim();
+
+  const newItem = {
+    id: Date.now() + Math.random(),
+    file: blob,
+    customName: pastedName,
+    caption: currentInput   // ← pasted image gets the text
+  };
+
+  setPendingFiles(prev => [...prev, newItem].slice(0, 3));
+  setShowFileRename(true);
+
+  if (currentInput) setInputText('');
+}
             }
         }
     };
