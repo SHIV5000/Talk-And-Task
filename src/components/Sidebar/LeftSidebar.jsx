@@ -1,28 +1,47 @@
 import React from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
-export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, activeGroup, setActiveGroup, setShowRightSidebar, setMobileSidebarOpen, getUnreadInfoForUser, messages, onLogout, setActiveModal, setGroupForm, setEditingGroup, sidebarSearch, setSidebarSearch, mobileSidebarOpen, isVipAdmin, setViewMode }) 
-{
+export default function LeftSidebar({
+  user,
+  currentUserData,
+  myGroups,
+  dmUsers,
+  activeGroup,
+  setActiveGroup,
+  setShowRightSidebar,
+  setMobileSidebarOpen,
+  getUnreadInfoForUser,
+  messages,
+  onLogout,
+  setActiveModal,
+  setGroupForm,
+  setEditingGroup,
+  sidebarSearch,
+  setSidebarSearch,
+  mobileSidebarOpen,
+  isVipAdmin,
+  setViewMode,
+}) {
   return (
     <>
       {mobileSidebarOpen && <div className="mobile-sidebar-overlay md:hidden" onClick={() => setMobileSidebarOpen(false)}></div>}
       
       <div className={`hidden md:flex w-[30%] min-w-[300px] max-w-[400px] bg-white border-r border-slate-200 flex-col shrink-0 z-20 shadow-[2px_0_15px_rgba(0,0,0,0.03)] ${mobileSidebarOpen ? 'mobile-sidebar-panel open flex' : 'mobile-sidebar-panel'}`}>
-        {/* Header */}
-        <div className="flex items-center gap-2">
-  <MemoizedAvatar
-    uid={user.uid}
-    url={currentUserData?.profilePicUrl}
-    name={currentUserData?.name || user.email.split('@')[0]}
-    sizeClass="w-8 h-8"   // ← was w-10 h-10
-    extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
-  />
-  <span className="font-medium text-[13px] text-[#111b21] truncate max-w-[100px]">
-    {currentUserData?.name || user.email.split('@')[0]}
-  </span>
-</div>
+        {/* Header – smaller avatar, lighter text */}
+        <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-3 shrink-0 border-b border-slate-200/60 group relative safe-top">
           <div className="flex items-center gap-2">
-            {/* Create Department (always visible for admins) */}
+            <MemoizedAvatar
+              uid={user.uid}
+              url={currentUserData?.profilePicUrl}
+              name={currentUserData?.name || user.email.split('@')[0]}
+              sizeClass="w-8 h-8"
+              extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
+            />
+            <span className="font-medium text-[13px] text-[#111b21] truncate max-w-[100px]">
+              {currentUserData?.name || user.email.split('@')[0]}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
             {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
               <button
                 onClick={() => {
@@ -30,15 +49,17 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
                   setEditingGroup(null);
                   setActiveModal('group_form_modal');
                 }}
-                className="text-[#54656f] hover:bg-black/5 w-10 h-10 rounded-full transition-colors flex items-center justify-center text-[19px]"
+                className="text-[#54656f] hover:bg-black/5 w-8 h-8 rounded-full transition-colors flex items-center justify-center text-[19px]"
                 title="Create Department"
               >
                 <i className="fa-solid fa-plus"></i>
               </button>
             )}
-            <button onClick={() => setActiveModal('edit_profile')} className="text-[#54656f] hover:bg-black/5 w-10 h-10 rounded-full transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-gear"></i></button>
-            <button onClick={onLogout} className="text-[#54656f] hover:bg-black/5 w-10 h-10 rounded-full transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-power-off"></i></button>
+            <button onClick={() => setActiveModal('edit_profile')} className="text-[#54656f] hover:bg-black/5 w-8 h-8 rounded-full transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-gear"></i></button>
+            <button onClick={onLogout} className="text-[#54656f] hover:bg-black/5 w-8 h-8 rounded-full transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-power-off"></i></button>
           </div>
+          
+          {/* Profile popup on hover */}
           <div className="absolute top-14 left-4 glass-panel rounded-xl shadow-lg border border-slate-200 p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
             <div className="font-bold text-[14px] text-slate-800">{currentUserData?.name || user.email.split('@')[0]}</div>
             <div className="text-[12px] font-medium text-slate-500">{user.email}</div>
@@ -54,7 +75,7 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
           </div>
         </div>
 
-        {/* Group & DM List */}
+        {/* Group & DM list */}
         <div className="flex-1 overflow-y-auto flex flex-col bg-white">
           {myGroups.map(g => {
             const hasUnread = messages.some(m => m.groupId === g.id && !m.isMine && !(m.seenBy || []).includes(user.email));
@@ -63,6 +84,7 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
                 <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-[49px] h-[49px]" isGroup={true} extraClasses="mr-3 shrink-0" />
                 <div className="flex-1 overflow-hidden border-b border-slate-100 h-full flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
+                    {/* Lighter group name */}
                     <span className="font-medium text-[14.5px] truncate text-[#800020]">{g.name}</span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -86,6 +108,7 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
                 </div>
                 <div className="flex-1 overflow-hidden border-b border-slate-100 h-full flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
+                    {/* Lighter DM name */}
                     <span className={`text-[14.5px] truncate ${unreadInfo.total > 0 ? 'font-semibold text-[#111b21]' : 'font-medium text-[#111b21]'}`}>{u.name}</span>
                   </div>
                   <div className="flex justify-between items-center">
