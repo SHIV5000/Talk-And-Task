@@ -45,7 +45,6 @@ const toSentenceCase = (str) => {
 
 const formatMessageText = (text) => {
     if (!text) return '';
-    // Basic sanitization to prevent XSS before parsing formatting
     const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return safeText
         .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
@@ -57,7 +56,7 @@ const formatMessageText = (text) => {
 const EMOJI_LIST = ['😀','😂','🤣','😍','🥰','😘','😜','🤪','😎','🤩','😇','🙂','😊','🥳','😡','🤬','💀','👻','👍','👎','❤️','🔥','⭐','✨','🎉','💯','✅','❌','🤔','🙏','💪','🤝','👋','🙌','🤲','🫶','👀','🗣️','💬','📎','📌','🗑️','✏️','📷','🎵','🌈','🍕'];
 
 export function ChatApp({ user, onLogout }) {
-    // --- 5.1 View & Modal States ---
+    // --- View & Modal States ---
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(false);
@@ -68,7 +67,7 @@ export function ChatApp({ user, onLogout }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
 
-    // --- 5.2 Chat Interaction States ---
+    // --- Chat Interaction States ---
     const [inputText, setInputText] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
     const [sidebarSearch, setSidebarSearch] = useState("");
@@ -78,7 +77,7 @@ export function ChatApp({ user, onLogout }) {
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editMessageText, setEditMessageText] = useState("");
 
-    // --- 5.3 Task specific states ---
+    // --- Task specific states ---
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
     const [delegateAssignees, setDelegateAssignees] = useState([]);
@@ -88,7 +87,7 @@ export function ChatApp({ user, onLogout }) {
     const [isEditingTaskTitle, setIsEditingTaskTitle] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState("");
 
-    // --- 5.4 Data Stream Arrays (Firestore Sync) ---
+    // --- Data Stream Arrays (Firestore Sync) ---
     const [messages, setMessages] = useState([]);
     const [dbUsers, setDbUsers] = useState([]);
     const [groups, setGroups] = useState([]);
@@ -100,7 +99,7 @@ export function ChatApp({ user, onLogout }) {
     const [allAdminReminders, setAllAdminReminders] = useState([]);
     const [immutableAuditLogs, setImmutableAuditLogs] = useState([]);
 
-    // --- 5.5 Admin/Form Management States ---
+    // --- Admin/Form Management States ---
     const [adminForm, setAdminForm] = useState({ uid: '', name: '', email: '', password: '', isAdmin: false, canCreateGroups: false });
     const [profileForm, setProfileForm] = useState({ name: "", fontSize: "text-[14.2px]", fontFamily: "font-sans" });
     const [groupForm, setGroupForm] = useState({ name: "", members: [], profilePicUrl: null });
@@ -110,14 +109,14 @@ export function ChatApp({ user, onLogout }) {
     const [adminFilterType, setAdminFilterType] = useState("");
     const [adminFilterGroup, setAdminFilterGroup] = useState("");
 
-    // --- 5.6 File Upload Progress ---
+    // --- File Upload Progress ---
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
     const [trailFileUploading, setTrailFileUploading] = useState(false);
     const [profileUploadProgress, setProfileUploadProgress] = useState(0);
     const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
 
-    // --- 5.7 DOM Element References ---
+    // --- DOM Element References ---
     const messagesEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const chatInputRef = useRef(null);
@@ -148,32 +147,32 @@ export function ChatApp({ user, onLogout }) {
         reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
     });
 
-    // F1: Scheduled Messages
+    // Scheduled Messages
     const [scheduledMessages, setScheduledMessages] = useState([]);
     const [scheduleDateTime, setScheduleDateTime] = useState("");
     const [showScheduleInput, setShowScheduleInput] = useState(false);
     const [pendingScheduledText, setPendingScheduledText] = useState("");
 
-    // F2: Task Analytics
+    // Task Analytics
     const [analyticsView, setAnalyticsView] = useState("overview");
 
-    // F3: Recurring Task Templates
+    // Recurring Task Templates
     const [taskTemplates, setTaskTemplates] = useState([]);
     const [templateForm, setTemplateForm] = useState({ title: "", assignees: [], deadlineDays: 1, groupId: "", recurring: "once", category: "General" });
     const [editingTemplate, setEditingTemplate] = useState(null);
 
-    // F4: Offline Draft Queue
+    // Offline Draft Queue
     const [offlineDrafts, setOfflineDrafts] = useState([]);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-    // F5: Inactivity Warning
+    // Inactivity Warning
     const [showInactivityWarning, setShowInactivityWarning] = useState(false);
     const [inactivityCountdown, setInactivityCountdown] = useState(60);
     const inactivityTimerRef = useRef(null);
     const inactivityCountdownRef = useRef(null);
     const lastActivityRef = useRef(Date.now());
 
-    // F6: Scheduled Message (per-message send scheduling)
+    // Scheduled Message (per-message send scheduling)
     const [msgScheduleDateTime, setMsgScheduleDateTime] = useState("");
 
     useEffect(() => {
@@ -233,7 +232,6 @@ export function ChatApp({ user, onLogout }) {
     }, []);
     useEffect(() => { verifyAdminStatus().then(res => setIsVipAdmin(res)); }, [verifyAdminStatus]);
 
-    // Database Listener: Reminders, Notifications, Admin Logs
     useEffect(() => {
         const qPersonal = query(collection(db, "reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false));
         const unsubPersonal = onSnapshot(qPersonal, (snapshot) => setActiveReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -259,7 +257,6 @@ export function ChatApp({ user, onLogout }) {
         return () => { unsubPersonal(); unsubAlerts(); unsubAdmin(); unsubAudit(); };
     }, [user.uid, currentUserData?.isAdmin, isVipAdmin]);
 
-    // Database Listener: Users & Departments
     useEffect(() => {
         const heartbeatInterval = setInterval(() => { updateDoc(doc(db, "users", user.uid), { lastActive: serverTimestamp() }).catch(() => {}); }, 60000);
         const unsubCurrent = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
@@ -277,7 +274,6 @@ export function ChatApp({ user, onLogout }) {
         return () => { clearInterval(heartbeatInterval); unsubCurrent(); unsubUsers(); unsubGroups(); };
     }, [user, currentUserData?.isAdmin, isVipAdmin]);
 
-    // Sound Execution Functions
     const playAlertSound = useCallback(() => {
         const audioUrls = {
             classic: "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3",
@@ -300,7 +296,6 @@ export function ChatApp({ user, onLogout }) {
         } catch(e) {}
     }, []);
 
-    // Database Listener: Real-time Messages Sync
     useEffect(() => {
         const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -334,7 +329,6 @@ export function ChatApp({ user, onLogout }) {
         return () => { unsubscribe(); unsubTyping(); };
     }, [user.uid, activeGroup?.id, playAlertSound, isWorkspaceLoading, pendingScrollTarget]);
 
-    // Database Updater: Seen status marking
     useEffect(() => {
         if (!activeGroup?.id || !user.email) return;
         const unseenMsgs = messages.filter(m => m.groupId === activeGroup.id && !m.isMine && !(m.seenBy || []).includes(user.email));
@@ -350,7 +344,6 @@ export function ChatApp({ user, onLogout }) {
         batchUpdate();
     }, [activeGroup?.id, messages, user.email]);
 
-    // UI Listeners: Click outside to close emoji picker
     useEffect(() => {
         const handleClickOutside = (e) => { if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) { setEmojiPickerOpen(false); } };
         if (emojiPickerOpen) { document.addEventListener('mousedown', handleClickOutside); document.addEventListener('touchstart', handleClickOutside); }
@@ -359,14 +352,12 @@ export function ChatApp({ user, onLogout }) {
 
     useEffect(() => { return () => { if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current); }; }, []);
     
-    // ── F1 + F6: Scheduled Messages Firestore listener + heartbeat sender ──
     useEffect(() => {
         if (!user?.email) return;
         const q = query(collection(db, "scheduled_messages"), where("senderEmail", "==", user.email));
         const unsub = onSnapshot(q, snap => {
             setScheduledMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
-        // heartbeat: every 30s check if any scheduled messages are due
         const hb = setInterval(async () => {
             const now = new Date();
             const dueQ = query(collection(db, "scheduled_messages"), where("senderEmail", "==", user.email), where("status", "==", "pending"));
@@ -405,7 +396,6 @@ export function ChatApp({ user, onLogout }) {
         return () => { unsub(); clearInterval(hb); };
     }, [user?.email, user?.uid, dbUsers]);
 
-    // ── F3: Task Templates Firestore listener ──
     useEffect(() => {
         if (!user?.uid) return;
         const unsub = onSnapshot(collection(db, "task_templates"), snap => {
@@ -414,7 +404,6 @@ export function ChatApp({ user, onLogout }) {
         return () => unsub();
     }, [user?.uid]);
 
-    // ── F4: Offline Draft Queue (IndexedDB) ──
     useEffect(() => {
         const goOnline = () => {
             setIsOnline(true);
@@ -427,10 +416,9 @@ export function ChatApp({ user, onLogout }) {
         return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
     }, []);
 
-    // ── F5: Inactivity Warning (warn at 4 min, logout at 5 min) ──
     useEffect(() => {
         const IDLE_WARN = 4 * 60 * 1000;
-        const IDLE_LOGOUT = 60; // seconds after warning
+        const IDLE_LOGOUT = 60;
         const resetInactivity = () => {
             lastActivityRef.current = Date.now();
             if (showInactivityWarning) return;
@@ -460,14 +448,12 @@ export function ChatApp({ user, onLogout }) {
         };
     }, [showInactivityWarning]);
     
-    // Animation Helper: Triggers message highlight pulse
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
         highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 3100);
     }, []);
 
-    // Handle Smart Scrolling for Notifications (DOM Polling)
     useEffect(() => {
         if (pendingScrollTarget && activeGroup) {
             const el = document.getElementById(`msg-${pendingScrollTarget}`);
@@ -480,11 +466,6 @@ export function ChatApp({ user, onLogout }) {
             }
         }
     }, [messages, pendingScrollTarget, activeGroup, triggerHighlight]);
-
-
-    // =====================================================================
-    // --- SECTION 5.B : COMPUTED STATE (useMemo)                        ---
-    // =====================================================================
 
     const myGroups = useMemo(() => {
         let filtered = groups.filter(g => g.members?.includes(user.email) && !g.isArchived);
@@ -552,7 +533,6 @@ export function ChatApp({ user, onLogout }) {
         return logs;
     }, [immutableAuditLogs, adminFilterUser, adminFilterDate, adminFilterType, adminFilterGroup]);
 
-    // ── F2: Task Analytics Computed State ──
     const analyticsData = useMemo(() => {
         const allTasks = messages.filter(m => m.isTask);
         const completed = allTasks.filter(m => m.taskData?.status === 'Completed');
@@ -589,10 +569,6 @@ export function ChatApp({ user, onLogout }) {
         }
         return { total: allTasks.length, completed: completed.length, pending: pending.length, inProgress: inProgress.length, overdue: overdue.length, staffMap, groupMap, trend, overdueList: overdue.slice(0,10), completionRate: allTasks.length ? Math.round((completed.length / allTasks.length) * 100) : 0 };
     }, [messages, groups]);
-
-    // =====================================================================
-    // --- SECTION 5.C : ACTION HANDLERS (LOGIC & FIREBASE WRITES)       ---
-    // =====================================================================
 
     const scrollToMessageDirect = useCallback((msgId) => {
         const el = document.getElementById(`msg-${msgId}`);
@@ -750,78 +726,57 @@ export function ChatApp({ user, onLogout }) {
     };
 
     const onGroupUpdate = useCallback(async (updates) => {
-    if (!activeGroup || !activeGroup.id) return;
+        if (!activeGroup || !activeGroup.id) return;
 
-    // 1. INSTANTLY close the modal
-    setActiveModal(null);
+        // 1. INSTANTLY close the modal
+        setActiveModal(null);
 
-    // 2. BACKGROUND FILE UPLOAD
-    if (updates.profilePicFile) {
-        const file = updates.profilePicFile;
-        const uniqueFileName = `group_${Date.now()}_${file.name}`;
-        const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
-        
-        uploadTask.on(
-            'state_changed',
-            null, // Silently upload in background (no progress bar needed)
-            (error) => { console.error('Background upload failed', error); },
-            async () => {
-                const url = await getDownloadURL(uploadTask.snapshot.ref);
-                // Background sync to DB
-                await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
-                // Update UI once the background upload finishes
-                setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
-                setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, profilePicUrl: url } : g));
-            }
-        );
-        return;
-    }
+        // 2. BACKGROUND FILE UPLOAD
+        if (updates.profilePicFile) {
+            const file = updates.profilePicFile;
+            const uniqueFileName = `group_${Date.now()}_${file.name}`;
+            const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
+            
+            uploadTask.on(
+                'state_changed',
+                null, // Silently upload in background
+                (error) => { console.error('Background upload failed', error); },
+                async () => {
+                    const url = await getDownloadURL(uploadTask.snapshot.ref);
+                    // Background sync to DB
+                    await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
+                    // Update UI once the background upload finishes
+                    setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
+                    setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, profilePicUrl: url } : g));
+                }
+            );
+            return;
+        }
 
-    // 3. OPTIMISTIC TEXT UPDATES (Name, Members, Admins)
-    const cleanUpdates = {};
-    if (updates.name) cleanUpdates.name = updates.name;
-    if (updates.members) {
-        cleanUpdates.members = updates.members;
-        // Keep admins that are still in the members list
-        cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a));
-    }
-    
-    if (Object.keys(cleanUpdates).length === 0) return;
-
-    // Instantly update the local UI to reflect changes (Optimistic UI)
-    setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
-    setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, ...cleanUpdates } : g));
-
-    // 4. BACKGROUND SYNC TO FIREBASE
-    try {
-        await updateDoc(doc(db, "groups", activeGroup.id), cleanUpdates);
-        logImmutableAction("GROUP_UPDATE", `Updated group: ${activeGroup.name}`, `Fields: ${Object.keys(cleanUpdates).join(', ')}`);
-    } catch (err) { 
-        console.error('Background update failed', err); 
-    }
-}, [activeGroup, storage, db, logImmutableAction, setActiveModal]);
-        // Text-based updates (name, members, admins)
+        // 3. OPTIMISTIC TEXT UPDATES (Name, Members, Admins)
         const cleanUpdates = {};
         if (updates.name) cleanUpdates.name = updates.name;
         if (updates.members) {
             cleanUpdates.members = updates.members;
-            // If admins not explicitly provided, keep only those still in members
+            // Keep admins that are still in the members list
             cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a));
         }
         
         if (Object.keys(cleanUpdates).length === 0) return;
 
+        // Instantly update the local UI to reflect changes (Optimistic UI)
+        setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
+        setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, ...cleanUpdates } : g));
+
+        // 4. BACKGROUND SYNC TO FIREBASE
         try {
             await updateDoc(doc(db, "groups", activeGroup.id), cleanUpdates);
-            // Immediately update local state to avoid delay
-            setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
-            setGroups(prev => prev.map(g => g.id === activeGroup.id ? { ...g, ...cleanUpdates } : g));
             logImmutableAction("GROUP_UPDATE", `Updated group: ${activeGroup.name}`, `Fields: ${Object.keys(cleanUpdates).join(', ')}`);
         } catch (err) { 
-            console.error('Update failed', err); 
+            console.error('Background update failed', err); 
         }
-    }, [activeGroup, storage, db, logImmutableAction]);
-    
+    }, [activeGroup, storage, db, logImmutableAction, setActiveModal]);
+
     const handleSendOfflineAware = async () => {
         if (!inputText.trim() || !activeGroup) return;
         if (!isOnline) {
@@ -1179,7 +1134,6 @@ export function ChatApp({ user, onLogout }) {
         }
     };
 
-    // CORE: Admin Logic
     const handleToggleApprove = async (u) => { await updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved }); };
 
     const handleEditUserSubmit = async (e) => {
@@ -1219,10 +1173,6 @@ export function ChatApp({ user, onLogout }) {
         const pendingTasks = dmMessages.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid) && m.senderEmail === otherUserEmail && !m.taskData?.isArchived);
         return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
     }, [messages, user.uid, user.email]);
-
-    // =====================================================================
-    // --- SECTION 5.D : RENDER HELPERS (UI BUILDERS)                    ---
-    // =====================================================================
 
     const getBubbleStyles = (msg) => {
         let baseStyles = "";
@@ -1327,11 +1277,6 @@ export function ChatApp({ user, onLogout }) {
         );
     }, [messages, editingMessageId, editMessageText, user.email, currentUserData, handleTogglePin, handleToggleBookmark, handleReaction, handleDeleteMessage, scrollToMessageDirect, activeGroup, isVipAdmin, toolPreferences, highlightedMsgId]);
 
-
-    // =====================================================================
-    // --- SECTION 5.E : MAIN RENDER CYCLE                               ---
-    // =====================================================================
-
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-100 p-4 text-gray-800">
@@ -1429,16 +1374,13 @@ export function ChatApp({ user, onLogout }) {
                             <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Talk & Task</h2>
                             <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
                             {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
-    <button
-        onClick={() => { setGroupForm({name: "", members: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }}
-        className="w-full max-w-xs bg-[#008069] text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-[#006e5a] transition-all"
-    >
-        <i className="fa-solid fa-layer-group mr-2"></i> Create Department
-    </button>
-)}                           
-                            <div className="flex flex-col gap-4 w-full max-w-xs">
-                      
-                            </div>
+                                <button
+                                    onClick={() => { setGroupForm({name: "", members: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }}
+                                    className="w-full max-w-xs bg-[#008069] text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-[#006e5a] transition-all"
+                                >
+                                    <i className="fa-solid fa-layer-group mr-2"></i> Create Department
+                                </button>
+                            )}                           
                             
                             <div className="absolute top-4 right-4 flex items-center gap-2">
                                 <div className="relative">
@@ -1515,7 +1457,6 @@ export function ChatApp({ user, onLogout }) {
                                 <div className="flex items-center gap-1 shrink-0 relative">
                                     <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
                                     
-                                    
                                     {showFilterMenu && (
                                         <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-100">
                                             {['all', 'tasks-pending', 'tasks-completed', 'messages', 'today', 'bookmarked'].map(f => (
@@ -1588,13 +1529,8 @@ export function ChatApp({ user, onLogout }) {
                                 </div>
                             </div>
 
-                            
                             <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] wa-bg relative" onClick={() => setShowFilterMenu(false)}>
-                                
-                                
                                 <div className="flex flex-col min-h-full justify-end py-4 pb-10">
-                                    
-                                    
                                     {toolPreferences.showWatermark !== false && (
                                         <div className="doodle-watermark">
                                             {Array.from({ length: 15 }).map((_, rowIdx) => (
@@ -1639,12 +1575,10 @@ export function ChatApp({ user, onLogout }) {
                                 </div>
                             </div>
 
-                            
                             <button onClick={scrollToPosition} className="absolute bottom-[80px] right-4 bg-white text-[#54656f] shadow-[0_1px_1px_0_rgba(11,20,26,.1),0_2px_5px_0_rgba(11,20,26,.2)] rounded-full w-10 h-10 flex items-center justify-center z-30 transition-transform">
                                 <i className={`fa-solid ${isAtBottom ? 'fa-arrow-up' : 'fa-arrow-down'} text-[16px]`}></i>
                             </button>
 
-                            
                             {replyingTo && (
                                 <div className="bg-[#f0f2f5] px-4 py-2 flex items-center justify-between shrink-0 animate-in slide-in-from-bottom-2 z-10 relative">
                                     <div className="flex-1 bg-[#e9edef] rounded-lg p-2 border-l-4 border-[#00a884] flex items-center justify-between">
@@ -1657,7 +1591,6 @@ export function ChatApp({ user, onLogout }) {
                                 </div>
                             )}
 
-                            
                             {inputText.split(/\s+/).pop().startsWith('@') && inputText.split(/\s+/).pop().length > 0 && (
                                 <div className="absolute bottom-[65px] left-4 bg-white shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] rounded-lg w-72 max-h-56 overflow-y-auto z-20 py-2 animate-in slide-in-from-bottom-2 border border-slate-100">
                                     <div className="px-4 py-1 text-[12px] font-bold text-[#00a884] tracking-wide mb-1">Users</div>
@@ -1677,11 +1610,9 @@ export function ChatApp({ user, onLogout }) {
                                 </div>
                             )}
 
-                            {/* Message Input Area with Emoji Picker & Toolbar */}
                             <div className="bg-[#f0f2f5] px-3 md:px-4 py-3 shrink-0 z-10 flex items-end gap-2 safe-bottom relative w-full">
                                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
                                 <button className="w-[42px] h-[42px] flex items-center justify-center text-[#54656f] hover:text-[#111b21] transition-colors shrink-0 text-[22px]" onClick={() => fileInputRef.current.click()} disabled={isUploading}><i className="fa-solid fa-plus"></i></button>
-                                {/* Emoji Picker */}
                                 <div className="relative shrink-0" ref={emojiPickerRef}>
                                     <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-[#54656f] hover:text-[#111b21] transition-colors text-[22px]" title="Emoji"><i className="fa-regular fa-face-smile"></i></button>
                                     {emojiPickerOpen && (
@@ -1700,9 +1631,7 @@ export function ChatApp({ user, onLogout }) {
                                     </div>
                                     <textarea ref={chatInputRef} rows={1} placeholder={isOnline ? "Type or Paste a message..." : "⚡ Offline — message will be queued"} className="bg-transparent flex-1 outline-none text-[15px] text-[#111b21] resize-none py-[10px] px-4 w-full" style={{ minHeight: '42px', maxHeight: '120px' }} value={inputText} onPaste={handlePaste} onChange={(e) => { setInputText(e.target.value); handleTypingEvent(); e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendOfflineAware(); } }} />
                                 </div>
-                                {/* Schedule Send Button */}
                                 <button onClick={() => { if (!inputText.trim()) return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-[#54656f] hover:text-amber-500 transition-colors" title="Schedule this message"><i className="fa-regular fa-clock text-[20px]"></i></button>
-                                {/* Offline Drafts indicator */}
                                 {offlineDrafts.length > 0 && (
                                     <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-[42px] h-[42px] flex justify-center items-center text-amber-500 hover:text-amber-600 transition-colors" title={`${offlineDrafts.length} offline draft(s)`}>
                                         <i className="fa-solid fa-inbox text-[20px]"></i>
@@ -1735,10 +1664,7 @@ export function ChatApp({ user, onLogout }) {
                         />
                     )}
 
-                    {/* ========================================================================= */}
-                    {/* === SECTION 5.F : MODALS & OVERLAYS                                    === */}
-                    {/* ========================================================================= */}
-
+                    {/* MODALS */}
                     {activeModal === 'context' && <ContextMenuModal selectedMessage={selectedMessage} setActiveModal={setActiveModal} setReplyingTo={setReplyingTo} chatInputRef={chatInputRef} />}
                     
                     {activeModal === 'edit_profile' && (
@@ -1783,7 +1709,7 @@ export function ChatApp({ user, onLogout }) {
                         currentUserData={currentUserData}
                         isVipAdmin={isVipAdmin}
                         handleUpdateGroupMembers={handleUpdateGroupMembers}
-                       onGroupUpdate={onGroupUpdate}
+                        onGroupUpdate={onGroupUpdate}
                       />
                     )}
 
@@ -1870,9 +1796,6 @@ export function ChatApp({ user, onLogout }) {
     );
 }
 
-// =========================================================================
-// === SECTION 6 : AUTHENTICATION & ENTRY POINT                          ===
-// =========================================================================
 export default function App() {
     const [user, setUser] = useState(null);
     const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
