@@ -1017,26 +1017,25 @@ const scrollToMessage = (msgId) => {
       );
     };
 
-    const handleFileUpload = (e) => {
-  const files = Array.from(e.target.files).slice(0, 3);   // max 3 files
+   const handleFileUpload = (e) => {
+  const files = Array.from(e.target.files).slice(0, 3);
   if (files.length === 0) return;
   e.target.value = '';
 
-  const currentInput = inputText.trim();   // ← take what the user already typed
+  const currentInput = inputText.trim();   // <-- capture the typed text
 
   const newPending = files.map((file, index) => ({
     id: Date.now() + Math.random(),
     file,
     customName: file.name,
-    caption: index === 0 ? currentInput : ''   // ← first file gets the typed text
+    caption: index === 0 ? currentInput : ''   // <-- first file gets the text
   }));
 
   setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
   setShowFileRename(true);
 
-  if (currentInput) setInputText('');   // ← clear the chat bar so it doesn't double‑send
+  if (currentInput) setInputText('');   // <-- clear the main chat bar
 };
-
     const handlePaste = (e) => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let index in items) {
@@ -1051,7 +1050,7 @@ const scrollToMessage = (msgId) => {
     id: Date.now() + Math.random(),
     file: blob,
     customName: pastedName,
-    caption: currentInput   // ← pasted image gets the text
+    caption: currentInput   // <-- pasted image gets the text
   };
 
   setPendingFiles(prev => [...prev, newItem].slice(0, 3));
