@@ -48,7 +48,7 @@ const formatMessageText = (text) => {
 
 const EMOJI_LIST = ['😀','😂','🤣','😍','🥰','😘','😜','🤪','😎','🤩','😇','🙂','😊','🥳','😡','🤬','💀','👻','👍','👎','❤️','🔥','⭐','✨','🎉','💯','✅','❌','🤔','🙏','💪','🤝','👋','🙌','🤲','🫶','👀','🗣️','💬','📎','📌','🗑️','✏️','📷','🎵','🌈','🍕'];
 
-export function ChatApp({ user, onLogout }) {
+export default function ChatApp({ user, onLogout }) {
     // --- View & Modal States ---
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [activeModal, setActiveModal] = useState(null);
