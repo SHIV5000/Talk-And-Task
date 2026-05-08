@@ -600,6 +600,27 @@ export function ChatApp({ user, onLogout }) {
         } catch(e) {}
     }, [user.email, activeGroup]);
 
+
+
+// Notification routing function
+const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId) => {
+    const targetGroup = groups.find(g => g.id === targetGroupId);
+    if (targetGroup) {
+        setActiveGroup(targetGroup);
+        setShowRightSidebar(false);
+        setMobileSidebarOpen(false);
+        setShowNotifications(false);
+        setPendingScrollTarget(msgId);
+        setActiveModal(null);
+    }
+}, [groups]);
+
+// Fix the pinned‑message click
+const scrollToMessage = (msgId) => {
+    scrollToMessageDirect(msgId);
+};
+    
+
     const handleScheduleMessage = async (isTask = false, taskData = null) => {
         const text = pendingScheduledText || inputText.trim();
         const dt = scheduleDateTime || msgScheduleDateTime;
