@@ -1,123 +1,188 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
+import MemoizedAvatar from '../Common/MemoizedAvatar';
 
-export default function GroupSettingsModal({
-  setActiveModal,
-  activeGroup,
-  dbUsers,
-  user,
-  currentUserData,
-  isVipAdmin,
-  onGroupUpdate,
+function GroupSettingsModal({
+    setActiveModal,
+    activeGroup,
+    groupForm,
+    setGroupForm,
+    dbUsers,
+    user,
+    currentUserData,
+    isVipAdmin,
+    handleUpdateGroupMembers,
+    onGroupUpdate // Using the new instantly closing & background syncing function
 }) {
-  const [editName, setEditName] = useState(activeGroup.name);
-  const [uploading, setUploading] = useState(false);
-  const groupPicInputRef = useRef(null);
 
-  const isAdmin = activeGroup?.admins?.includes(user.email) || currentUserData?.isAdmin || isVipAdmin;
+    // Pre-fill the form with the current active group's details when opened
+    useEffect(() => {
+        if (activeGroup) {
+            setGroupForm({
+                name: activeGroup.name || "",
+                members: activeGroup.members ? activeGroup.members.filter(m => !activeGroup.admins?.includes(m)) : [],
+                admins: activeGroup.admins || [],
+                profilePicUrl: activeGroup.profilePicUrl || null,
+                profilePicFile: null
+            });
+        }
+    }, [activeGroup, setGroupForm]);
 
-  // keep editName in sync if activeGroup changes externally
-  useEffect(() => {
-    setEditName(activeGroup.name);
-  }, [activeGroup.name]);
+    // Handle Image Selection
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            // Store the file directly in the form state for `onGroupUpdate` to handle
+            setGroupForm(prev => ({ ...prev, profilePicFile: file, profilePicUrl: URL.createObjectURL(file) }));
+        }
+    };
 
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file || !isAdmin) return;
-    onGroupUpdate({ profilePicFile: file });
-  };
+    // Toggle Member Selection
+    const toggleMember = (email) => {
+        setGroupForm(prev => {
+            const isMember = prev.members.includes(email);
+            return {
+                ...prev,
+                members: isMember ? prev.members.filter(m => m !== email) : [...prev.members, email]
+            };
+        });
+    };
 
-  const handleMemberToggle = (email, checked) => {
-    if (!isAdmin) return;
-    const newMembers = checked
-      ? [...activeGroup.members, email]
-      : activeGroup.members.filter(m => m !== email);
-    // Keep admins only if still in members
-    const newAdmins = activeGroup.admins.filter(a => newMembers.includes(a));
-    onGroupUpdate({ members: newMembers, admins: newAdmins });
-  };
+    // Prepare updates and pass to the parent handler
+    const onSubmit = (e) => {
+        e.preventDefault();
+        
+        const updates = {};
+        if (groupForm.name !== activeGroup.name) updates.name = groupForm.name;
+        if (groupForm.profilePicFile) updates.profilePicFile = groupForm.profilePicFile;
+        
+        // Reconstruct the full members list (combining regular members + admins)
+        const combinedMembers = [...new Set([...groupForm.members, ...groupForm.admins])];
+        
+        // Only update if the arrays are fundamentally different
+        if (JSON.stringify(combinedMembers.sort()) !== JSON.stringify([...activeGroup.members].sort())) {
+            updates.members = combinedMembers;
+        }
 
-  const handleSaveName = () => {
-    const trimmed = editName.trim();
-    if (trimmed && trimmed !== activeGroup.name) {
-      onGroupUpdate({ name: trimmed });
-    }
-  };
+        // Call the parent function which handles the UI Optimism & Background Sync
+        onGroupUpdate(updates);
+    };
 
-  return (
-    <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
-      <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-5">
-          <div className="relative cursor-pointer" onClick={() => isAdmin && groupPicInputRef.current?.click()}>
-            {activeGroup.profilePicUrl ? (
-              <img src={activeGroup.profilePicUrl} className="w-14 h-14 rounded-full object-cover shadow-sm border border-slate-100" alt="Group avatar" />
-            ) : (
-              <div className="w-14 h-14 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-xl shadow-inner"><i className="fa-solid fa-people-group"></i></div>
-            )}
-            {isAdmin && (
-              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity backdrop-blur-sm">
-                <i className="fa-solid fa-camera text-white text-sm"></i>
-              </div>
-            )}
-          </div>
-          <input
-            type="file"
-            ref={groupPicInputRef}
-            className="hidden"
-            accept="image/*"
-            onChange={handlePhotoUpload}
-          />
-          <div className="overflow-hidden flex-1">
-            {isAdmin ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); }}
-                  className="text-xl font-bold text-slate-800 outline-none border-b border-slate-300 focus:border-[#008069] bg-transparent w-full"
-                />
-                <button
-                  onClick={handleSaveName}
-                  className="text-xs bg-[#008069] text-white px-3 py-1 rounded-lg font-semibold shadow-sm hover:bg-[#006e5a] transition-colors"
-                >
-                  Save
-                </button>
-              </div>
-            ) : (
-              <div className="text-xl font-bold text-slate-800 truncate">{activeGroup.name}</div>
-            )}
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Department Info</div>
-          </div>
+    const isGroupAdmin = activeGroup?.admins?.includes(user.email) || currentUserData?.isAdmin || isVipAdmin;
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
+                
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
+                    <h2 className="text-xl font-bold text-[#111b21] flex items-center gap-2">
+                        <i className="fa-solid fa-users-gear text-[#00a884]"></i> Department Settings
+                    </h2>
+                    <button onClick={() => setActiveModal(null)} className="w-8 h-8 flex justify-center items-center rounded-full text-slate-400 hover:bg-slate-200 transition-colors">
+                        <i className="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                {/* Form Body */}
+                <div className="p-6 overflow-y-auto flex-1">
+                    <form id="group-settings-form" onSubmit={onSubmit} className="space-y-6">
+                        
+                        {/* Avatar Section */}
+                        <div className="flex flex-col items-center">
+                            <label className={`relative cursor-pointer group ${isGroupAdmin ? '' : 'pointer-events-none'}`}>
+                                <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-[#00a884] shadow-sm">
+                                    {groupForm.profilePicUrl ? (
+                                        <img src={groupForm.profilePicUrl} alt="Group Avatar" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full bg-teal-50 flex items-center justify-center text-[#00a884]">
+                                            <i className="fa-solid fa-users text-3xl"></i>
+                                        </div>
+                                    )}
+                                </div>
+                                {isGroupAdmin && (
+                                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <i className="fa-solid fa-camera text-white text-xl"></i>
+                                    </div>
+                                )}
+                                <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} disabled={!isGroupAdmin} />
+                            </label>
+                            {isGroupAdmin && <span className="text-xs text-[#54656f] mt-2 font-medium">Click to change avatar</span>}
+                        </div>
+
+                        {/* Name Section */}
+                        <div>
+                            <label className="block text-xs font-bold text-[#00a884] uppercase tracking-wide mb-2">Department Name</label>
+                            <input 
+                                type="text" 
+                                value={groupForm.name} 
+                                onChange={(e) => setGroupForm(prev => ({...prev, name: e.target.value}))} 
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-[#00a884]/30 focus:border-[#00a884] outline-none transition-all text-[#111b21] font-semibold disabled:bg-slate-50 disabled:text-slate-500" 
+                                placeholder="Enter department name..." 
+                                required
+                                disabled={!isGroupAdmin}
+                            />
+                        </div>
+
+                        {/* Members Section */}
+                        <div>
+                            <label className="block text-xs font-bold text-[#00a884] uppercase tracking-wide mb-2">Manage Members</label>
+                            <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
+                                <div className="max-h-64 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                                    {dbUsers.filter(u => u.isApproved || u.isAdmin).map(u => {
+                                        const isAdmin = groupForm.admins.includes(u.email);
+                                        const isChecked = groupForm.members.includes(u.email) || isAdmin;
+                                        
+                                        return (
+                                            <label key={u.uid} className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${isChecked ? 'bg-white shadow-sm border border-slate-200/60' : 'hover:bg-slate-100 border border-transparent'}`}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={isChecked} 
+                                                    onChange={() => toggleMember(u.email)} 
+                                                    disabled={!isGroupAdmin || isAdmin} // Cannot remove admins through this generic checkbox
+                                                    className="w-4 h-4 text-[#00a884] rounded border-slate-300 focus:ring-[#00a884] disabled:opacity-50"
+                                                />
+                                                <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8 shrink-0" />
+                                                <div className="flex flex-col min-w-0 flex-1">
+                                                    <span className={`text-[14px] truncate ${isChecked ? 'font-bold text-[#111b21]' : 'font-medium text-[#54656f]'}`}>
+                                                        {(u.name || "").split('@')[0]}
+                                                        {u.email === user.email && " (You)"}
+                                                    </span>
+                                                    <span className="text-[11px] text-[#8696a0] truncate">{u.email}</span>
+                                                </div>
+                                                {isAdmin && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded uppercase shrink-0">Admin</span>}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <p className="text-[11px] text-[#8696a0] mt-2 italic"><i className="fa-solid fa-circle-info mr-1"></i> Department Admins cannot be removed via this menu.</p>
+                        </div>
+
+                    </form>
+                </div>
+
+                {/* Footer / Buttons aligned side-by-side on the right */}
+                {isGroupAdmin && (
+                    <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl shrink-0 flex justify-end items-center gap-3">
+                        <button 
+                            type="button" 
+                            onClick={() => setActiveModal(null)} 
+                            className="px-5 py-2.5 rounded-lg font-bold text-[#54656f] bg-white border border-slate-200 hover:bg-slate-100 transition-colors text-[14px]"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            form="group-settings-form" 
+                            className="px-6 py-2.5 rounded-lg font-bold text-white bg-[#00a884] shadow-sm hover:bg-[#008f6f] transition-all flex items-center gap-2 text-[14px]"
+                        >
+                            <i className="fa-solid fa-check"></i> Save Settings
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
-
-        <div className="space-y-4">
-          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Directory</div>
-          <div className="h-56 overflow-y-auto space-y-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl shadow-inner">
-            {dbUsers.map(u => {
-              const isMember = activeGroup.members?.includes(u.email);
-              return (
-                <label key={u.uid} className={`flex items-center gap-3 p-2 rounded-lg transition-colors border border-transparent ${isAdmin ? 'hover:bg-white hover:border-slate-200 hover:shadow-sm cursor-pointer' : ''}`}>
-                  <input
-                    type="checkbox"
-                    disabled={!isAdmin || activeGroup.admins?.includes(u.email)}
-                    checked={isMember}
-                    onChange={(e) => handleMemberToggle(u.email, e.target.checked)}
-                    className="w-4 h-4 accent-[#008069] disabled:opacity-40"
-                  />
-                  <span className="text-[14px] font-semibold text-slate-700 flex-1 truncate">{u.name}</span>
-                  {activeGroup.admins?.includes(u.email) && (
-                    <span className="text-[9px] font-bold text-[#008069] bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded uppercase tracking-wider">Admin</span>
-                  )}
-                </label>
-              );
-            })}
-          </div>
-
-          <div className="flex gap-3 mt-4 pt-2">
-            <button onClick={() => setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl transition-colors">Close</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }
+
+export default GroupSettingsModal;
