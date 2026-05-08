@@ -3,7 +3,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+body {
+    font-family: 'Inter', 'Segoe UI', Helvetica Neue, Helvetica, Arial, sans-serif !important;
+}
 /* Import Font Awesome */
 
 
