@@ -1,8 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, setPersistence, inMemoryPersistence } from 'firebase/auth';
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, setDoc, getDocs, where, deleteDoc } from 'firebase/firestore';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
@@ -23,21 +19,10 @@ import UploadOverlay from './Common/UploadOverlay.jsx';
 import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 import { compressImage } from '../utils/imageUtils.js';
+import { auth, db, storage, signOut } from '../firebase.js';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, setDoc, getDocs, where, deleteDoc, GoogleAuthProvider, signInWithPopup, setPersistence, inMemoryPersistence, ref, uploadBytesResumable, getDownloadURL } from '../firebase.js';
 
 // Initialize Firebase directly from your original config
-const firebaseConfig = {
-    apiKey: "AIzaSyAoOsog2NP6Pf8YNSxn0rRYK4MSLEVNNZc",
-    authDomain: "niltask.firebaseapp.com",
-    projectId: "niltask",
-    storageBucket: "niltask.firebasestorage.app",
-    messagingSenderId: "868641827920",
-    appId: "1:868641827920:web:70d9db79a361a76468f555"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
 
 const lockExtension = (originalName, newName) => {
   const originalExt = originalName.split('.').pop().toLowerCase();
@@ -2107,22 +2092,6 @@ const scrollToMessage = (msgId) => {
     );
 }
 
-export default function App() {
-    const [user, setUser] = useState(null);
-    const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
-    const [authChecked, setAuthChecked] = useState(false);
-    const [authError, setAuthError] = useState("");
-
-    useEffect(() => {
-        const setupAuth = () => {
-            onAuthStateChanged(auth, (u) => {
-                setUser(u);
-                setTimeout(() => setAuthChecked(true), 300);
-            });
-            setIsFirebaseLoaded(true);
-        };
-        setupAuth();
-    }, []);
 
     const handleGoogleLogin = async (e) => {
         e.preventDefault();
