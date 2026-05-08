@@ -1022,19 +1022,23 @@ const scrollToMessage = (msgId) => {
   if (files.length === 0) return;
   e.target.value = '';
 
-  const currentInput = inputText.trim();   // <-- capture the typed text
+  const currentInput = inputText.trim();   // <-- capture chat message
 
   const newPending = files.map((file, index) => ({
     id: Date.now() + Math.random(),
     file,
     customName: file.name,
-    caption: index === 0 ? currentInput : ''   // <-- first file gets the text
+    caption: index === 0 ? currentInput : ''   // first file gets the message
   }));
+
+  // 🔍 TEMPORARY DEBUG – check what we captured
+  console.log('😎 Captured input for upload:', currentInput);
+  console.log('📦 New pending files:', newPending);
 
   setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
   setShowFileRename(true);
 
-  if (currentInput) setInputText('');   // <-- clear the main chat bar
+  if (currentInput) setInputText('');   // clear main bar
 };
     const handlePaste = (e) => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -1050,8 +1054,11 @@ const scrollToMessage = (msgId) => {
     id: Date.now() + Math.random(),
     file: blob,
     customName: pastedName,
-    caption: currentInput   // <-- pasted image gets the text
+    caption: currentInput   // <-- pasted image gets the message
   };
+
+  // Optional debug
+  console.log('📋 Pasted file with caption:', currentInput);
 
   setPendingFiles(prev => [...prev, newItem].slice(0, 3));
   setShowFileRename(true);
