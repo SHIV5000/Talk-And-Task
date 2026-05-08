@@ -56,7 +56,7 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
                 <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-[49px] h-[49px]" isGroup={true} extraClasses="mr-3 shrink-0" />
                 <div className="flex-1 overflow-hidden border-b border-slate-100 h-full flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
-                    <span className="font-bold text-[16px] truncate text-[#800020]">{g.name}</span>
+                    <span className="font-medium text-[14.5px] truncate text-[#800020]">{g.name}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[13px] text-[#54656f] truncate pr-4">{`${g.members?.length || 0} Members`}</span>
@@ -79,7 +79,7 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
                 </div>
                 <div className="flex-1 overflow-hidden border-b border-slate-100 h-full flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
-                    <span className={`text-[16px] truncate ${unreadInfo.total > 0 ? 'font-bold text-[#111b21]' : 'font-medium text-[#111b21]'}`}>{u.name}</span>
+                    <span className={`text-[14.5px] truncate ${unreadInfo.total > 0 ? 'font-semibold text-[#111b21]' : 'font-medium text-[#111b21]'}`}>{u.name}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className={`text-[12px] truncate pr-4 ${unreadInfo.total > 0 ? 'text-[#111b21] font-semibold' : 'text-[#54656f]'}`}>
