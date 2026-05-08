@@ -301,7 +301,7 @@ export function ChatApp({ user, onLogout }) {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const loadedMessages = snapshot.docs.map(docSnapshot => {
                 const data = docSnapshot.data();
-                return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [], forwardedFromGroup: data.forwardedFromGroup, isPrivateForward: data.isPrivateForward };
+                return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [], forwardedFromGroup: data.forwardedFromGroup, isPrivateForward: data.isPrivateForward, isMentionNotification: data.isMentionNotification, mentionedInGroup: data.mentionedInGroup, mentionedInGroupId: data.mentionedInGroupId, originalMessageId: data.originalMessageId, originalTextSnippet: data.originalTextSnippet };
             });
             setMessages(loadedMessages);
             if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
@@ -834,12 +834,13 @@ export function ChatApp({ user, onLogout }) {
         }
 
         try {
-            await addDoc(collection(db, "messages"), {
+            const groupMsgRef = await addDoc(collection(db, "messages"), {
                 text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(),
                 isTask: false, hasReminder: false, isPrivateMention: isPrivate, allowedUsers: allowedUsers,
                 seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null,
                 groupId: activeGroup.id, reactions: {}, ...(replyData || {})
             });
+            const groupMsgId = groupMsgRef.id;
             
             if (activeGroup.isDM) {
                 const recipientEmail = activeGroup.members.find(m => m !== user.email);
@@ -854,29 +855,41 @@ export function ChatApp({ user, onLogout }) {
                     if (mentionedUser) {
                         const dmIdList = [user.uid, mentionedUser.uid].sort();
                         const dmIdStr = dmIdList.join('_');
+                        
                         await addDoc(collection(db, "messages"), {
-                            text: `[Forwarded from ${activeGroup.name}]\n\n${messageText}`, 
-                            senderUid: user.uid, 
-                            senderEmail: user.email, 
+                            text: `You were mentioned in ${activeGroup.name}`,
+                            originalTextSnippet: messageText.substring(0, 150),
+                            mentionedInGroup: activeGroup.name,
+                            mentionedInGroupId: activeGroup.id,
+                            originalMessageId: groupMsgId,
+                            isMentionNotification: true,
+                            senderUid: user.uid,
+                            senderEmail: user.email,
                             timestamp: serverTimestamp(),
-                            isTask: false, 
-                            hasReminder: false, 
-                            isPrivateMention: false, 
-                            allowedUsers: [user.email, mentionedEmail], 
-                            seenBy: [user.email], 
-                            deliveredTo: [user.email], 
-                            isPinned: false, 
-                            bookmarkedBy: [], 
-                            fileUrl: null, 
-                            fileName: null, 
-                            fileType: null, 
-                            groupId: dmIdStr, 
-                            reactions: {},
-                            // NEW FIELDS
-                            forwardedFromGroup: activeGroup.name,
-                            isPrivateForward: true
+                            isTask: false,
+                            hasReminder: false,
+                            isPrivateMention: false,
+                            allowedUsers: [user.email, mentionedEmail],
+                            seenBy: [user.email],
+                            deliveredTo: [user.email],
+                            isPinned: false,
+                            bookmarkedBy: [],
+                            fileUrl: null,
+                            fileName: null,
+                            fileType: null,
+                            groupId: dmIdStr,
+                            reactions: {}
                         });
-                        await addDoc(collection(db, "notifications"), { userId: mentionedUser.uid, type: "mention", text: `${(user.email||"").split('@')[0]} mentioned you in ${activeGroup.name}.`, messageId: null, groupId: dmIdStr, timestamp: serverTimestamp(), isRead: false });
+                        
+                        await addDoc(collection(db, "notifications"), { 
+                            userId: mentionedUser.uid, 
+                            type: "mention", 
+                            text: `${(user.email||"").split('@')[0]} mentioned you in ${activeGroup.name}.`, 
+                            messageId: groupMsgId, 
+                            groupId: dmIdStr, 
+                            timestamp: serverTimestamp(), 
+                            isRead: false 
+                        });
                     }
                 });
             }
@@ -1201,6 +1214,35 @@ export function ChatApp({ user, onLogout }) {
     };
 
     const renderMessageNode = useCallback((msg) => {
+        if (msg.isMentionNotification) {
+            return (
+                <div
+                    key={`msg-node-${msg.id}`}
+                    id={`msg-${msg.id}`}
+                    className="w-full flex justify-center my-4 cursor-pointer"
+                    onClick={() => {
+                        const targetGroup = groups.find(g => g.id === msg.mentionedInGroupId);
+                        if (targetGroup) {
+                            setActiveGroup(targetGroup);
+                            setShowRightSidebar(false);
+                            setMobileSidebarOpen(false);
+                            setPendingScrollTarget(msg.originalMessageId);
+                            setActiveModal(null);
+                        }
+                    }}
+                >
+                    <div className="max-w-[85vw] md:max-w-md bg-purple-50 border border-purple-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-purple-800">
+                            <i className="fa-solid fa-lock text-sm"></i>
+                            <span className="text-sm font-bold">Mentioned in {msg.mentionedInGroup}</span>
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-2">{msg.originalTextSnippet}</p>
+                        <div className="text-[10px] text-slate-400 self-end">Tap to view</div>
+                    </div>
+                </div>
+            );
+        }
+
         const hasReactions = Object.keys(msg.reactions || {}).length > 0;
         const hasReplies = messages.some(m => m.replyToId === msg.id);
         const canModify = msg.isMine && !msg.isTask && !hasReplies && !hasReactions;
@@ -1303,7 +1345,7 @@ export function ChatApp({ user, onLogout }) {
                 </div>
             </div>
         );
-    }, [messages, editingMessageId, editMessageText, user.email, currentUserData, handleTogglePin, handleToggleBookmark, handleReaction, handleDeleteMessage, scrollToMessageDirect, activeGroup, isVipAdmin, toolPreferences, highlightedMsgId]);
+    }, [messages, editingMessageId, editMessageText, user.email, currentUserData, handleTogglePin, handleToggleBookmark, handleReaction, handleDeleteMessage, scrollToMessageDirect, activeGroup, isVipAdmin, toolPreferences, highlightedMsgId, groups, setActiveGroup, setShowRightSidebar, setMobileSidebarOpen, setPendingScrollTarget, setActiveModal]);
 
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
         return (
