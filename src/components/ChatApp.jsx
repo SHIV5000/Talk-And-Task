@@ -22,6 +22,8 @@ import TaskAnalyticsModal from './Modals/TaskAnalyticsModal.jsx';
 import UploadOverlay from './Common/UploadOverlay.jsx';
 import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
+import ChatView from './Chat/ChatView.jsx';
+import InputArea from './Chat/InputArea.jsx';
 import { compressImage } from '../utils/imageUtils.js';
 
 // Initialize Firebase directly from your original config
@@ -964,9 +966,8 @@ export function ChatApp({ user, onLogout }) {
         async () => {
           try {
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            const messageText = caption.trim()
-              ? `${caption}\n\n📎 ${finalName}`
-              : `Shared a file: ${finalName}`;
+            const messageText = caption && caption.trim() !== "" ? caption.trim() : ""; // Safely extract user text
+            
             await addDoc(collection(db, "messages"), {
               text: messageText,
               senderUid: user.uid,
@@ -1000,14 +1001,19 @@ export function ChatApp({ user, onLogout }) {
       const files = Array.from(e.target.files).slice(0, 3);   // max 3 files
       if (files.length === 0) return;
       e.target.value = '';
-      const newPending = files.map(file => ({
+      
+      const currentInput = inputText.trim(); // Pull text from main chat bar
+      
+      const newPending = files.map((file, index) => ({
         id: Date.now() + Math.random(),
         file,
         customName: file.name,
-        caption: ''
+        caption: index === 0 ? currentInput : '' // Inject main chat text into first file
       }));
+      
       setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
       setShowFileRename(true);
+      if (currentInput) setInputText(''); // Clear the main chat bar so it doesn't double-send
     };
 
     const handlePaste = (e) => {
@@ -1018,14 +1024,16 @@ export function ChatApp({ user, onLogout }) {
                 const blob = item.getAsFile();
                 if (blob) {
                   const pastedName = `pasted_image_${Date.now()}.png`;
+                  const currentInput = inputText.trim(); // Pull text from main chat bar
                   const newItem = {
                     id: Date.now() + Math.random(),
                     file: blob,
                     customName: pastedName,
-                    caption: ''
+                    caption: currentInput // Inject main chat text
                   };
                   setPendingFiles(prev => [...prev, newItem].slice(0, 3));
                   setShowFileRename(true);
+                  if (currentInput) setInputText(''); // Clear main chat bar
                 }
             }
         }
@@ -1293,148 +1301,6 @@ export function ChatApp({ user, onLogout }) {
         return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
     }, [messages, user.uid, user.email]);
 
-    const getBubbleStyles = (msg) => {
-        let baseStyles = "";
-        if (msg.isTask) baseStyles = "bg-[#d1e8ff] text-[#111b21] border border-[#b8daff]";
-        else if (msg.isPrivateMention) baseStyles = msg.isMine ? "bg-[#f3e8ff] text-[#111b21] border border-[#e9d5ff]" : "bg-[#faf5ff] text-[#111b21] border border-[#f3e8ff]";
-        else baseStyles = msg.isMine ? "bg-[#d9fdd3] text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]" : "bg-white text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]";
-        return `${baseStyles} ${msg.isMine ? 'rounded-lg rounded-tr-none' : 'rounded-lg rounded-tl-none'} shadow-sm`;
-    };
-
-    const renderMessageNode = useCallback((msg) => {
-        if (msg.isMentionNotification) {
-            return (
-                <div
-                    key={`msg-node-${msg.id}`}
-                    id={`msg-${msg.id}`}
-                    className="w-full flex justify-center my-4 cursor-pointer"
-                    onClick={() => {
-                        const targetGroup = groups.find(g => g.id === msg.mentionedInGroupId);
-                        if (targetGroup) {
-                            setActiveGroup(targetGroup);
-                            setShowRightSidebar(false);
-                            setMobileSidebarOpen(false);
-                            setPendingScrollTarget(msg.originalMessageId);
-                            setActiveModal(null);
-                        }
-                    }}
-                >
-                    <div className="max-w-[85vw] md:max-w-md bg-purple-50 border border-purple-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2">
-                        <div className="flex items-center gap-2 text-purple-800">
-                            <i className="fa-solid fa-lock text-sm"></i>
-                            <span className="text-sm font-bold">Mentioned in {msg.mentionedInGroup}</span>
-                        </div>
-                        <p className="text-xs text-slate-600 line-clamp-2">{msg.originalTextSnippet}</p>
-                        <div className="text-[10px] text-slate-400 self-end">Tap to view</div>
-                    </div>
-                </div>
-            );
-        }
-
-        const hasReactions = Object.keys(msg.reactions || {}).length > 0;
-        const hasReplies = messages.some(m => m.replyToId === msg.id);
-        const canModify = msg.isMine && !msg.isTask && !hasReplies && !hasReactions;
-        const isEditingThis = editingMessageId === msg.id;
-        const isBookmarked = msg.bookmarkedBy?.includes(user.email);
-        const seenByOthers = (msg.seenBy || []).filter(e => e !== user.email).length > 0;
-        const deliveredCount = (msg.deliveredTo || []).filter(e => e !== user.email).length;
-        const isHighlighted = highlightedMsgId === msg.id;
-
-        const ActionBar = () => (
-            <div className="hidden md:flex opacity-0 group-hover/msg:opacity-100 transition-opacity items-center gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-200 rounded-full px-2 py-0.5 shrink-0 z-20 mx-1">
-                {toolPreferences.reply && <button onClick={(e)=>{e.stopPropagation(); setReplyingTo(msg); setTimeout(()=>chatInputRef.current?.focus(), 100);}} className="text-slate-400 hover:text-[#008069] text-[13px] p-1.5 transition-colors" title="Reply"><i className="fa-solid fa-reply"></i></button>}
-                {toolPreferences.react && ['👍', '❤️', '😂', '😮'].map(e => <button key={e} onClick={(ev)=>{ev.stopPropagation(); handleReaction(msg.id, e);}} className="hover:scale-125 transition-transform text-[16px] ml-0.5">{e}</button>)}
-                {toolPreferences.bookmark && <button onClick={(e)=>{e.stopPropagation(); handleToggleBookmark(msg);}} className={`${isBookmarked ? 'text-[#008069]' : 'textslate-400 hover:text-[#008069]'} text-[13px] p-1.5 transition-colors`} title="Save for later"><i className="fa-solid fa-bookmark"></i></button>}
-                {toolPreferences.pin && (currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(user.email)) && <button onClick={(e)=>{e.stopPropagation(); handleTogglePin(msg);}} className={`${msg.isPinned ? 'text-[#008069]' : 'text-slate-400 hover:text-[#008069]'} text-[13px] p-1.5 transition-colors`} title="Pin"><i className="fa-solid fa-thumbtack"></i></button>}
-                {canModify && toolPreferences.edit && <button onClick={(e)=>{e.stopPropagation(); setEditingMessageId(msg.id); setEditMessageText(msg.text);}} className="text-slate-400 hover:text-[#008069] text-[13px] p-1.5 transition-colors" title="Edit"><i className="fa-solid fa-pen"></i></button>}
-                {canModify && toolPreferences.delete && <button onClick={(e)=>{e.stopPropagation(); handleDeleteMessage(msg);}} className="text-slate-400 hover:text-red-500 text-[13px] p-1.5 transition-colors" title="Delete"><i className="fa-solid fa-trash"></i></button>}
-            </div>
-        );
-
-        return (
-            <div id={`msg-${msg.id}`} key={`msg-node-${msg.id}`} className={`w-full flex flex-col ${msg.isMine ? 'items-end' : 'items-start'} msg-row-spacing transform-gpu`}>
-                <div className={`flex items-center relative max-w-full group/msg ${isHighlighted ? 'highlight-flash' : ''}`}>
-                    {msg.isMine && <ActionBar/>}
-                    <div className={`max-w-[80vw] sm:max-w-[75vw] md:max-w-[65vw] relative px-[10px] py-[7px] pb-[9px] ${getBubbleStyles(msg)} transition-all hover:shadow-md break-words`}>
-                        {!msg.isMine && !msg.isTask && <div className="text-[12.5px] font-semibold text-[#1fa855] mb-0.5 tracking-tight">{(msg.sender||"").split('@')[0]}</div>}
-                        {msg.replyToId && (
-                            <div onClick={(e) => { e.stopPropagation(); scrollToMessageDirect(msg.replyToId); }} className={`p-2 rounded bg-black/5 mb-1.5 border-l-4 cursor-pointer opacity-80 hover:opacity-100 transition-opacity ${msg.isMine ? 'border-[#02a698]' : 'border-[#02a698]'}`}>
-                                <div className="font-semibold text-[11.5px] text-[#02a698] tracking-tight">{(msg.originalSender||"").split('@')[0]}</div>
-                                <div className="line-clamp-2 text-[13px] text-[#667781] mt-0.5 leading-snug">{msg.originalText}</div>
-                            </div>
-                        )}
-                        {isEditingThis ? (
-                            <div className="flex flex-col gap-2 min-w-[200px] md:min-w-[300px] my-1" onClick={e=>e.stopPropagation()}>
-                                <textarea value={editMessageText} onChange={(e)=>setEditMessageText(e.target.value)} className="w-full text-[14.2px] p-2 rounded border border-[#008069] text-slate-800 outline-none resize-none focus:ring-2 focus:ring-[#008069]/20 transition-all" rows="2"></textarea>
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={()=>setEditingMessageId(null)} className="text-[12px] text-[#54656f] font-semibold px-3 py-1 hover:bg-slate-100 rounded transition-colors">Cancel</button>
-                                    <button onClick={()=>handleSaveEdit(msg)} className="text-[12px] bg-[#008069] text-white px-4 py-1 rounded font-semibold shadow-sm hover:bg-[#006e5a] transition-colors">Save</button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div onClick={() => { setSelectedMessage(msg); setIsEditingTaskTitle(false); setActiveModal(msg.isTask ? 'task_trail' : 'context'); }} className="cursor-pointer">
-                                {msg.isTask && (
-                                    <div className="flex justify-between items-center mb-1.5 pb-1.5 border-b border-black/5">
-                                        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-800 tracking-tight"><i className="fa-regular fa-square-check"></i> OFFICIAL TASK</span>
-                                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shadow-sm ${msg.taskData.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{msg.taskData.status}</span>
-                                    </div>
-                                )}
-                                {msg.isPrivateMention && <div className="text-[11px] font-semibold flex items-center gap-1.5 mb-1.5 pb-1 border-b border-black/5 text-purple-700 tracking-tight"><i className="fa-solid fa-lock"></i> {msg.text.startsWith('[Forwarded') ? 'FORWARDED DM' : 'PRIVATE'}</div>}
-                                
-                                {msg.isPrivateForward && (
-                                    <div className="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-black/5">
-                                        <i className="fa-solid fa-lock text-purple-700 text-[11px]"></i>
-                                        <span className="text-[11px] font-semibold text-purple-700 tracking-tight">
-                                            Private from {msg.forwardedFromGroup}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {msg.fileUrl ? (
-                                    <div className="flex flex-col gap-1 my-1">
-                                        {msg.fileType?.startsWith('image/') ? <img src={msg.fileUrl} alt="Shared" className="rounded max-w-full max-h-64 object-cover cursor-pointer shadow-sm" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}/> :
-                                        <div className="flex items-center gap-3 p-2 rounded bg-black/5 cursor-pointer hover:bg-black/10 transition-colors" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}>
-                                            <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-[#54656f] shadow-sm"><i className="fa-solid fa-file-alt text-lg"></i></div>
-                                            <div className="flex-1 overflow-hidden"><p className="text-[14.2px] truncate text-[#111b21]">{msg.fileName}</p></div>
-                                        </div>}
-                                    </div>
-                                ) : <p className={`leading-snug whitespace-pre-wrap ${currentUserData?.fontSize || 'text-[14.2px]'}`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }}></p>}
-                                {msg.isTask && (
-                                    <div className="mt-2 bg-white/60 p-2 rounded flex flex-col gap-1 shadow-sm border border-black/5">
-                                        <span className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
-                                            <i className="fa-solid fa-users text-[#54656f]"></i>
-                                            {msg.taskData.assignees?.map(a => (a||"").split('@')[0]).join(', ')}
-                                        </span>
-                                        <span className="text-[11px] text-red-600 font-semibold self-end"><i className="fa-regular fa-calendar mr-1"></i>Due {new Date(msg.taskData.deadline).toLocaleDateString()}</span>
-                                    </div>
-                                )}
-                                <div className="float-right flex items-center gap-1 mt-1 ml-3 text-[11px] text-[#667781] font-medium">
-                                    {msg.isEdited && <span className="italic mr-1">(edited)</span>}
-                                    {msg.hasReminder && <i className="fa-regular fa-clock text-amber-500 mr-0.5"></i>}
-                                    {isBookmarked && <i className="fa-solid fa-bookmark text-[#008069] mr-0.5"></i>}
-                                    <span className="mt-[2px]">{msg.time}</span>
-                                    {msg.isMine && seenByOthers && <span title="Seen by others" className="ml-0.5 text-[#53bdeb] flex items-center mt-[2px]"><i className="fa-solid fa-check-double text-[13px]"></i></span>}
-                                    {msg.isMine && !seenByOthers && deliveredCount > 0 && <span title="Delivered" className="ml-0.5 text-[#667781] flex items-center mt-[2px]"><i className="fa-solid fa-check-double text-[13px]"></i></span>}
-                                    {msg.isMine && !seenByOthers && deliveredCount === 0 && <span title="Sent" className="ml-0.5 text-[#667781] flex items-center mt-[2px]"><i className="fa-solid fa-check text-[13px]"></i></span>}
-                                </div>
-                            </div>
-                        )}
-                        {!msg.isMine && <ActionBar/>}
-                    </div>
-                    {Object.keys(msg.reactions || {}).length > 0 && (
-                        <div className={`absolute -bottom-5 ${msg.isMine ? 'right-3' : 'left-3'} flex gap-1 z-10`}>
-                            {Object.entries(msg.reactions).map(([emoji, users]) => (
-                                <div key={emoji} onClick={(e)=>{e.stopPropagation(); handleReaction(msg.id, emoji);}} className={`text-[14px] bg-white border border-slate-200 rounded-full px-2 py-[2px] shadow-sm flex items-center gap-1 cursor-pointer hover:scale-110 transition-transform ${users.includes(user.email) ? 'bg-slate-100 border-slate-300' : ''}`}>
-                                    <span>{emoji}</span><span className="font-semibold text-slate-600 text-[11px]">{users.length}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    }, [messages, editingMessageId, editMessageText, user.email, currentUserData, handleTogglePin, handleToggleBookmark, handleReaction, handleDeleteMessage, scrollToMessageDirect, activeGroup, isVipAdmin, toolPreferences, highlightedMsgId, groups, setActiveGroup, setShowRightSidebar, setMobileSidebarOpen, setPendingScrollTarget, setActiveModal]);
-
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-100 p-4 text-gray-800">
@@ -1524,7 +1390,174 @@ export function ChatApp({ user, onLogout }) {
                         setViewMode={setViewMode}
                     />
                     
-                    {!activeGroup ? (
+                    {activeGroup ? (
+                        <div className="flex-1 flex flex-col relative h-full bg-[#efeae2] overflow-hidden">
+                            <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200/60 safe-top">
+                                <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-black/5 flex items-center justify-center text-[#54656f] mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
+                                <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={() => { if(!activeGroup.isDM) setActiveModal('group_settings'); }}>
+                                    {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-[#800020] shadow-sm"><i className="fa-solid fa-users"></i></div>}
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                        <span className={`text-[16px] font-bold leading-tight truncate ${activeGroup.isDM ? 'text-[#111b21]' : 'text-[#800020]'}`}>{activeGroup.name}</span>
+                                        <span className="text-[13px] text-[#54656f] truncate max-w-[150px] lg:max-w-[400px]">
+                                            {activeGroup.isDM ? 'End-to-Server Encrypted' :
+                                                (dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).length > 0)
+                                                ? dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).map(u=>u.name.split(' ')[0]).join(', ') + ' (Online)'
+                                                : `${activeGroup.members?.length||0} Members`
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="hidden md:flex flex-1 max-w-md mx-4">
+                                    <div className="bg-white rounded-full flex items-center px-4 py-1.5 shadow-sm border border-slate-200 focus-within:ring-2 focus-within:ring-[#00a884]/30 focus-within:border-[#00a884] transition-all w-full">
+                                        <i className="fa-solid fa-search text-[14px] text-[#54656f] mr-2"></i>
+                                        <input type="text" placeholder="Search messages..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-transparent outline-none flex-1 text-[13px] text-[#111b21]" />
+                                        {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
+                                    <div className="relative">
+                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px] relative`}>
+                                            <i className="fa-solid fa-bell"></i>
+                                            {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#25d366] rounded-full border border-[#f0f2f5]"></span>}
+                                        </button>
+                                        {showNotifications && (
+                                            <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-100">
+                                                <div className="p-3 bg-white flex justify-between items-center border-b border-slate-100">
+                                                    <span className="text-[15px] font-bold text-slate-800">Activity Feed</span>
+                                                    <button onClick={handleClearNotifications} className="text-[12px] text-[#00a884] font-semibold hover:underline">Clear All</button>
+                                                </div>
+                                                <div className="max-h-[70vh] overflow-y-auto bg-slate-50 p-2 space-y-2">
+                                                    {totalNotifications === 0 ? <div className="p-8 text-center text-[14px] text-[#54656f]">No new activity</div> :
+                                                        <div>
+                                                            {activeActionableTasks.map(task => {
+                                                                const timeStr = task.timestamp?.toDate ? new Date(task.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                                                                return (
+                                                                    <div key={task.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative mb-2" onClick={() => navigateToMessageFromNotification(task.id, task.groupId)}>
+                                                                        <div className="text-[13px] font-bold text-[#00a884] mb-1.5 flex items-center justify-between"><span className="flex items-center"><i className="fa-regular fa-square-check mr-1.5"></i>Pending Task</span> <span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span></div>
+                                                                        <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">"{task.text}"</div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {genericNotifications.map(n => {
+                                                                const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now';
+                                                                return (
+                                                                    <div key={n.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative mb-2" onClick={() => { if(n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }}>
+                                                                        <div className="w-8 h-8 rounded-full bg-[#d9fdd3] flex items-center justify-center text-[#00a884] shrink-0 mt-0.5"><i className={n.type === 'reply' ? "fa-solid fa-reply text-xs" : n.type === 'message' ? "fa-solid fa-message text-xs" : n.type === 'mention' ? "fa-solid fa-at text-xs" : "fa-solid fa-bolt text-xs"}></i></div>
+                                                                        <div className="flex-1 overflow-hidden">
+                                                                            <div className="text-[14px] font-bold text-[#111b21]">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : 'New Reaction'}</div>
+                                                                            <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug truncate pr-8 font-medium">{n.text}</div>
+                                                                        </div>
+                                                                        <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold">{timeStr}</div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-black/10 text-[#111b21]' : 'hover:bg-black/5 text-[#54656f]'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                    {showFilterMenu && (
+                                        <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-100">
+                                            {['all', 'tasks-pending', 'tasks-completed', 'messages', 'today', 'bookmarked'].map(f => (
+                                                <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-[#f0f2f5] text-[#111b21]' : 'text-[#3b4a54] hover:bg-[#f5f6f6]'}`}>
+                                                    {f === 'all' && <i className="fa-solid fa-layer-group w-5 text-center"></i>}
+                                                    {f === 'tasks-pending' && <i className="fa-regular fa-clock w-5 text-center"></i>}
+                                                    {f === 'tasks-completed' && <i className="fa-regular fa-square-check w-5 text-center"></i>}
+                                                    {f === 'messages' && <i className="fa-regular fa-comment w-5 text-center"></i>}
+                                                    {f === 'today' && <i className="fa-regular fa-calendar-day w-5 text-center"></i>}
+                                                    {f === 'bookmarked' && <i className="fa-solid fa-bookmark w-5 text-center"></i>}
+                                                    {f === 'bookmarked' ? 'Saved Messages' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="md:hidden px-3 py-2 bg-[#f0f2f5] border-b border-slate-200/60">
+                                <div className="bg-white rounded-full flex items-center px-4 py-1.5 shadow-sm border border-slate-200">
+                                    <i className="fa-solid fa-search text-[14px] text-[#54656f] mr-2"></i>
+                                    <input type="text" placeholder="Search messages..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-transparent outline-none flex-1 text-[13px] text-[#111b21]" />
+                                </div>
+                            </div>
+
+                            <ChatView
+                              messagesToRender={messagesToRender}
+                              messages={messages}
+                              activeGroup={activeGroup}
+                              user={user}
+                              currentUserData={currentUserData}
+                              isVipAdmin={isVipAdmin}
+                              pinnedMessages={pinnedMessages}
+                              typingStatus={typingStatus}
+                              replyingTo={replyingTo}
+                              setReplyingTo={setReplyingTo}
+                              toolPreferences={toolPreferences}
+                              dbUsers={dbUsers}
+                              groups={groups}
+                              setActiveGroup={setActiveGroup}
+                              setShowRightSidebar={setShowRightSidebar}
+                              setMobileSidebarOpen={setMobileSidebarOpen}
+                              setPendingScrollTarget={setPendingScrollTarget}
+                              setActiveModal={setActiveModal}
+                              scrollToMessageDirect={scrollToMessageDirect}
+                              handleReaction={handleReaction}
+                              handleToggleBookmark={handleToggleBookmark}
+                              handleTogglePin={handleTogglePin}
+                              handleDeleteMessage={handleDeleteMessage}
+                              chatInputRef={chatInputRef}
+                              editingMessageId={editingMessageId}
+                              editMessageText={editMessageText}
+                              setEditingMessageId={setEditingMessageId}
+                              setEditMessageText={setEditMessageText}
+                              handleSaveEdit={handleSaveEdit}
+                              setSelectedMessage={setSelectedMessage}
+                              setIsEditingTaskTitle={setIsEditingTaskTitle}
+                              messagesEndRef={messagesEndRef}
+                              chatContainerRef={chatContainerRef}
+                              isAtBottom={isAtBottom}
+                              setIsAtBottom={setIsAtBottom}
+                              highlightedMsgId={highlightedMsgId}
+                            />
+
+                            <InputArea
+                              inputText={inputText}
+                              setInputText={setInputText}
+                              isOnline={isOnline}
+                              isUploading={isUploading}
+                              activeGroup={activeGroup}
+                              replyingTo={replyingTo}
+                              setReplyingTo={setReplyingTo}
+                              handleSendOfflineAware={handleSendOfflineAware}
+                              handleTypingEvent={handleTypingEvent}
+                              handlePaste={handlePaste}
+                              chatInputRef={chatInputRef}
+                              fileInputRef={fileInputRef}
+                              handleFileUpload={handleFileUpload}
+                              emojiPickerOpen={emojiPickerOpen}
+                              setEmojiPickerOpen={setEmojiPickerOpen}
+                              emojiPickerRef={emojiPickerRef}
+                              EMOJI_LIST={EMOJI_LIST}
+                              pendingFiles={pendingFiles}
+                              setPendingFiles={setPendingFiles}
+                              showFileRename={showFileRename}
+                              setShowFileRename={setShowFileRename}
+                              lockExtension={lockExtension}
+                              uploadFileDirectly={uploadFileDirectly}
+                              setActiveModal={setActiveModal}
+                              setPendingScheduledText={setPendingScheduledText}
+                              offlineDrafts={offlineDrafts}
+                              user={user}
+                              dbUsers={dbUsers}
+                              groups={groups}
+                              handleSendMessage={handleSendMessage}
+                              currentUserData={currentUserData}
+                              MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB}
+                            />
+                        </div>
+                    ) : (
                         <div className="flex-1 flex flex-col items-center justify-center bg-[#f0f2f5] text-center p-8 relative">
                             <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-[#00a884] ring-4 ring-white border border-slate-100">
                                 <i className="fa-solid fa-comments text-4xl"></i>
@@ -1583,312 +1616,6 @@ export function ChatApp({ user, onLogout }) {
                                         </div>
                                     )}
                                 </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex-1 flex flex-col relative h-full bg-[#efeae2] overflow-hidden">
-                            <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200/60 safe-top">
-                                <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-black/5 flex items-center justify-center text-[#54656f] mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
-                                
-                                <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) setActiveModal('group_settings'); }}>
-                                    {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-[#800020] shadow-sm"><i className="fa-solid fa-users"></i></div>}
-                                    <div className="flex flex-col min-w-0 flex-1">
-                                        <span className={`text-[16px] font-bold leading-tight truncate ${activeGroup.isDM ? 'text-[#111b21]' : 'text-[#800020]'}`}>{activeGroup.name}</span>
-                                        <span className="text-[13px] text-[#54656f] truncate max-w-[150px] lg:max-w-[400px]">
-                                            {activeGroup.isDM ? 'End-to-Server Encrypted' :
-                                                (dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).length > 0)
-                                                ? dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).map(u=>u.name.split(' ')[0]).join(', ') + ' (Online)'
-                                                : `${activeGroup.members?.length||0} Members`
-                                            }
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="hidden md:flex flex-1 max-w-md mx-4">
-                                    <div className="bg-white rounded-full flex items-center px-4 py-1.5 shadow-sm border border-slate-200 focus-within:ring-2 focus-within:ring-[#00a884]/30 focus-within:border-[#00a884] transition-all w-full">
-                                        <i className="fa-solid fa-search text-[14px] text-[#54656f] mr-2"></i>
-                                        <input type="text" placeholder="Search messages..." className="bg-transparent outline-none flex-1 text-[13px] text-[#111b21] placeholder-[#8696a0]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                                        {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
-                                    </div>
-                                </div>
-                                
-                                <div className="flex items-center gap-1 shrink-0 relative">
-                                    <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
-                                    
-                                    {showFilterMenu && (
-                                        <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-100">
-                                            {['all', 'tasks-pending', 'tasks-completed', 'messages', 'today', 'bookmarked'].map(f => (
-                                                <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-[#f0f2f5] text-[#111b21]' : 'text-[#3b4a54] hover:bg-[#f5f6f6]'}`}>
-                                                    {f === 'all' && <i className="fa-solid fa-layer-group w-5 text-center"></i>}
-                                                    {f === 'tasks-pending' && <i className="fa-regular fa-clock w-5 text-center"></i>}
-                                                    {f === 'tasks-completed' && <i className="fa-regular fa-square-check w-5 text-center"></i>}
-                                                    {f === 'messages' && <i className="fa-regular fa-comment w-5 text-center"></i>}
-                                                    {f === 'today' && <i className="fa-regular fa-calendar-day w-5 text-center"></i>}
-                                                    {f === 'bookmarked' && <i className="fa-solid fa-bookmark w-5 text-center"></i>}
-                                                    {f === 'bookmarked' ? 'Saved Messages' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5 text-[#54656f] text-[19px]" title="Task Analytics">
-                                        <i className="fa-solid fa-chart-pie"></i>
-                                    </button>
-                                    <div className="relative">
-                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px] relative`}>
-                                            <i className="fa-solid fa-bell"></i>
-                                            {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#25d366] rounded-full border border-[#f0f2f5]"></span>}
-                                        </button>
-                                        {showNotifications && (
-                                            <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-100">
-                                                <div className="p-3 bg-white flex justify-between items-center border-b border-slate-100">
-                                                    <span className="text-[15px] font-bold text-slate-800">Activity Feed</span>
-                                                    <button onClick={handleClearNotifications} className="text-[12px] text-[#00a884] font-semibold hover:underline">Clear All</button>
-                                                </div>
-                                                <div className="max-h-[70vh] overflow-y-auto bg-slate-50 p-2 space-y-2">
-                                                    {totalNotifications === 0 ? <div className="p-8 text-center text-[14px] text-[#54656f]">No new activity</div> :
-                                                        <div>
-                                                            {activeActionableTasks.map(task => {
-                                                                const timeStr = task.timestamp?.toDate ? new Date(task.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
-                                                                return (
-                                                                    <div key={task.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative mb-2" onClick={() => navigateToMessageFromNotification(task.id, task.groupId)}>
-                                                                        <div className="text-[13px] font-bold text-[#00a884] mb-1.5 flex items-center justify-between"><span className="flex items-center"><i className="fa-regular fa-square-check mr-1.5"></i>Pending Task</span> <span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span></div>
-                                                                        <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">"{task.text}"</div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                            {genericNotifications.map(n => {
-                                                                const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now';
-                                                                return (
-                                                                    <div key={n.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative mb-2" onClick={() => { if(n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }}>
-                                                                        <div className="w-8 h-8 rounded-full bg-[#d9fdd3] flex items-center justify-center text-[#00a884] shrink-0 mt-0.5"><i className={n.type === 'reply' ? "fa-solid fa-reply text-xs" : n.type === 'message' ? "fa-solid fa-message text-xs" : n.type === 'mention' ? "fa-solid fa-at text-xs" : "fa-solid fa-bolt text-xs"}></i></div>
-                                                                        <div className="flex-1 overflow-hidden">
-                                                                            <div className="text-[14px] font-bold text-[#111b21]">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : 'New Reaction'}</div>
-                                                                            <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug truncate pr-8 font-medium">{n.text}</div>
-                                                                        </div>
-                                                                        <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold">{timeStr}</div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    }
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="md:hidden px-3 py-2 bg-[#f0f2f5] border-b border-slate-200/60">
-                                <div className="bg-white rounded-full flex items-center px-4 py-1.5 shadow-sm border border-slate-200 focus-within:ring-2 focus-within:ring-[#00a884]/30 transition-all">
-                                    <i className="fa-solid fa-search text-[14px] text-[#54656f] mr-2"></i>
-                                    <input type="text" placeholder="Search messages..." className="bg-transparent outline-none flex-1 text-[13px] text-[#111b21] placeholder-[#8696a0]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                                    {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
-                                </div>
-                            </div>
-
-                            <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] wa-bg relative" onClick={() => setShowFilterMenu(false)}>
-                                <div className="flex flex-col min-h-full justify-end py-4 pb-10">
-                                    {toolPreferences.showWatermark !== false && (
-                                        <div className="doodle-watermark">
-                                            {Array.from({ length: 15 }).map((_, rowIdx) => (
-                                                <div key={rowIdx} className="doodle-row">
-                                                    {Array.from({ length: 8 }).map((_, i) => (
-                                                        <span key={i} className="doodle-item" style={{ fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif', fontSize: '20pt', transform: 'rotate(-20deg)', opacity: 0.7 }}>
-                                                            {currentUserData?.name || user.email.split('@')[0]}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <div className="text-center mb-6 mt-4 relative z-[1]"><span className="text-[12.5px] text-[#54656f] bg-[#ffeecd] px-4 py-1.5 rounded-lg shadow-sm font-medium"><i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.</span></div>
-                                    {pinnedMessages.length > 0 && (
-                                        <div className="sticky top-2 z-10 bg-white shadow-[0_1px_2px_rgba(11,20,26,0.1)] rounded-lg p-2.5 mb-6 animate-in slide-in-from-top-4 cursor-pointer transform-gpu hover:bg-slate-50 transition-colors mx-auto w-[92%] md:w-full md:max-w-[65vw] relative z-[1]" onClick={() => scrollToMessage(pinnedMessages[0].id)}>
-                                            <div className="flex justify-between items-center text-[12px] text-[#54656f] font-medium mb-1"><span><i className="fa-solid fa-thumbtack mr-1 text-[#8696a0]"></i> Pinned Message</span></div>
-                                            <div className="text-[14px] text-[#111b21] line-clamp-1 truncate">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
-                                        </div>
-                                    )}
-                                    <div className="relative z-[1] flex flex-col justify-end">
-                                        {messagesToRender.map(m => renderMessageNode(m))}
-                                    </div>
-                                    {typingStatus.length > 0 && (
-                                        <div className="flex items-start animate-in fade-in slide-in-from-bottom-2 mt-2 relative z-[1]">
-                                            <div className="bg-white px-4 py-2.5 rounded-2xl rounded-tl-none shadow-[0_4px_15px_rgba(0,168,132,0.15)] flex items-center gap-3 border border-teal-50">
-                                                <div className="flex -space-x-2">
-                                                    {typingStatus.map(t => {
-                                                        const uidPart = t.id.split('_')[1] || t.id;
-                                                        const typist = dbUsers.find(u => u.uid === uidPart || u.name === t.name) || {};
-                                                        return <MemoizedAvatar key={t.id} uid={uidPart} url={typist.profilePicUrl} name={t.name} sizeClass="w-7 h-7 typing-avatar-pulse border-2 border-white relative z-10" />
-                                                    })}
-                                                </div>
-                                                <span className="typing-gradient-text text-[13px] tracking-wide">
-                                                    {typingStatus.map(t => t.name).join(', ')} {typingStatus.length > 1 ? 'are' : 'is'} typing...
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div ref={messagesEndRef} className="h-6 shrink-0 relative z-[1]"></div>
-                                </div>
-                            </div>
-
-                            <button onClick={scrollToPosition} className="absolute bottom-[80px] right-4 bg-white text-[#54656f] shadow-[0_1px_1px_0_rgba(11,20,26,.1),0_2px_5px_0_rgba(11,20,26,.2)] rounded-full w-10 h-10 flex items-center justify-center z-30 transition-transform">
-                                <i className={`fa-solid ${isAtBottom ? 'fa-arrow-up' : 'fa-arrow-down'} text-[16px]`}></i>
-                            </button>
-
-                            {replyingTo && (
-                                <div className="bg-[#f0f2f5] px-4 py-2 flex items-center justify-between shrink-0 animate-in slide-in-from-bottom-2 z-10 relative">
-                                    <div className="flex-1 bg-[#e9edef] rounded-lg p-2 border-l-4 border-[#00a884] flex items-center justify-between">
-                                        <div className="flex flex-col overflow-hidden pr-2">
-                                            <div className="text-[13px] font-semibold text-[#00a884]">{(replyingTo.sender||"").split('@')[0]}</div>
-                                            <div className="text-[13px] text-[#54656f] truncate">"{replyingTo.text || replyingTo.fileName}"</div>
-                                        </div>
-                                        <button onClick={()=>setReplyingTo(null)} className="w-8 h-8 rounded-full text-[#54656f] hover:bg-black/5 transition-colors flex items-center justify-center text-[20px]"><i className="fa-solid fa-xmark"></i></button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {inputText.split(/\s+/).pop().startsWith('@') && inputText.split(/\s+/).pop().length > 0 && (
-                                <div className="absolute bottom-[65px] left-4 bg-white shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] rounded-lg w-72 max-h-56 overflow-y-auto z-20 py-2 animate-in slide-in-from-bottom-2 border border-slate-100">
-                                    <div className="px-4 py-1 text-[12px] font-bold text-[#00a884] tracking-wide mb-1">Users</div>
-                                    {dbUsers.filter(u => (u.name||"").toLowerCase().includes(inputText.split(/\s+/).pop().substring(1).toLowerCase())).map(u => (
-                                        <div key={u.uid} onMouseDown={(e) => e.preventDefault()} onClick={() => { const words = inputText.split(/\s+/); words[words.length - 1] = `@${u.name} `; setInputText(words.join(' ')); chatInputRef.current?.focus(); }} className="px-4 py-2 hover:bg-[#f5f6f6] cursor-pointer text-[14px] flex items-center gap-3 text-[#111b21] transition-colors">
-                                            <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
-                                            {u.name}
-                                        </div>
-                                    ))}
-                                    <div className="px-4 py-1 text-[12px] font-bold text-[#00a884] tracking-wide border-t border-slate-100 my-1 pt-2">Teams</div>
-                                    {groups.filter(g => (g.name||"").toLowerCase().includes(inputText.split(/\s+/).pop().substring(1).toLowerCase()) && !g.isArchived).map(g => (
-                                        <div key={g.id} onMouseDown={(e) => e.preventDefault()} onClick={() => { const words = inputText.split(/\s+/); words[words.length - 1] = `@${g.name.replace(/\s+/g, '')} `; setInputText(words.join(' ')); chatInputRef.current?.focus(); }} className="px-4 py-2 hover:bg-[#f5f6f6] cursor-pointer text-[14px] flex items-center gap-3 text-[#111b21] transition-colors">
-                                            <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-8 h-8" isGroup={true} />
-                                            {g.name}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Multi-file Rename Card */}
-                            {showFileRename && pendingFiles.length > 0 && (
-                              <div className="bg-white border border-[#00a884] shadow-xl rounded-2xl p-4 mx-3 mb-2 animate-in slide-in-from-bottom-2 z-20 space-y-3">
-                                {pendingFiles.map((pf) => (
-                                  <div key={pf.id} className="flex items-start gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
-                                    
-                                    {/* File Icon */}
-                                    <div className="mt-1 w-10 h-10 rounded-lg bg-[#e8fbf6] flex items-center justify-center shrink-0 border border-[#00a884]/20">
-                                        <i className="fa-solid fa-file-lines text-[#00a884] text-xl"></i>
-                                    </div>
-                                    
-                                    <div className="flex-1 space-y-2.5">
-                                      {/* Top Row: File Name & Size */}
-                                      <div className="flex items-center gap-2">
-                                        <input
-                                          type="text"
-                                          value={pf.customName.replace(/\.[^/.]+$/, '')}
-                                          onChange={(e) => {
-                                            const baseName = e.target.value;
-                                            const newName = lockExtension(pf.file.name, baseName);
-                                            setPendingFiles(prev =>
-                                              prev.map(f => f.id === pf.id ? { ...f, customName: newName } : f)
-                                            );
-                                          }}
-                                          className="flex-1 text-[15px] font-bold text-slate-800 outline-none border-b border-transparent focus:border-[#00a884] bg-transparent transition-colors py-0.5"
-                                          placeholder="File name"
-                                        />
-                                        <span className="text-[13px] font-bold text-slate-400">.{pf.file.name.split('.').pop()}</span>
-                                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full ml-auto shrink-0 border border-slate-200">
-                                            {(pf.file.size / 1024 / 1024).toFixed(2)} MB
-                                        </span>
-                                      </div>
-
-                                      {/* Bottom Row: Prominent Message Input */}
-                                      <textarea
-                                        rows={1}
-                                        value={pf.caption}
-                                        onChange={(e) => {
-                                            e.target.style.height = 'auto';
-                                            e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px';
-                                            setPendingFiles(prev =>
-                                              prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)
-                                            );
-                                        }}
-                                        placeholder="Add a message..."
-                                        className="w-full text-[14.2px] text-[#111b21] outline-none bg-[#f0f2f5] border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-[#00a884] focus:ring-1 focus:ring-[#00a884] transition-all placeholder-[#8696a0]"
-                                      />
-                                    </div>
-
-                                    {/* Delete Button */}
-                                    <button
-                                      onClick={() => {
-                                        setPendingFiles(prev => prev.filter(f => f.id !== pf.id));
-                                        if (pendingFiles.length === 1) setShowFileRename(false);
-                                      }}
-                                      className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-2.5 rounded-xl mt-1 transition-colors"
-                                      title="Remove file"
-                                    >
-                                      <i className="fa-solid fa-trash-can text-lg"></i>
-                                    </button>
-                                  </div>
-                                ))}
-                                
-                                {/* Action Buttons */}
-                                <div className="flex justify-end gap-3 pt-2">
-                                  <button
-                                    onClick={() => { setPendingFiles([]); setShowFileRename(false); }}
-                                    className="text-slate-600 font-bold text-[14.2px] px-5 py-2.5 rounded-xl hover:bg-slate-100 transition-colors"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      if (pendingFiles.length === 0) {
-                                        setShowFileRename(false);
-                                        return;
-                                      }
-                                      pendingFiles.forEach(pf => uploadFileDirectly(pf));
-                                      setShowFileRename(false);
-                                    }}
-                                    className="bg-[#008069] text-white px-6 py-2.5 rounded-xl text-[14.2px] font-bold shadow-sm hover:bg-[#006e5a] transition-colors flex items-center gap-2"
-                                  >
-                                    <i className="fa-solid fa-paper-plane"></i> Send {pendingFiles.length > 1 ? `All (${pendingFiles.length})` : ''}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="bg-[#f0f2f5] px-3 md:px-4 py-3 shrink-0 z-10 flex items-end gap-2 safe-bottom relative w-full">
-                                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple/>
-                                <button className="w-[42px] h-[42px] flex items-center justify-center text-[#54656f] hover:text-[#111b21] transition-colors shrink-0 text-[22px]" onClick={() => fileInputRef.current.click()} disabled={isUploading}><i className="fa-solid fa-plus"></i></button>
-                                <div className="relative shrink-0" ref={emojiPickerRef}>
-                                    <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-[#54656f] hover:text-[#111b21] transition-colors text-[22px]" title="Emoji"><i className="fa-regular fa-face-smile"></i></button>
-                                    {emojiPickerOpen && (
-                                        <div className="emoji-picker-popup">
-                                            {EMOJI_LIST.map(emoji => (
-                                                <button key={emoji} onClick={() => { setInputText(prev => prev + emoji); chatInputRef.current?.focus(); }}>{emoji}</button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-1 bg-white rounded-lg flex flex-col shadow-sm overflow-hidden justify-end">
-                                    <div className="flex gap-1 px-3 pt-1.5 pb-0.5 bg-slate-50 border-b border-slate-100">
-                                        <button onClick={(e) => { e.preventDefault(); const cursor = chatInputRef.current?.selectionStart || 0; const text = inputText; setInputText(text.slice(0, cursor) + '**' + text.slice(cursor)); chatInputRef.current?.focus(); }} title="Bold" className="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 rounded px-2 py-0.5 hover:bg-slate-100 transition-colors">B</button>
-                                        <button onClick={(e) => { e.preventDefault(); const cursor = chatInputRef.current?.selectionStart || 0; const text = inputText; setInputText(text.slice(0, cursor) + '__' + text.slice(cursor)); chatInputRef.current?.focus(); }} title="Italic" className="text-[11px] italic font-bold text-slate-600 bg-white border border-slate-200 rounded px-2 py-0.5 hover:bg-slate-100 transition-colors">I</button>
-                                        <button onClick={(e) => { e.preventDefault(); const cursor = chatInputRef.current?.selectionStart || 0; const text = inputText; setInputText(text.slice(0, cursor) + '~~' + text.slice(cursor)); chatInputRef.current?.focus(); }} title="Strikethrough" className="text-[11px] line-through font-bold text-slate-600 bg-white border border-slate-200 rounded px-2 py-0.5 hover:bg-slate-100 transition-colors">S</button>
-                                    </div>
-                                    <textarea ref={chatInputRef} rows={1} placeholder={isOnline ? "Type or Paste a message..." : "⚡ Offline — message will be queued"} className="bg-transparent flex-1 outline-none text-[15px] text-[#111b21] resize-none py-[10px] px-4 w-full" style={{ minHeight: '42px', maxHeight: '120px' }} value={inputText} onPaste={handlePaste} onChange={(e) => { setInputText(e.target.value); handleTypingEvent(); e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendOfflineAware(); } }} />
-                                </div>
-                                <button onClick={() => { if (!inputText.trim()) return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-[#54656f] hover:text-amber-500 transition-colors" title="Schedule this message"><i className="fa-regular fa-clock text-[20px]"></i></button>
-                                {offlineDrafts.length > 0 && (
-                                    <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-[42px] h-[42px] flex justify-center items-center text-amber-500 hover:text-amber-600 transition-colors" title={`${offlineDrafts.length} offline draft(s)`}>
-                                        <i className="fa-solid fa-inbox text-[20px]"></i>
-                                        <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{offlineDrafts.length}</span>
-                                    </button>
-                                )}
-                                {inputText.trim() ? (
-                                    <button onClick={handleSendOfflineAware} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-[#54656f] hover:text-[#00a884] transition-colors"><i className="fa-solid fa-paper-plane text-[22px]"></i></button>
-                                ) : (
-                                    <button className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-[#54656f] opacity-50 cursor-not-allowed"><i className="fa-solid fa-paper-plane text-[22px]"></i></button>
-                                )}
                             </div>
                         </div>
                     )}
@@ -2144,3 +1871,4 @@ export default function App() {
     }
     return <ErrorBoundary><ChatApp user={user} onLogout={() => signOut(auth)} /></ErrorBoundary>;
 }
+```</InputArea></ChatView>
