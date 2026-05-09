@@ -856,14 +856,14 @@ export default function ChatApp({ user, onLogout }) {
                     </div>
                 </div>
                 <h2 className="text-xl font-bold mb-2 tracking-tight">Talk & Task Enterprise Portal</h2>
-                <div className="flex items-center gap-3 text-[#54656f] font-semibold text-[13px] uppercase tracking-widest mt-2">
+                <div className="flex items-center gap-3 text-primary font-semibold text-[13px] uppercase tracking-widest mt-2">
                     <i className="fa-solid fa-lock text-[#00a884]"></i> Preparing Workspace...
                 </div>
                 <div className="w-48 h-1 bg-gray-200 rounded-full mt-6 overflow-hidden">
                     <div className="h-full bg-[#00a884] animate-[pulse_1.5s_ease-in-out_infinite] w-full origin-left"></div>
                 </div>
                 <div className="mt-10 px-8 text-center max-w-md">
-                    <p className="text-[#54656f] text-sm font-medium italic" key={currentTip}>{currentTip}</p>
+                    <p className="text-primary text-sm font-medium italic" key={currentTip}>{currentTip}</p>
                 </div>
             </div>
         );
@@ -918,7 +918,7 @@ export default function ChatApp({ user, onLogout }) {
                                     {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-[#800020] shadow-sm"><i className="fa-solid fa-users"></i></div>}
                                     <div className="flex flex-col min-w-0 flex-1">
                                         <span className={`text-[16px] font-bold leading-tight truncate ${activeGroup.isDM ? 'text-[#111b21]' : 'text-[#800020]'}`}>{activeGroup.name}</span>
-                                        <span className="text-[13px] text-[#54656f] truncate max-w-[150px] lg:max-w-[400px]">
+                                        <span className="text-[13px] text-primary truncate max-w-[150px] lg:max-w-[400px]">
                                             {activeGroup.isDM ? 'End-to-Server Encrypted' :
                                                 (dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).length > 0)
                                                 ? dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).map(u=>u.name.split(' ')[0]).join(', ') + ' (Online)'
@@ -930,14 +930,14 @@ export default function ChatApp({ user, onLogout }) {
 
                                 <div className="hidden md:flex flex-1 max-w-md mx-4">
                                     <div className="bg-white rounded-full flex items-center px-4 py-1.5 shadow-sm border border-slate-200 focus-within:ring-2 focus-within:ring-[#00a884]/30 focus-within:border-[#00a884] transition-all w-full">
-                                        <i className="fa-solid fa-search text-[14px] text-[#54656f] mr-2"></i>
+                                        <i className="fa-solid fa-search text-[14px] text-primary mr-2"></i>
                                         <input type="text" placeholder="Search messages..." className="bg-transparent outline-none flex-1 text-[13px] text-[#111b21] placeholder-[#8696a0]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                                         {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
                                     </div>
                                 </div>
                                 
                                 <div className="flex items-center gap-1 shrink-0 relative">
-                                    <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-primary/5'} text-[#54656f] text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
+                                    <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-primary/5'} text-primary text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
                                     
                                     {showFilterMenu && (
                                         <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-100">
@@ -949,11 +949,11 @@ export default function ChatApp({ user, onLogout }) {
                                         </div>
                                     )}
 
-                                    <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors hover:bg-primary/5 text-[#54656f] text-[19px]" title="Task Analytics">
+                                    <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors hover:bg-primary/5 text-primary text-[19px]" title="Task Analytics">
                                         <i className="fa-solid fa-chart-pie"></i>
                                     </button>
                                     <div className="relative">
-                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-black/10' : 'hover:bg-primary/5'} text-[#54656f] text-[19px] relative`}>
+                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-black/10' : 'hover:bg-primary/5'} text-primary text-[19px] relative`}>
                                             <i className="fa-solid fa-bell"></i>
                                             {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#25d366] rounded-full border border-[#f0f2f5]"></span>}
                                         </button>
