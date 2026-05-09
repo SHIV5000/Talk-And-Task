@@ -106,7 +106,6 @@ export default function RightSidebar({
           <i className="fa-solid fa-xmark"></i>
         </button>
       </div>
-      {/* Scrollable container with custom scrollbar */}
       <div className="flex-1 overflow-y-auto flex flex-col gap-4 p-4 custom-scrollbar">
         <div>
           <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
