@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-
+import TaskBoard from './Sidebar/TaskBoard.jsx';   // new
+// Remove the old RightSidebar import (or keep it if you want to fallback, but not needed)
 import AdminPanel from './Admin/AdminPanel.jsx';
 import LeftSidebar from './Sidebar/LeftSidebar.jsx';
 import RightSidebar from './Sidebar/RightSidebar.jsx';
@@ -1029,12 +1030,20 @@ export default function ChatApp({ user, onLogout }) {
                     )}
 
                     {showRightSidebar && (
-                        <RightSidebar
-                          showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
-                          tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                          setSelectedMessage={setSelectedMessage} setIsEditingTaskTitle={setIsEditingTaskTitle} setActiveModal={setActiveModal}
-                        />
-                    )}
+                                  <TaskBoard
+                                showRightSidebar={showRightSidebar}
+                                setShowRightSidebar={setShowRightSidebar}
+                                tasksAssignedToMe={tasksAssignedToMe}
+                                tasksAssignedByMe={tasksAssignedByMe}
+                                groups={groups}
+                                dbUsers={dbUsers}
+                                user={user}
+                                setActiveGroup={setActiveGroup}
+                                setSelectedMessage={setSelectedMessage}
+                                setIsEditingTaskTitle={setIsEditingTaskTitle}
+                                setActiveModal={setActiveModal}
+                                      />
+                                    )}
 
                     {/* --- MODALS --- */}
                     {activeModal === 'context' && <ContextMenuModal selectedMessage={selectedMessage} setActiveModal={setActiveModal} setReplyingTo={setReplyingTo} chatInputRef={chatInputRef} />}
