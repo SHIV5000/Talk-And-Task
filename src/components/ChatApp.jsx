@@ -450,6 +450,32 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [groups]);
 
+    const notifyInvolvedInTask = async (taskMsg, actionText) => {
+        const involved = new Set();
+        if (taskMsg.senderEmail) involved.add(taskMsg.senderEmail);
+        (taskMsg.taskData?.assignees || []).forEach(a => involved.add(a));
+        (taskMsg.taskData?.trail || []).forEach(t => {
+            if (t.by) involved.add(t.by);
+        });
+        involved.delete(user.email);
+        const uidsToNotify = dbUsers
+            .filter(u => involved.has(u.email))
+            .map(u => u.uid);
+        for (const uid of uidsToNotify) {
+            try {
+                await addDoc(collection(db, "notifications"), {
+                    userId: uid,
+                    type: "task",
+                    text: actionText,
+                    messageId: taskMsg.id,
+                    groupId: taskMsg.groupId,
+                    timestamp: serverTimestamp(),
+                    isRead: false,
+                });
+            } catch (e) {}
+        }
+    };
+
     const openDraftDB = () => new Promise((resolve, reject) => {
         const req = indexedDB.open("TalkTaskDrafts", 1);
         req.onupgradeneeded = e => { e.target.result.createObjectStore("drafts", { keyPath: "id", autoIncrement: true }); };
@@ -682,6 +708,7 @@ export default function ChatApp({ user, onLogout }) {
                 const now = new Date();
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
+                await notifyInvolvedInTask(selectedMessage, `${(user.email||"").split('@')[0]} attached a file to a task.`);
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
                 playTaskSound();
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
@@ -816,6 +843,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
+            await notifyInvolvedInTask(selectedMessage, `${(user.email||"").split('@')[0]} transferred a task.`);
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
             playTaskSound();
         } catch (error) {}
@@ -828,6 +856,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
+            await notifyInvolvedInTask(selectedMessage, `${(user.email||"").split('@')[0]} marked a task as Completed.`);
             setActiveModal(null);
             playTaskSound();
         } catch (error) {}
@@ -848,6 +877,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: trailComment }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
+            await notifyInvolvedInTask(selectedMessage, `${(user.email||"").split('@')[0]} updated a task.`);
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
             playTaskSound();
@@ -1037,15 +1067,117 @@ export default function ChatApp({ user, onLogout }) {
     <i className="fa-solid fa-chart-pie"></i>
   </button>
 
-  <div className="relative">
-    <button
-      onClick={() => setShowNotifications(!showNotifications)}
-      className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px] relative`}
-    >
-      <i className="fa-solid fa-bell"></i>
-      {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-success rounded-full border border-white"></span>}
-    </button>
-  </div>
+  {/* Bell button + dropdown */}
+<div className="relative">
+  <button
+    onClick={() => setShowNotifications(!showNotifications)}
+    className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${
+      showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'
+    } text-[19px] relative`}
+  >
+    <i className="fa-solid fa-bell"></i>
+    {totalNotifications > 0 && (
+      <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-success rounded-full border border-white"></span>
+    )}
+  </button>
+
+  {showNotifications && (
+    <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-100">
+      {/* Header */}
+      <div className="p-3 bg-white flex justify-between items-center border-b border-slate-100">
+        <span className="text-[15px] font-bold text-slate-800">Activity Feed</span>
+        <button
+          onClick={handleClearNotifications}
+          className="text-[12px] text-[#00a884] font-semibold hover:underline"
+        >
+          Clear All
+        </button>
+      </div>
+
+      {/* Scrollable list */}
+      <div className="max-h-[70vh] overflow-y-auto bg-slate-50 p-2 space-y-2">
+        {totalNotifications === 0 ? (
+          <div className="p-8 text-center text-[14px] text-[#54656f]">
+            No new activity
+          </div>
+        ) : (
+          <>
+            {/* Pending tasks assigned to me */}
+            {activeActionableTasks.map(task => {
+              const timeStr = task.timestamp?.toDate
+                ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '';
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => navigateToMessageFromNotification(task.id, task.groupId)}
+                  className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative mb-2"
+                >
+                  <div className="text-[13px] font-bold text-[#00a884] mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center">
+                      <i className="fa-regular fa-square-check mr-1.5"></i>Pending Task
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span>
+                  </div>
+                  <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">
+                    "{task.text}"
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* All other notifications (mentions, replies, reactions, task updates) */}
+            {genericNotifications.map(n => {
+              const timeStr = n.timestamp?.toDate
+                ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Just now';
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => {
+                    if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id);
+                  }}
+                  className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative mb-2"
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#d9fdd3] flex items-center justify-center text-[#00a884] shrink-0 mt-0.5">
+                    <i
+                      className={
+                        n.type === 'reply'
+                          ? 'fa-solid fa-reply text-xs'
+                          : n.type === 'mention'
+                          ? 'fa-solid fa-at text-xs'
+                          : 'fa-solid fa-bolt text-xs'
+                      }
+                    ></i>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <div className="text-[14px] font-bold text-[#111b21]">
+                      {n.type === 'reply'
+                        ? 'New Reply'
+                        : n.type === 'message'
+                        ? 'Direct Message'
+                        : n.type === 'mention'
+                        ? 'Mentioned You'
+                        : n.type === 'task'
+                        ? 'Task Update'
+                        : 'New Reaction'}
+                    </div>
+                    <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug truncate pr-8 font-medium">
+                      {n.text}
+                    </div>
+                  </div>
+                  <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold">
+                    {timeStr}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  )}
+</div>
 
   <button
     onClick={() => setShowRightSidebar(!showRightSidebar)}
