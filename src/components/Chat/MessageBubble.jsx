@@ -145,7 +145,13 @@ const MessageBubble = React.memo(({
                 {msg.isEdited && <span className="italic">(edited)</span>}
                 {msg.hasReminder && <i className="fa-regular fa-clock text-amber-500"></i>}
                 {isBookmarked && <i className="fa-solid fa-bookmark text-primary"></i>}
-                {msg.isMine && (msg.seenBy || []).filter(e => e !== userEmail).length > 0 && <span title="Seen" className="text-teal-500"><i className="fa-solid fa-check-double text-xs"></i></span>}
+                {/* Read receipt indicator */}
+{msg.isMine && !seenByOthers && deliveredCount > 0 && (
+  <span className="text-[11px] font-medium text-[#800000] ml-1">Delivered</span>
+)}
+{msg.isMine && seenByOthers && (
+  <span className="text-[11px] font-medium text-[#006400] ml-1">Seen</span>
+)}
               </div>
             </>
           )}
