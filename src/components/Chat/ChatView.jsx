@@ -102,9 +102,20 @@ export default function ChatView({
         )}
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
-      <button onClick={scrollToPosition} className="absolute bottom-[80px] right-4 bg-white shadow-lg rounded-full w-10 h-10 flex items-center justify-center z-30">
-        <i className={`fa-solid ${isAtBottom ? 'fa-arrow-up' : 'fa-arrow-down'} text-primary text-lg`}></i>
-      </button>
+      <button
+  onClick={() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: isAtBottom ? 0 : chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }}
+  className="absolute bottom-[80px] right-4 bg-primary text-white shadow-lg rounded-full w-10 h-10 flex items-center justify-center z-30 transition-transform hover:scale-110"
+  title={isAtBottom ? 'Scroll to top' : 'Scroll to latest'}
+>
+  <i className={`fa-solid ${isAtBottom ? 'fa-arrow-up' : 'fa-arrow-down'} text-lg`}></i>
+</button>
     </div>
   );
 }
