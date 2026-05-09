@@ -937,29 +937,51 @@ export default function ChatApp({ user, onLogout }) {
                                 </div>
                                 
                                 <div className="flex items-center gap-1 shrink-0 relative">
-                                    <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-primary/5'} text-primary text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
-                                    
-                                    {showFilterMenu && (
-                                        <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-100">
-                                            {['all', 'tasks-pending', 'tasks-completed', 'messages', 'today', 'bookmarked'].map(f => (
-                                                <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-[#f0f2f5] text-[#111b21]' : 'text-[#3b4a54] hover:bg-[#f5f6f6]'}`}>
-                                                    {f === 'bookmarked' ? 'Saved Messages' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+  <button
+    onClick={() => setShowFilterMenu(!showFilterMenu)}
+    className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10"
+    title="Filter Messages"
+  >
+    <i className="fa-solid fa-sliders"></i>
+  </button>
 
-                                    <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors hover:bg-primary/5 text-primary text-[19px]" title="Task Analytics">
-                                        <i className="fa-solid fa-chart-pie"></i>
-                                    </button>
-                                    <div className="relative">
-                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-black/10' : 'hover:bg-primary/5'} text-primary text-[19px] relative`}>
-                                            <i className="fa-solid fa-bell"></i>
-                                            {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#25d366] rounded-full border border-[#f0f2f5]"></span>}
-                                        </button>
-                                        {/* Notifications Dropdown Omitted for Brevity in Display - Assumed Managed in Header Component if extracted */}
-                                    </div>
-                                </div>
+  {showFilterMenu && (
+    <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-lg z-50 overflow-hidden animate-in fade-in py-2 w-48 border">
+      {['all','tasks-pending','tasks-completed','messages','today','bookmarked'].map(f => (
+        <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-primary-light text-primary' : 'text-text-primary hover:bg-gray-50'}`}>
+          {f === 'bookmarked' ? 'Saved Messages' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+        </div>
+      ))}
+    </div>
+  )}
+
+  <button
+    onClick={() => setActiveModal('task_analytics')}
+    className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10"
+    title="Task Analytics"
+  >
+    <i className="fa-solid fa-chart-pie"></i>
+  </button>
+
+  <div className="relative">
+    <button
+      onClick={() => setShowNotifications(!showNotifications)}
+      className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px] relative`}
+    >
+      <i className="fa-solid fa-bell"></i>
+      {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-danger rounded-full border border-white"></span>}
+    </button>
+    {/* Notification dropdown stays unchanged */}
+  </div>
+
+  <button
+    onClick={() => setShowRightSidebar(!showRightSidebar)}
+    className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`}
+    title="Task Hub"
+  >
+    <i className="fa-solid fa-clipboard-list"></i>
+  </button>
+</div>
                             </div>
                             
                             {/* --- CHAT VIEW COMPONENT --- */}
