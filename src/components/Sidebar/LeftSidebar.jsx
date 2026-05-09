@@ -23,19 +23,37 @@ export default function LeftSidebar({
   setViewMode,
 }) {
   return (
-    <div className="relative z-20">
+    <div className="relative z-20 h-full">
+      {/* CSS injected to guarantee scrollbars are visible in Chrome/Edge/Safari */}
+      <style>{`
+        .custom-sidebar-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-sidebar-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-sidebar-scroll::-webkit-scrollbar-thumb {
+          background-color: rgba(255, 255, 255, 0.25);
+          border-radius: 10px;
+        }
+        .custom-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(255, 255, 255, 0.4);
+        }
+      `}</style>
+
       {mobileSidebarOpen && (
         <div
           className="mobile-sidebar-overlay md:hidden"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
+      
       <div
         className={`${
           mobileSidebarOpen
             ? 'mobile-sidebar-panel open flex'
             : 'hidden md:flex'
-        } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl`}
+        } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
       >
         {/* Header */}
         <div className="h-[59px] flex items-center justify-between px-3 shrink-0 border-b border-white/10 safe-top">
@@ -83,7 +101,7 @@ export default function LeftSidebar({
         </div>
 
         {/* Search */}
-        <div className="p-3 border-b border-white/10">
+        <div className="p-3 border-b border-white/10 shrink-0">
           <div className="bg-white/10 rounded-lg flex items-center px-3 py-2 focus-within:bg-white/20 transition-all">
             <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
             <input
@@ -107,12 +125,10 @@ export default function LeftSidebar({
         {/* Scrollable team/DM list */}
         <div
           id="leftSidebarScroll"
-          className="flex-1 min-h-0 flex flex-col"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-sidebar-scroll"
           style={{
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'rgba(255, 255, 255, 0.3) transparent',
+            scrollbarWidth: 'thin', /* Ensures Firefox respects the thin scrollbar */
+            scrollbarColor: 'rgba(255, 255, 255, 0.25) transparent',
           }}
         >
           {myGroups.map(g => {
@@ -171,7 +187,6 @@ export default function LeftSidebar({
               u.lastActive &&
               Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000;
 
-            // Extract status string logic to prevent Vite parser regex errors
             let statusText = isOnline ? 'Online' : 'Offline';
             if (unreadInfo.total > 0) {
               const parts = [];
@@ -250,7 +265,7 @@ export default function LeftSidebar({
 
         {/* Admin Workspace button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
-          <div className="p-3 bg-white/5 border-t border-white/10">
+          <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
