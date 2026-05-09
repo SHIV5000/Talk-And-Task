@@ -138,25 +138,6 @@ export default function ChatApp({ user, onLogout }) {
 
     // ==================== EFFECTS ====================
     useEffect(() => {
-        if (!activeGroup?.id || !user.uid) return;
-        updateDoc(doc(db, "users", user.uid), { lastActiveGroupId: activeGroup.id }).catch(() => {});
-    }, [activeGroup?.id, user.uid]);
-
-    useEffect(() => {
-        if (isWorkspaceLoading || !groups.length || activeGroup) return;
-        const savedGroupId = currentUserData?.lastActiveGroupId;
-        if (savedGroupId) {
-            const g = groups.find(gr => gr.id === savedGroupId && gr.members?.includes(user.email));
-            if (g) setActiveGroup(g);
-        }
-    }, [isWorkspaceLoading, groups, activeGroup, currentUserData?.lastActiveGroupId, user.email]);
-
-    useEffect(() => {
-        if (!activeGroup || isWorkspaceLoading) return;
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 200);
-    }, [activeGroup?.id, isWorkspaceLoading]);
-
-    useEffect(() => {
         let tipIndex = 0;
         const tipInterval = setInterval(() => {
             tipIndex = (tipIndex + 1) % loaderTips.length;
@@ -340,6 +321,35 @@ export default function ChatApp({ user, onLogout }) {
         loadOfflineDrafts();
         return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
     }, []);
+
+    // Save the last active group whenever the user switches
+    useEffect(() => {
+        if (!activeGroup?.id || !user.uid) return;
+        updateDoc(doc(db, "users", user.uid), {
+            lastActiveGroupId: activeGroup.id
+        }).catch(() => {});
+    }, [activeGroup?.id, user.uid]);
+
+    // Restore the last active group once the app has loaded
+    useEffect(() => {
+        if (isWorkspaceLoading || !groups.length || activeGroup) return;
+        const savedGroupId = currentUserData?.lastActiveGroupId;
+        if (savedGroupId) {
+            const g = groups.find(gr => gr.id === savedGroupId && gr.members?.includes(user.email));
+            if (g) setActiveGroup(g);
+        }
+    }, [isWorkspaceLoading, groups, currentUserData?.lastActiveGroupId, user.email, activeGroup]);
+
+    // Force scroll to the very bottom when the group changes
+    useEffect(() => {
+        if (!activeGroup || isWorkspaceLoading) return;
+        setTimeout(() => {
+            if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                setIsAtBottom(true);
+            }
+        }, 300);
+    }, [activeGroup?.id, isWorkspaceLoading]);
 
     // ==================== MEMOS ====================
     const myGroups = useMemo(() => {
@@ -776,7 +786,7 @@ export default function ChatApp({ user, onLogout }) {
                 }
             }, { merge: true });
 
-            // After setting the task, notify assignees
+            // Notify assignees
             taskAssignees.forEach(email => {
                 if (email !== user.email) {
                     const assigneeUser = dbUsers.find(u => u.email === email);
@@ -784,12 +794,12 @@ export default function ChatApp({ user, onLogout }) {
                         addDoc(collection(db, "notifications"), {
                             userId: assigneeUser.uid,
                             type: "task",
-                            text: `${(user.email||"").split('@')[0]} assigned you a task: "${selectedMessage.text}"`,
+                            text: `${(user.email || "").split('@')[0]} assigned you a task: "${selectedMessage.text}"`,
                             messageId: selectedMessage.id,
                             groupId: selectedMessage.groupId,
                             timestamp: serverTimestamp(),
                             isRead: false
-                        });
+                        }).catch(() => {});
                     }
                 }
             });
@@ -1033,7 +1043,7 @@ export default function ChatApp({ user, onLogout }) {
       className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px] relative`}
     >
       <i className="fa-solid fa-bell"></i>
-      {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-danger rounded-full border border-white"></span>}
+      {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-success rounded-full border border-white"></span>}
     </button>
   </div>
 
