@@ -1248,6 +1248,7 @@ useEffect(() => {
                                 setEditingMessageId={setEditingMessageId} setEditMessageText={setEditMessageText} handleSaveEdit={handleSaveEdit}
                                 setSelectedMessage={setSelectedMessage} setIsEditingTaskTitle={setIsEditingTaskTitle} messagesEndRef={messagesEndRef}
                                 chatContainerRef={chatContainerRef} isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId}
+                                unreadHighlightIds={unreadHighlightIds}
                             />
 
                             {/* --- INPUT AREA COMPONENT --- */}
