@@ -20,6 +20,8 @@ const MessageBubble = React.memo(({
   const isBookmarked = msg.bookmarkedBy?.includes(userEmail);
   const canModify = msg.isMine && !msg.isTask && !hasReplies && !(Object.keys(msg.reactions || {}).length > 0);
   const isEditingThis = editingMessageId === msg.id;
+  const seenByOthers = (msg.seenBy || []).filter(e => e !== userEmail).length > 0;
+const deliveredCount = (msg.deliveredTo || []).filter(e => e !== userEmail).length;
 
   const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
   const senderName = (msg.sender || '').split('@')[0];
