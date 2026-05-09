@@ -7,23 +7,22 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectManifest: false,
-      workbox: {
-        cleanupOutdatedCaches: true,
-        skipWaiting: true,
-        clientsClaim: true,
-      },
       manifest: {
-        name: 'Talk & Task Enterprise',
+        name: 'Talk & Task Board Edition',
         short_name: 'Talk&Task',
-        description: 'Corporate Coordination Portal',
-        theme_color: '#008069',
-        background_color: '#f0f2f5',
+        description: 'Team communication with built‑in task management',
+        theme_color: '#4F46E5',
+        background_color: '#F8F7F4',
         display: 'standalone',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' }
         ]
+      },
+      workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
       }
     })
   ]
