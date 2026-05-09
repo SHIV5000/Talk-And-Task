@@ -50,7 +50,10 @@ const deliveredCount = (msg.deliveredTo || []).filter(e => e !== userEmail).leng
 
   return (
     <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu`}>
-      <div className={`flex ${msg.isMine ? 'flex-row-reverse' : 'flex-row'} items-start max-w-[85vw] md:max-w-[70vw] group/msg relative ${isHighlighted ? 'highlight-flash' : ''}`}>
+      <div
+    id={`msg-${msg.id}`}
+    className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu ${isUnreadHighlight ? 'highlight-flash' : ''}`}
+>
         <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3' : 'mr-3'} />
         <div className={`flex-1 bg-white rounded-xl shadow-sm border border-gray-100 ${getBorderColor()} border-l-4 px-4 py-3 relative`}>
           <div className="flex justify-between items-center mb-1">
