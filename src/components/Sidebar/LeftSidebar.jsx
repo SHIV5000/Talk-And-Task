@@ -18,10 +18,16 @@ export default function LeftSidebar({
           </div>
           <div className="flex items-center gap-2">
             {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
-              <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg"><i className="fa-solid fa-plus"></i></button>
+              <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg" title="Create Team">
+                <i className="fa-solid fa-plus"></i>
+              </button>
             )}
-            <button onClick={() => setActiveModal('edit_profile')} className="hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg"><i className="fa-solid fa-gear"></i></button>
-            <button onClick={onLogout} className="hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg"><i className="fa-solid fa-power-off"></i></button>
+            <button onClick={() => setActiveModal('edit_profile')} className="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg">
+              <i className="fa-solid fa-gear"></i>
+            </button>
+            <button onClick={onLogout} className="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg">
+              <i className="fa-solid fa-power-off"></i>
+            </button>
           </div>
         </div>
         <div className="p-3 border-b border-white/10">
