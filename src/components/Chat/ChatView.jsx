@@ -83,6 +83,7 @@ export default function ChatView({
               setIsEditingTaskTitle={setIsEditingTaskTitle}
               setActiveModal={setActiveModal}
               dbUsers={dbUsers}
+              isUnreadHighlight={unreadHighlightIds.includes(msg.id)}
             />
           ))}
         </div>
