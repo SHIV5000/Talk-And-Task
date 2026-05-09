@@ -44,6 +44,7 @@ export default function LeftSidebar({
               <div key={g.id} onClick={() => { setActiveGroup(g); setShowRightSidebar(false); setMobileSidebarOpen(false); }} className={`flex items-center h-[72px] cursor-pointer transition-colors relative ${activeGroup?.id === g.id ? 'bg-white/10' : 'hover:bg-white/5'} pl-3 pr-4`}>
                 <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-[49px] h-[49px]" isGroup={true} extraClasses="mr-3 shrink-0" />
                 <div className="flex-1 overflow-hidden border-b border-white/10 h-full flex flex-col justify-center pr-2">
+                  <div className="flex-1 overflow-y-auto flex flex-col bg-[#312E81] custom-scrollbar">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span className="font-medium text-[14.5px] truncate">{g.name}</span>
                   </div>
