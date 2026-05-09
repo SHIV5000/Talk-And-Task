@@ -129,3 +129,13 @@ aside .hover\:bg-white\/10:hover {
 .bg-\[\#008069\] {
     background-color: #4F46E5 !important;
 }
+
+
+
+/* Ensure sidebar scrollbar is visible */
+.bg-\[\#312E81\]::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+}
+.bg-\[\#312E81\]::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.4);
+}
