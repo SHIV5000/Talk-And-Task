@@ -107,9 +107,10 @@ export default function LeftSidebar({
 
         {/* ★ The scrollable container now has an ID */}
         <div
-          id="leftSidebarScroll"
-          className="flex-1 overflow-y-auto flex flex-col"
-        >
+  id="leftSidebarScroll"
+  className="flex-1 flex flex-col"
+  style={{ overflowY: "scroll", scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.4) rgba(255,255,255,0.05)" }}
+>
           {myGroups.map((g) => {
             const hasUnread = messages.some(
               (m) =>
