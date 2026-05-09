@@ -1,6 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-export default function TaskConvertModal({ setActiveModal, taskAssignees, setTaskAssignees, taskDeadline, setTaskDeadline, convertToTask, activeGroup, dbUsers }) {
+export default function TaskConvertModal({
+  setActiveModal,
+  taskAssignees,
+  setTaskAssignees,
+  taskDeadline,
+  setTaskDeadline,
+  taskPriority,               // new prop
+  setTaskPriority,            // new prop
+  convertToTask,
+  activeGroup,
+  dbUsers,
+}) {
+  const priorityOptions = [
+    { value: 'High',   label: '🔴 High',   color: 'text-red-600' },
+    { value: 'Medium', label: '🟡 Medium', color: 'text-amber-600' },
+    { value: 'Low',    label: '🟢 Low',    color: 'text-green-600' },
+  ];
+
   return (
     <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4"
          onClick={() => setActiveModal(null)}>
@@ -10,7 +27,29 @@ export default function TaskConvertModal({ setActiveModal, taskAssignees, setTas
           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><i className="fa-regular fa-square-check text-xl"></i></div>
           <h3 className="text-xl font-bold text-slate-800">Convert to Task</h3>
         </div>
+
         <div className="space-y-5">
+          {/* Priority selection */}
+          <div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase mb-2">Priority</div>
+            <div className="flex gap-2">
+              {priorityOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setTaskPriority(opt.value)}
+                  className={`flex-1 py-2.5 px-2 text-xs font-semibold rounded-xl border transition-all ${
+                    taskPriority === opt.value
+                      ? 'bg-indigo-50 border-primary text-primary shadow-sm'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Assignees */}
           <div>
             <div className="text-[11px] font-bold text-slate-400 uppercase mb-2">Select Assignees</div>
             <div className="h-40 overflow-y-auto space-y-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl shadow-inner custom-checkbox">
@@ -25,14 +64,17 @@ export default function TaskConvertModal({ setActiveModal, taskAssignees, setTas
               ))}
             </div>
           </div>
+
+          {/* Deadline */}
           <div className="relative mt-2">
             <label className="text-[10px] text-blue-600 font-bold uppercase absolute -top-2.5 left-3 bg-white px-1">Set Deadline</label>
             <input type="datetime-local" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)}
               className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[14px] font-semibold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
           </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl">Cancel</button>
-            <button onClick={convertToTask} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(37,99,235,0.3)] hover:bg-blue-700 transition-all">Assign Task</button>
+            <button onClick={convertToTask} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg hover:bg-primary-hover transition-all">Assign Task</button>
           </div>
         </div>
       </div>
