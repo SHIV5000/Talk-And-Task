@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import RightSidebar from './Sidebar/RightSidebar.jsx';
-// Remove the old RightSidebar import (or keep it if you want to fallback, but not needed)
+
 import AdminPanel from './Admin/AdminPanel.jsx';
 import LeftSidebar from './Sidebar/LeftSidebar.jsx';
 import RightSidebar from './Sidebar/RightSidebar.jsx';
