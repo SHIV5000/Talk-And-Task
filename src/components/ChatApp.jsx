@@ -723,30 +723,32 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) { alert("Failed to save reminder."); }
     };
 
-    const convertToTask = async () => 
-        
-        {
-        if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees and Deadline.");
-        try {
-            const [taskPriority, setTaskPriority] = useState("Medium");
-            const now = new Date();
-            await setDoc(doc(db, "messages", selectedMessage.id), {
-                isTask: true,
-                taskData: {
-  deadline: taskDeadline,
-  assignees: taskAssignees,
-  priority: taskPriority,   // ← add this line
-  status: "Pending",
-  isArchived: false,
-  dismissedBy: [],
-  trail: [{ ... }]
-}
-            }, { merge: true });
-            setActiveModal(null); setTaskAssignees([]);
-            playTaskSound();
-        } catch (error) { alert("Failed to create task."); }
-    };
-
+    const convertToTask = async () => {
+    if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
+    try {
+        const now = new Date();
+        await setDoc(doc(db, "messages", selectedMessage.id), {
+            isTask: true,
+            taskData: {
+                deadline: taskDeadline,
+                assignees: taskAssignees,
+                priority: taskPriority,
+                status: "Pending",
+                isArchived: false,
+                dismissedBy: [],
+                trail: [{
+                    action: "Task Created",
+                    by: user.email,
+                    time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(),
+                    to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ')
+                }]
+            }
+        }, { merge: true });
+        logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
+        setActiveModal(null); setTaskAssignees([]);
+        playTaskSound();
+    } catch (error) { alert("Failed to create task."); }
+};
     const handleDelegateTask = async () => {
         if (!selectedMessage || delegateAssignees.length === 0) return;
         try {
