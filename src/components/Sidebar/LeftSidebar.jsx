@@ -37,7 +37,7 @@ export default function LeftSidebar({
             {sidebarSearch && <button onClick={() => setSidebarSearch('')} className="text-white/70 hover:text-white ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto flex flex-col custom-scrollbar">
+        <div className="flex-1 overflow-y-auto flex flex-col left-sidebar-scroll">
           {myGroups.map(g => {
             const hasUnread = messages.some(m => m.groupId === g.id && !m.isMine && !(m.seenBy || []).includes(user.email));
             return (
