@@ -912,7 +912,7 @@ export default function ChatApp({ user, onLogout }) {
                         <div className="flex-1 flex flex-col relative h-full bg-[#efeae2] overflow-hidden wa-bg">
                             {/* --- HEADER --- */}
                             <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200/60 safe-top">
-                                <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-black/5 flex items-center justify-center text-[#54656f] mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
+                                <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-primary/5 flex items-center justify-center text-primary mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
                                 
                                 <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) setActiveModal('group_settings'); }}>
                                     {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-[#800020] shadow-sm"><i className="fa-solid fa-users"></i></div>}
@@ -937,7 +937,7 @@ export default function ChatApp({ user, onLogout }) {
                                 </div>
                                 
                                 <div className="flex items-center gap-1 shrink-0 relative">
-                                    <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
+                                    <button onClick={() => setShowFilterMenu(!showFilterMenu)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showFilterMenu ? 'bg-black/10' : 'hover:bg-primary/5'} text-[#54656f] text-[19px]`} title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
                                     
                                     {showFilterMenu && (
                                         <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-100">
@@ -949,11 +949,11 @@ export default function ChatApp({ user, onLogout }) {
                                         </div>
                                     )}
 
-                                    <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5 text-[#54656f] text-[19px]" title="Task Analytics">
+                                    <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors hover:bg-primary/5 text-[#54656f] text-[19px]" title="Task Analytics">
                                         <i className="fa-solid fa-chart-pie"></i>
                                     </button>
                                     <div className="relative">
-                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-black/10' : 'hover:bg-black/5'} text-[#54656f] text-[19px] relative`}>
+                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-black/10' : 'hover:bg-primary/5'} text-[#54656f] text-[19px] relative`}>
                                             <i className="fa-solid fa-bell"></i>
                                             {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#25d366] rounded-full border border-[#f0f2f5]"></span>}
                                         </button>
