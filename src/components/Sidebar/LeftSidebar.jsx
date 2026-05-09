@@ -38,7 +38,7 @@ export default function LeftSidebar({
             : 'hidden md:flex'
         } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl`}
       >
-        {/* Header – unchanged */}
+        {/* Header */}
         <div className="h-[59px] flex items-center justify-between px-3 shrink-0 border-b border-white/10 safe-top">
           <div className="flex items-center gap-2">
             <MemoizedAvatar
@@ -83,7 +83,7 @@ export default function LeftSidebar({
           </div>
         </div>
 
-        {/* Search – unchanged */}
+        {/* Search */}
         <div className="p-3 border-b border-white/10">
           <div className="bg-white/10 rounded-lg flex items-center px-3 py-2 focus-within:bg-white/20 transition-all">
             <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
@@ -91,7 +91,7 @@ export default function LeftSidebar({
               type="text"
               placeholder="Search teams & people..."
               value={sidebarSearch}
-              onChange={(e) => setSidebarSearch(e.target.value)}
+              onChange={e => setSidebarSearch(e.target.value)}
               className="bg-transparent outline-none flex-1 text-sm placeholder-white/50"
             />
             {sidebarSearch && (
@@ -105,18 +105,19 @@ export default function LeftSidebar({
           </div>
         </div>
 
-        {/* ★ The scrollable container now has an ID */}
-       id="leftSidebarScroll"
-  className="flex-1 flex flex-col"
-  style={{
-    overflowY: "scroll",
-    scrollbarWidth: "thin",
-    scrollbarColor: "rgba(255,255,255,0.4) rgba(255,255,255,0.08)"
-  }}
->
-          {myGroups.map((g) => {
+        {/* Scrollable team/DM list */}
+        <div
+          id="leftSidebarScroll"
+          className="flex-1 min-h-0 flex flex-col"
+          style={{
+            overflowY: 'scroll',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(255,255,255,0.4) rgba(255,255,255,0.08)',
+          }}
+        >
+          {myGroups.map(g => {
             const hasUnread = messages.some(
-              (m) =>
+              m =>
                 m.groupId === g.id &&
                 !m.isMine &&
                 !(m.seenBy || []).includes(user.email)
@@ -130,9 +131,7 @@ export default function LeftSidebar({
                   setMobileSidebarOpen(false);
                 }}
                 className={`flex items-center h-[72px] cursor-pointer transition-colors relative ${
-                  activeGroup?.id === g.id
-                    ? 'bg-white/10'
-                    : 'hover:bg-white/5'
+                  activeGroup?.id === g.id ? 'bg-white/10' : 'hover:bg-white/5'
                 } pl-3 pr-4`}
               >
                 <MemoizedAvatar
@@ -163,7 +162,7 @@ export default function LeftSidebar({
               </div>
             );
           })}
-          {dmUsers.map((u) => {
+          {dmUsers.map(u => {
             const dmIdList = [user.uid, u.uid].sort();
             const dmIdStr = dmIdList.join('_');
             const unreadInfo = getUnreadInfoForUser(u.email, u.uid);
@@ -213,9 +212,7 @@ export default function LeftSidebar({
                   <div className="flex justify-between items-center">
                     <span
                       className={`text-xs truncate pr-4 ${
-                        unreadInfo.total > 0
-                          ? 'font-semibold'
-                          : 'opacity-70'
+                        unreadInfo.total > 0 ? 'font-semibold' : 'opacity-70'
                       }`}
                     >
                       {unreadInfo.total > 0
@@ -241,7 +238,7 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace button */}
+        {/* Admin Workspace button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
           <div className="p-3 bg-white/5 border-t border-white/10">
             <button
