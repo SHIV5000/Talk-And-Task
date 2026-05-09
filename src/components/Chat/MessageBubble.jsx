@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatMessageText } from '../../utils/helpers.js';
+import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢'];
 
@@ -27,6 +28,7 @@ const MessageBubble = React.memo(({
   setSelectedMessage,
   setIsEditingTaskTitle,
   setActiveModal,
+  dbUsers,     // needed for sender avatar
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -36,26 +38,24 @@ const MessageBubble = React.memo(({
   const isBookmarked = msg.bookmarkedBy?.includes(userEmail);
   const canModify = msg.isMine && !msg.isTask && !hasReplies && !(Object.keys(msg.reactions || {}).length > 0);
   const isEditingThis = editingMessageId === msg.id;
-  const seenByOthers = (msg.seenBy || []).filter(e => e !== userEmail).length > 0;
-  const deliveredCount = (msg.deliveredTo || []).filter(e => e !== userEmail).length;
 
-  const getBubbleStyles = () => {
-    let baseStyles = "";
-    if (msg.isTask) baseStyles = "bg-[#d1e8ff] text-[#111b21] border border-[#b8daff]";
-    else if (msg.isPrivateMention || msg.isPrivateForward) baseStyles = msg.isMine ? "bg-[#f3e8ff] text-[#111b21] border border-[#e9d5ff]" : "bg-[#faf5ff] text-[#111b21] border border-[#f3e8ff]";
-    else baseStyles = msg.isMine ? "bg-[#d9fdd3] text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]" : "bg-white text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]";
-    return `${baseStyles} ${msg.isMine ? 'rounded-lg rounded-tr-none' : 'rounded-lg rounded-tl-none'} shadow-sm`;
+  // Sender info for left avatar
+  const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
+  const senderName = (msg.sender || '').split('@')[0];
+  const senderAvatar = senderUser.profilePicUrl || null;
+
+  // Determine left border colour
+  const getBorderColor = () => {
+    if (msg.isTask) return 'border-l-orange-400';
+    if (msg.isPrivateMention || msg.isPrivateForward) return 'border-l-purple-400';
+    return 'border-l-indigo-400';
   };
 
-  // Close dropdown when clicking outside
+  // Dropdown close on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false);
-      }
-      if (emojiRef.current && !emojiRef.current.contains(e.target)) {
-        setEmojiPickerOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+      if (emojiRef.current && !emojiRef.current.contains(e.target)) setEmojiPickerOpen(false);
     };
     if (menuOpen || emojiPickerOpen) {
       document.addEventListener('mousedown', handleClickOutside);
@@ -68,194 +68,143 @@ const MessageBubble = React.memo(({
   }, [menuOpen, emojiPickerOpen]);
 
   return (
-    <div id={`msg-${msg.id}`} className={`w-full flex flex-col ${msg.isMine ? 'items-end' : 'items-start'} msg-row-spacing transform-gpu`}>
-      <div className={`flex items-center relative max-w-full group/msg ${isHighlighted ? 'highlight-flash' : ''}`}>
-        {/* Message bubble */}
-        <div className={`max-w-[80vw] sm:max-w-[75vw] md:max-w-[65vw] relative px-[10px] py-[7px] pb-[9px] ${getBubbleStyles()} transition-all hover:shadow-md break-words`}>
-          {/* Sender name */}
-          {!msg.isMine && !msg.isTask && (
-            <div className="text-[12.5px] font-semibold text-[#1fa855] mb-0.5 tracking-tight">
-              {(msg.sender || "").split('@')[0]}
+    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu`}>
+      <div className={`flex ${msg.isMine ? 'flex-row-reverse' : 'flex-row'} items-start max-w-[85vw] md:max-w-[70vw] group/msg relative ${isHighlighted ? 'highlight-flash' : ''}`}>
+        
+        {/* Avatar */}
+        <MemoizedAvatar
+          uid={msg.senderUid || 'anon'}
+          url={senderAvatar}
+          name={senderName}
+          sizeClass="w-8 h-8 shrink-0 mt-1"
+          extraClasses={msg.isMine ? 'ml-3' : 'mr-3'}
+        />
+
+        {/* Message Card */}
+        <div className={`flex-1 bg-white rounded-xl shadow-sm border border-gray-100 ${getBorderColor()} border-l-4 px-4 py-3 relative`}>
+          
+          {/* Sender name & time */}
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-xs font-semibold text-primary">{senderName}</span>
+            <span className="text-[11px] text-text-secondary">{msg.time}</span>
+          </div>
+
+          {/* Three‑dot menu button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }}
+            className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-text-secondary hover:text-primary p-1 rounded-full hover:bg-primary/5"
+            title="More actions"
+          >
+            <i className="fa-solid fa-ellipsis-vertical text-xs"></i>
+          </button>
+
+          {/* Dropdown menu */}
+          {menuOpen && (
+            <div
+              ref={menuRef}
+              className="absolute bottom-full right-0 mb-2 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-2 w-56 animate-in fade-in slide-in-from-bottom-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => { setMenuOpen(false); setReplyingTo(msg); setTimeout(() => chatInputRef.current?.focus(), 100); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-primary-light hover:text-primary transition-colors">
+                <i className="fa-solid fa-reply w-5"></i> Reply
+              </button>
+              {!msg.isTask && (
+                <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                  <i className="fa-regular fa-square-check w-5"></i> Convert to Task
+                </button>
+              )}
+              <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-amber-50 hover:text-amber-600 transition-colors">
+                <i className="fa-regular fa-clock w-5"></i> Set Reminder
+              </button>
+              <button onClick={() => { setMenuOpen(false); handleToggleBookmark(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-purple-50 hover:text-purple-600 transition-colors">
+                <i className={`fa-solid fa-bookmark w-5 ${isBookmarked ? 'text-primary' : ''}`}></i> {isBookmarked ? 'Unbookmark' : 'Bookmark'}
+              </button>
+              {(currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(userEmail)) && (
+                <button onClick={() => { setMenuOpen(false); handleTogglePin(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-amber-50 hover:text-amber-600 transition-colors">
+                  <i className={`fa-solid fa-thumbtack w-5 ${msg.isPinned ? 'text-primary' : ''}`}></i> {msg.isPinned ? 'Unpin' : 'Pin'}
+                </button>
+              )}
+              {canModify && toolPreferences.delete && (
+                <button onClick={() => { setMenuOpen(false); handleDeleteMessage(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-danger hover:bg-red-50 transition-colors">
+                  <i className="fa-solid fa-trash w-5"></i> Delete
+                </button>
+              )}
             </div>
           )}
 
           {/* Reply preview */}
           {msg.replyToId && (
-            <div
-              onClick={(e) => { e.stopPropagation(); scrollToMessageDirect(msg.replyToId); }}
-              className={`p-2 rounded bg-black/5 mb-1.5 border-l-4 cursor-pointer opacity-80 hover:opacity-100 transition-opacity ${msg.isMine ? 'border-[#02a698]' : 'border-[#02a698]'}`}
-            >
-              <div className="font-semibold text-[11.5px] text-[#02a698] tracking-tight">{(msg.originalSender || "").split('@')[0]}</div>
-              <div className="line-clamp-2 text-[13px] text-[#667781] mt-0.5 leading-snug">{msg.originalText}</div>
+            <div onClick={(e) => { e.stopPropagation(); scrollToMessageDirect(msg.replyToId); }} className="p-2 rounded bg-gray-50 mb-2 border-l-2 border-primary cursor-pointer opacity-80 hover:opacity-100 transition-opacity">
+              <div className="font-semibold text-[11px] text-primary">{(msg.originalSender||'').split('@')[0]}</div>
+              <div className="line-clamp-2 text-xs text-text-secondary mt-0.5">{msg.originalText}</div>
             </div>
           )}
 
           {/* Editing mode */}
           {isEditingThis ? (
-            <div className="flex flex-col gap-2 min-w-[200px] md:min-w-[300px] my-1" onClick={e => e.stopPropagation()}>
-              <textarea
-                value={editMessageText}
-                onChange={(e) => setEditMessageText(e.target.value)}
-                className="w-full text-[14.2px] p-2 rounded border border-[#008069] text-slate-800 outline-none resize-none focus:ring-2 focus:ring-[#008069]/20 transition-all"
-                rows="2"
-              ></textarea>
+            <div className="flex flex-col gap-2 my-1" onClick={e => e.stopPropagation()}>
+              <textarea value={editMessageText} onChange={(e) => setEditMessageText(e.target.value)} className="w-full text-sm p-2 rounded border border-primary text-text-primary outline-none resize-none focus:ring-2 focus:ring-primary/20 transition-all" rows="2"></textarea>
               <div className="flex justify-end gap-2">
-                <button onClick={() => setEditingMessageId(null)} className="text-[12px] text-[#54656f] font-semibold px-3 py-1 hover:bg-slate-100 rounded transition-colors">Cancel</button>
-                <button onClick={() => handleSaveEdit(msg)} className="text-[12px] bg-[#008069] text-white px-4 py-1 rounded font-semibold shadow-sm hover:bg-[#006e5a] transition-colors">Save</button>
+                <button onClick={() => setEditingMessageId(null)} className="text-xs text-text-secondary font-semibold px-3 py-1 hover:bg-gray-100 rounded transition-colors">Cancel</button>
+                <button onClick={() => handleSaveEdit(msg)} className="text-xs bg-primary text-white px-4 py-1 rounded font-semibold shadow-sm hover:bg-primary-hover transition-colors">Save</button>
               </div>
             </div>
           ) : (
-            <div className="relative">
-              {/* Three‑dot menu button – visible on hover */}
-              <button
-                onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }}
-                className="absolute top-0 right-0 opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-black/5"
-                title="More actions"
-              >
-                <i className="fa-solid fa-ellipsis-vertical text-sm"></i>
-              </button>
-
-              {/* Dropdown menu */}
-              {menuOpen && (
-  <div
-    ref={menuRef}
-    className="absolute bottom-full right-0 mb-2 z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-56 animate-in fade-in slide-in-from-bottom-2"
-    onClick={(e) => e.stopPropagation()}
-  >
-                  {/* Reply */}
-                  <button
-                    onClick={() => { setMenuOpen(false); setReplyingTo(msg); setTimeout(() => chatInputRef.current?.focus(), 100); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-slate-700 hover:bg-teal-50 hover:text-[#008069] transition-colors"
-                  >
-                    <i className="fa-solid fa-reply w-5"></i> Reply
-                  </button>
-
-                  {/* Convert to Task (only for non‑task messages) */}
-                  {!msg.isTask && (
-                    <button
-                      onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                    >
-                      <i className="fa-regular fa-square-check w-5"></i> Convert to Task
-                    </button>
-                  )}
-
-                  {/* Set Reminder */}
-                  <button
-                    onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-slate-700 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
-                  >
-                    <i className="fa-regular fa-clock w-5"></i> Set Reminder
-                  </button>
-
-                  {/* Bookmark */}
-                  <button
-                    onClick={() => { setMenuOpen(false); handleToggleBookmark(msg); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors"
-                  >
-                    <i className={`fa-solid fa-bookmark w-5 ${isBookmarked ? 'text-[#008069]' : ''}`}></i>
-                    {isBookmarked ? 'Unbookmark' : 'Bookmark'}
-                  </button>
-
-                  {/* Pin / Unpin */}
-                  {(currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(userEmail)) && (
-                    <button
-                      onClick={() => { setMenuOpen(false); handleTogglePin(msg); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-slate-700 hover:bg-amber-50 hover:text-amber-600 transition-colors"
-                    >
-                      <i className={`fa-solid fa-thumbtack w-5 ${msg.isPinned ? 'text-[#008069]' : ''}`}></i>
-                      {msg.isPinned ? 'Unpin' : 'Pin'}
-                    </button>
-                  )}
-
-                  {/* Delete (only on own messages) */}
-                  {canModify && toolPreferences.delete && (
-                    <button
-                      onClick={() => { setMenuOpen(false); handleDeleteMessage(msg); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      <i className="fa-solid fa-trash w-5"></i> Delete
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Message content (unchanged) */}
+            <>
+              {/* Task badge */}
               {msg.isTask && (
-                <div className="flex justify-between items-center mb-1.5 pb-1.5 border-b border-black/5">
-                  <span className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-800 tracking-tight">
-                    <i className="fa-regular fa-square-check"></i> OFFICIAL TASK
-                  </span>
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shadow-sm ${msg.taskData.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {msg.taskData.status}
-                  </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">TASK</span>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${msg.taskData.status === 'Completed' ? 'bg-teal-100 text-teal-700' : 'bg-indigo-100 text-indigo-700'}`}>{msg.taskData.status}</span>
                 </div>
               )}
-
+              {/* Private mention / forward header */}
               {msg.isPrivateMention && (
-                <div className="text-[11px] font-semibold flex items-center gap-1.5 mb-1.5 pb-1 border-b border-black/5 text-purple-700 tracking-tight">
-                  <i className="fa-solid fa-lock"></i> {msg.text.startsWith('[Forwarded') ? 'FORWARDED DM' : 'PRIVATE'}
-                </div>
+                <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> {msg.text?.startsWith('[Forwarded') ? 'FORWARDED DM' : 'PRIVATE'}</div>
               )}
-
               {msg.isPrivateForward && (
-                <div className="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-black/5">
-                  <i className="fa-solid fa-lock text-purple-700 text-[11px]"></i>
-                  <span className="text-[11px] font-semibold text-purple-700 tracking-tight">
-                    Private from {msg.forwardedFromGroup}
-                  </span>
-                </div>
+                <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> Private from {msg.forwardedFromGroup}</div>
               )}
-
-              {/* Text & file preview */}
+              
+              {/* Text content */}
               {msg.fileUrl ? (
                 <div className="flex flex-col gap-1 my-1">
                   {msg.fileType?.startsWith('image/') ? (
                     <img src={msg.fileUrl} alt="Shared" className="rounded max-w-full max-h-64 object-cover cursor-pointer shadow-sm" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }} />
                   ) : (
-                    <div className="flex items-center gap-3 p-2 rounded bg-black/5 cursor-pointer hover:bg-black/10 transition-colors" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}>
-                      <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-[#54656f] shadow-sm"><i className="fa-solid fa-file-lines text-lg"></i></div>
-                      <div className="flex-1 overflow-hidden"><p className="text-[14.2px] truncate text-[#111b21]">{msg.fileName}</p></div>
+                    <div className="flex items-center gap-3 p-2 rounded bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}>
+                      <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-text-secondary shadow-sm"><i className="fa-solid fa-file-lines text-lg"></i></div>
+                      <div className="flex-1 overflow-hidden"><p className="text-sm truncate text-text-primary">{msg.fileName}</p></div>
                     </div>
                   )}
                 </div>
               ) : (
-                <p
-                  className={`leading-snug whitespace-pre-wrap ${currentUserData?.fontSize || 'text-[14.2px]'}`}
-                  dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }}
-                ></p>
+                <p className={`text-sm leading-relaxed whitespace-pre-wrap ${currentUserData?.fontSize || 'text-sm'}`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text || '') }}></p>
               )}
 
+              {/* Task details */}
               {msg.isTask && (
-                <div className="mt-2 bg-white/60 p-2 rounded flex flex-col gap-1 shadow-sm border border-black/5">
-                  <span className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
-                    <i className="fa-solid fa-users text-[#54656f]"></i>
-                    {msg.taskData.assignees?.map(a => (a || "").split('@')[0]).join(', ')}
-                  </span>
-                  <span className="text-[11px] text-red-600 font-semibold self-end">
-                    <i className="fa-regular fa-calendar mr-1"></i>Due {new Date(msg.taskData.deadline).toLocaleDateString()}
-                  </span>
+                <div className="mt-2 bg-gray-50 p-2 rounded flex flex-col gap-1 shadow-sm border border-gray-100">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-text-primary"><i className="fa-solid fa-users text-text-secondary"></i> {msg.taskData.assignees?.map(a => (a||'').split('@')[0]).join(', ')}</span>
+                  <span className="text-[11px] text-warning font-semibold self-end"><i className="fa-regular fa-calendar mr-1"></i>Due {new Date(msg.taskData.deadline).toLocaleDateString()}</span>
                 </div>
               )}
 
-              {/* Footer: time, read receipts, etc. */}
-              <div className="float-right flex items-center gap-1 mt-1 ml-3 text-[11px] text-[#667781] font-medium">
-                {msg.isEdited && <span className="italic mr-1">(edited)</span>}
-                {msg.hasReminder && <i className="fa-regular fa-clock text-amber-500 mr-0.5"></i>}
-                {isBookmarked && <i className="fa-solid fa-bookmark text-[#008069] mr-0.5"></i>}
-                <span className="mt-[2px]">{msg.time}</span>
-                {msg.isMine && seenByOthers && <span title="Seen by others" className="ml-0.5 text-[#53bdeb] flex items-center mt-[2px]"><i className="fa-solid fa-check-double text-[13px]"></i></span>}
-                {msg.isMine && !seenByOthers && deliveredCount > 0 && <span title="Delivered" className="ml-0.5 text-[#667781] flex items-center mt-[2px]"><i className="fa-solid fa-check-double text-[13px]"></i></span>}
-                {msg.isMine && !seenByOthers && deliveredCount === 0 && <span title="Sent" className="ml-0.5 text-[#667781] flex items-center mt-[2px]"><i className="fa-solid fa-check text-[13px]"></i></span>}
+              {/* Read receipts & edited flag */}
+              <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-secondary">
+                {msg.isEdited && <span className="italic">(edited)</span>}
+                {msg.hasReminder && <i className="fa-regular fa-clock text-amber-500"></i>}
+                {isBookmarked && <i className="fa-solid fa-bookmark text-primary"></i>}
+                {msg.isMine && (msg.seenBy || []).filter(e => e !== userEmail).length > 0 && <span title="Seen" className="text-teal-500"><i className="fa-solid fa-check-double text-xs"></i></span>}
               </div>
-            </div>
+            </>
           )}
         </div>
 
-        {/* Grey emoji button for quick reactions */}
+        {/* Quick emoji button */}
         <button
           onClick={(e) => { e.stopPropagation(); setEmojiPickerOpen(prev => !prev); }}
-          className="ml-1 self-end opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-black/5 relative shrink-0"
+          className="ml-2 self-end opacity-0 group-hover/msg:opacity-100 transition-opacity text-text-secondary hover:text-primary p-1 rounded-full hover:bg-primary/5 shrink-0"
           title="Add reaction"
         >
           <i className="fa-regular fa-face-smile text-sm"></i>
@@ -263,33 +212,19 @@ const MessageBubble = React.memo(({
 
         {/* Quick emoji picker */}
         {emojiPickerOpen && (
-          <div
-            ref={emojiRef}
-            className="absolute bottom-full right-0 z-50 bg-white rounded-xl shadow-lg border border-slate-200 p-1.5 flex gap-1 animate-in fade-in slide-in-from-bottom-2"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div ref={emojiRef} className="absolute bottom-full right-0 z-50 bg-white rounded-xl shadow-lg border border-gray-200 p-1.5 flex gap-1 animate-in fade-in slide-in-from-bottom-2" onClick={(e) => e.stopPropagation()}>
             {QUICK_EMOJIS.map(emoji => (
-              <button
-                key={emoji}
-                onClick={() => { setEmojiPickerOpen(false); handleReaction(msg.id, emoji); }}
-                className="text-[18px] hover:scale-125 transition-transform p-1"
-              >
-                {emoji}
-              </button>
+              <button key={emoji} onClick={() => { setEmojiPickerOpen(false); handleReaction(msg.id, emoji); }} className="text-[18px] hover:scale-125 transition-transform p-1">{emoji}</button>
             ))}
           </div>
         )}
 
-        {/* Existing reaction pills (unchanged) */}
+        {/* Reaction pills */}
         {Object.keys(msg.reactions || {}).length > 0 && (
-          <div className={`absolute -bottom-5 ${msg.isMine ? 'right-3' : 'left-3'} flex gap-1 z-10`}>
+          <div className="absolute -bottom-4 right-0 flex gap-1 z-10">
             {Object.entries(msg.reactions).map(([emoji, users]) => (
-              <div
-                key={emoji}
-                onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, emoji); }}
-                className={`text-[14px] bg-white border border-slate-200 rounded-full px-2 py-[2px] shadow-sm flex items-center gap-1 cursor-pointer hover:scale-110 transition-transform ${users.includes(userEmail) ? 'bg-slate-100 border-slate-300' : ''}`}
-              >
-                <span>{emoji}</span><span className="font-semibold text-slate-600 text-[11px]">{users.length}</span>
+              <div key={emoji} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, emoji); }} className={`text-[13px] bg-white border border-gray-200 rounded-full px-2 py-[1px] shadow-sm flex items-center gap-1 cursor-pointer hover:scale-110 transition-transform ${users.includes(userEmail) ? 'bg-indigo-50 border-indigo-200' : ''}`}>
+                <span>{emoji}</span><span className="font-semibold text-text-secondary text-[10px]">{users.length}</span>
               </div>
             ))}
           </div>
