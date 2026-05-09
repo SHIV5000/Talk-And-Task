@@ -46,6 +46,7 @@ export default function ChatApp({ user, onLogout }) {
     const [editMessageText, setEditMessageText] = useState("");
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
+    const [taskPriority, setTaskPriority] = useState("Medium");
     const [delegateAssignees, setDelegateAssignees] = useState([]);
     const [showDelegateDropdown, setShowDelegateDropdown] = useState(false);
     const [trailComment, setTrailComment] = useState("");
