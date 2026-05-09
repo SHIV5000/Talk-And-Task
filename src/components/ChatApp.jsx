@@ -862,28 +862,26 @@ export default function ChatApp({ user, onLogout }) {
     }
 
     if (isWorkspaceLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center h-screen w-full bg-[#f0f2f5] text-[#111b21] fixed inset-0 z-50">
-                <div className="w-24 h-24 mb-6 relative">
-                    <div className="absolute inset-0 bg-[#00a884] rounded-2xl opacity-20 animate-ping"></div>
-                    <div className="relative w-full h-full bg-gradient-to-br from-[#00a884] to-teal-600 rounded-2xl flex items-center justify-center text-white text-4xl shadow-lg border-2 border-white">
-                        <i className="fa-solid fa-hourglass-half animate-sandclock"></i>
-                    </div>
-                </div>
-                <h2 className="text-xl font-bold mb-2 tracking-tight">Talk & Task Enterprise Portal</h2>
-                <div className="flex items-center gap-3 text-primary font-semibold text-[13px] uppercase tracking-widest mt-2">
-                    <i className="fa-solid fa-lock text-[#00a884]"></i> Preparing Workspace...
-                </div>
-                <div className="w-48 h-1 bg-gray-200 rounded-full mt-6 overflow-hidden">
-                    <div className="h-full bg-[#00a884] animate-[pulse_1.5s_ease-in-out_infinite] w-full origin-left"></div>
-                </div>
-                <div className="mt-10 px-8 text-center max-w-md">
-                    <p className="text-primary text-sm font-medium italic" key={currentTip}>{currentTip}</p>
-                </div>
-            </div>
-        );
-    }
-
+  return (
+    <div className="flex flex-col items-center justify-center h-screen w-full bg-surface fixed inset-0 z-50">
+      <div className="relative mb-8">
+        {/* Pulsing logo */}
+        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-primary-hover animate-pulse flex items-center justify-center shadow-2xl">
+          <i className="fa-solid fa-list-check text-4xl text-white drop-shadow-lg"></i>
+        </div>
+        {/* Spinning ring */}
+        <div className="absolute -inset-3 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+      </div>
+      <h2 className="text-2xl font-bold text-text-primary mb-3 tracking-tight">Talk & Task</h2>
+      <div className="w-56 h-2 bg-gray-200 rounded-full overflow-hidden mb-6">
+        <div className="h-full bg-gradient-to-r from-primary via-primary-hover to-success animate-loading-bar rounded-full"></div>
+      </div>
+      <div className="text-text-secondary text-sm font-medium italic">
+        {currentTip}
+      </div>
+    </div>
+  );
+}
     return (
         <div className="flex h-screen w-full bg-[#f3f4f6] text-[#111b21] overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100">
             <audio id="app-sound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3" preload="auto" className="hidden"></audio>
