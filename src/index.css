@@ -137,43 +137,10 @@ aside .hover\:bg-white\/10:hover {
 .bg-\[\#312E81\]::-webkit-scrollbar-thumb:hover {
   background: rgba(255,255,255,0.4);
 }
-/* Visible scrollbar for the sidebar */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.3);
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.5);
-}
-/* Firefox scrollbar */
-.custom-scrollbar {
-  scrollbar-color: rgba(255,255,255,0.3) transparent;
-  scrollbar-width: thin;
-}
-
-/* Force visible scrollbar on the left sidebar */
-.left-sidebar-scroll::-webkit-scrollbar {
-    width: 6px;
-}
-.left-sidebar-scroll::-webkit-scrollbar-track {
-    background: rgba(255,255,255,0.05);
-}
-.left-sidebar-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.35);
-    border-radius: 10px;
-}
-.left-sidebar-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(255,255,255,0.55);
-}
-
+/* Left sidebar scrollbar (ID) */
+#leftSidebarScroll::-webkit-scrollbar { width: 6px; }
+#leftSidebarScroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+#leftSidebarScroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.35); border-radius: 10px; }
+#leftSidebarScroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.55); }
 /* Firefox */
-.left-sidebar-scroll {
-    scrollbar-color: rgba(255,255,255,0.35) rgba(255,255,255,0.05);
-    scrollbar-width: thin;
-}
+#leftSidebarScroll { scrollbar-color: rgba(255,255,255,0.35) rgba(255,255,255,0.05); scrollbar-width: thin; }
