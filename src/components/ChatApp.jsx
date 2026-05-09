@@ -119,6 +119,7 @@ export default function ChatApp({ user, onLogout }) {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
     const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+    const [unreadHighlightIds, setUnreadHighlightIds] = useState([]);
     const [toolPreferences, setToolPreferences] = useState({
         reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
     });
@@ -135,7 +136,6 @@ export default function ChatApp({ user, onLogout }) {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [showInactivityWarning, setShowInactivityWarning] = useState(false);
     const [inactivityCountdown, setInactivityCountdown] = useState(60);
-    const [unreadHighlightIds, setUnreadHighlightIds] = useState([]);
 
     // ==================== EFFECTS ====================
     useEffect(() => {
@@ -209,7 +209,7 @@ export default function ChatApp({ user, onLogout }) {
         const qPersonal = query(collection(db, "reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false));
         const unsubPersonal = onSnapshot(qPersonal, (snapshot) => setActiveReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-       const qAlerts = query(collection(db, "notifications"), where("userId", "==", user.uid), where("isRead", "==", false));
+        const qAlerts = query(collection(db, "notifications"), where("userId", "==", user.uid), where("isRead", "==", false));
         const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
             const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
             setGenericNotifications(sorted);
@@ -258,9 +258,12 @@ export default function ChatApp({ user, onLogout }) {
     }, [toolPreferences.soundProfile]);
 
     const playTaskSound = useCallback(() => {
-        try { const audio = new Audio("https://cdn.pixabay.com/download/audio/2021/08/09/audio_9ed1023bc2.mp3?filename=correct-2-46134.mp3"); audio.volume = 0.8; audio.play().catch(()=>{}); } catch(e) {}
-    }, []);
-
+    try {
+        const audio = new Audio("https://cdn.freesound.org/previews/270/270404_5123851-lq.mp3");
+        audio.volume = 0.8;
+        audio.play().catch(() => {});
+    } catch (e) {}
+}, []);
     useEffect(() => {
         const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -352,32 +355,16 @@ export default function ChatApp({ user, onLogout }) {
         }, 300);
     }, [activeGroup?.id, isWorkspaceLoading]);
 
-
-    // Highlight unread messages for a brief period when entering a chat
-useEffect(() => {
-    if (!activeGroup?.id || !user.email) return;
-    const unread = messages
-        .filter(m => m.groupId === activeGroup.id && !m.isMine && !(m.seenBy || []).includes(user.email))
-        .map(m => m.id);
-    if (unread.length > 0) {
+    // Calculate unread highlight IDs
+    useEffect(() => {
+        if (!activeGroup?.id || !user.email) return;
+        const unread = messages
+            .filter(m => m.groupId === activeGroup.id && !m.isMine && !(m.seenBy || []).includes(user.email))
+            .map(m => m.id);
         setUnreadHighlightIds(unread);
-        // clear the highlights after 4 seconds
         const timer = setTimeout(() => setUnreadHighlightIds([]), 4000);
         return () => clearTimeout(timer);
-    } else {
-        setUnreadHighlightIds([]);
-    }
-}, [activeGroup?.id, user.email, messages]);
-
-
-
-
-
-
-
-
-
-    
+    }, [activeGroup?.id, user.email, messages]);
 
     // ==================== MEMOS ====================
     const myGroups = useMemo(() => {
@@ -466,36 +453,17 @@ useEffect(() => {
         try { await addDoc(collection(db, "audit_logs"), { type: actionType, user: user.email, content, target, groupId: activeGroup.id, groupName: activeGroup.name, timestamp: serverTimestamp() }); } catch(e) {}
     }, [user.email, activeGroup]);
 
-   const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId) => {
-    // First try to find a real team
-    let targetGroup = groups.find(g => g.id === targetGroupId);
-    
-    if (!targetGroup) {
-        // It might be a DM – the ID is two UIDs joined by "_"
-        const parts = targetGroupId.split('_');
-        if (parts.length === 2 && parts.includes(user.uid)) {
-            const otherUid = parts.find(uid => uid !== user.uid);
-            const otherUser = dbUsers.find(u => u.uid === otherUid);
-            if (otherUser) {
-                targetGroup = {
-                    id: targetGroupId,
-                    name: otherUser.name,
-                    isDM: true,
-                    members: [user.email, otherUser.email],
-                };
-            }
+    const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId) => {
+        const targetGroup = groups.find(g => g.id === targetGroupId);
+        if (targetGroup) {
+            setActiveGroup(targetGroup);
+            setShowRightSidebar(false);
+            setMobileSidebarOpen(false);
+            setShowNotifications(false);
+            setPendingScrollTarget(msgId);
+            setActiveModal(null);
         }
-    }
-
-    if (targetGroup) {
-        setActiveGroup(targetGroup);
-        setShowRightSidebar(false);
-        setMobileSidebarOpen(false);
-        setShowNotifications(false);
-        setPendingScrollTarget(msgId);
-        setActiveModal(null);
-    }
-}, [groups, dbUsers, user.uid, user.email]);
+    }, [groups]);
 
     const notifyInvolvedInTask = async (taskMsg, actionText) => {
         const involved = new Set();
