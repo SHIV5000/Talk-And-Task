@@ -723,13 +723,24 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) { alert("Failed to save reminder."); }
     };
 
-    const convertToTask = async () => {
+    const convertToTask = async () => 
+        
+        {
         if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees and Deadline.");
         try {
+            const [taskPriority, setTaskPriority] = useState("Medium");
             const now = new Date();
             await setDoc(doc(db, "messages", selectedMessage.id), {
                 isTask: true,
-                taskData: { deadline: taskDeadline, assignees: taskAssignees, status: "Pending", isArchived: false, dismissedBy: [], trail: [{ action: "Task Created", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ') }] }
+                taskData: {
+  deadline: taskDeadline,
+  assignees: taskAssignees,
+  priority: taskPriority,   // ← add this line
+  status: "Pending",
+  isArchived: false,
+  dismissedBy: [],
+  trail: [{ ... }]
+}
             }, { merge: true });
             setActiveModal(null); setTaskAssignees([]);
             playTaskSound();
@@ -1028,7 +1039,8 @@ export default function ChatApp({ user, onLogout }) {
                     {activeModal === 'group_form_modal' && <GroupFormModal setActiveModal={setActiveModal} groupForm={groupForm} setGroupForm={setGroupForm} editingGroup={editingGroup} handleGroupSubmit={handleGroupSubmit} groupPicInputRef={groupPicInputRef} handleGroupPicUpload={handleGroupPicUpload} groupPicUploadProgress={groupPicUploadProgress} dbUsers={dbUsers} user={user} />}
                     {activeModal === 'group_settings' && <GroupSettingsModal setActiveModal={setActiveModal} activeGroup={activeGroup} groupForm={groupForm} setGroupForm={setGroupForm} dbUsers={dbUsers} user={user} currentUserData={currentUserData} isVipAdmin={isVipAdmin} handleUpdateGroupMembers={handleUpdateGroupMembers} onGroupUpdate={onGroupUpdate} />}
                     {activeModal === 'task_trail' && selectedMessage?.taskData && <TaskTrailModal selectedMessage={selectedMessage} setSelectedMessage={setSelectedMessage} activeModal={activeModal} setActiveModal={setActiveModal} isEditingTaskTitle={isEditingTaskTitle} setIsEditingTaskTitle={setIsEditingTaskTitle} newTaskTitle={newTaskTitle} setNewTaskTitle={setNewTaskTitle} handleSaveTaskTitle={handleSaveTaskTitle} delegateAssignees={delegateAssignees} setDelegateAssignees={setDelegateAssignees} showDelegateDropdown={showDelegateDropdown} setShowDelegateDropdown={setShowDelegateDropdown} handleDelegateTask={handleDelegateTask} trailComment={trailComment} setTrailComment={setTrailComment} handleAddComment={handleAddComment} handleCompleteTask={handleCompleteTask} handleArchiveTask={handleArchiveTask} trailFileInputRef={trailFileInputRef} handleTrailFileUpload={handleTrailFileUpload} activeGroup={activeGroup} dbUsers={dbUsers} user={user} currentUserData={currentUserData} isVipAdmin={isVipAdmin} />}
-                    {activeModal === 'task_convert' && <TaskConvertModal setActiveModal={setActiveModal} taskAssignees={taskAssignees} setTaskAssignees={setTaskAssignees} taskDeadline={taskDeadline} setTaskDeadline={setTaskDeadline} convertToTask={convertToTask} activeGroup={activeGroup} dbUsers={dbUsers} />}
+                    {activeModal === 'task_convert' && <TaskConvertModal setActiveModal={setActiveModal} taskAssignees={taskAssignees} setTaskAssignees={setTaskAssignees} taskDeadline={taskDeadline} setTaskDeadline={setTaskDeadline} convertToTask={convertToTask} activeGroup={activeGroup} taskPriority={taskPriority}
+  setTaskPriority={setTaskPriority} dbUsers={dbUsers} />}
                     {activeModal === 'reminder' && <ReminderModal setActiveModal={setActiveModal} reminderDateTime={reminderDateTime} setReminderDateTime={setReminderDateTime} setReminder={setReminder} />}
                     {activeModal === 'schedule_send' && <ScheduleSendModal setActiveModal={setActiveModal} scheduleDateTime={scheduleDateTime} setScheduleDateTime={setScheduleDateTime} pendingScheduledText={pendingScheduledText} handleScheduleMessage={handleScheduleMessage} />}
                     {activeModal === 'admin_edit_user' && <AdminEditUserModal setActiveModal={setActiveModal} adminForm={adminForm} setAdminForm={setAdminForm} handleEditUserSubmit={handleEditUserSubmit} />}
