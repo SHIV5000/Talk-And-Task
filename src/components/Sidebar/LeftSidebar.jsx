@@ -30,7 +30,6 @@ export default function LeftSidebar({
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
-
       <div
         className={`${
           mobileSidebarOpen
@@ -110,9 +109,10 @@ export default function LeftSidebar({
           id="leftSidebarScroll"
           className="flex-1 min-h-0 flex flex-col"
           style={{
-            overflowY: 'scroll',
+            overflowY: 'auto',
+            overflowX: 'hidden',
             scrollbarWidth: 'thin',
-            scrollbarColor: 'rgba(255,255,255,0.4) rgba(255,255,255,0.08)',
+            scrollbarColor: 'rgba(255, 255, 255, 0.3) transparent',
           }}
         >
           {myGroups.map(g => {
@@ -162,6 +162,7 @@ export default function LeftSidebar({
               </div>
             );
           })}
+
           {dmUsers.map(u => {
             const dmIdList = [user.uid, u.uid].sort();
             const dmIdStr = dmIdList.join('_');
@@ -169,6 +170,24 @@ export default function LeftSidebar({
             const isOnline =
               u.lastActive &&
               Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000;
+
+            // Extract status string logic to prevent Vite parser regex errors
+            let statusText = isOnline ? 'Online' : 'Offline';
+            if (unreadInfo.total > 0) {
+              const parts = [];
+              if (unreadInfo.unreadCount > 0) {
+                parts.push(`${unreadInfo.unreadCount} unread`);
+              }
+              if (unreadInfo.pendingTaskCount > 0) {
+                parts.push(
+                  `${unreadInfo.pendingTaskCount} task${
+                    unreadInfo.pendingTaskCount > 1 ? 's' : ''
+                  }`
+                );
+              }
+              statusText = parts.join(', ');
+            }
+
             return (
               <div
                 key={u.uid}
@@ -215,16 +234,7 @@ export default function LeftSidebar({
                         unreadInfo.total > 0 ? 'font-semibold' : 'opacity-70'
                       }`}
                     >
-                      {unreadInfo.total > 0
-                        ? `${unreadInfo.unreadCount > 0 ? unreadInfo.unreadCount + ' unread' : ''}${
-                            unreadInfo.pendingTaskCount > 0
-                              ? ', ' + unreadInfo.pendingTaskCount + ' task' +
-                                (unreadInfo.pendingTaskCount > 1 ? 's' : '')
-                              : ''
-                          }`
-                        : isOnline
-                        ? 'Online'
-                        : 'Offline'}
+                      {statusText}
                     </span>
                     {unreadInfo.total > 0 && (
                       <div className="w-[20px] h-[20px] bg-success rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm">
