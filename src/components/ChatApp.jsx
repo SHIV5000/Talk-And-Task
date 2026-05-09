@@ -5,7 +5,7 @@ import RightSidebar from './Sidebar/RightSidebar.jsx';
 
 import AdminPanel from './Admin/AdminPanel.jsx';
 import LeftSidebar from './Sidebar/LeftSidebar.jsx';
-import RightSidebar from './Sidebar/RightSidebar.jsx';
+
 import ContextMenuModal from './Modals/ContextMenuModal.jsx';
 import ProfileSettingsModal from './Modals/ProfileSettingsModal.jsx';
 import GroupFormModal from './Modals/GroupFormModal.jsx';
