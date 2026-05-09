@@ -125,8 +125,28 @@ export default function ChatApp({ user, onLogout }) {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [showInactivityWarning, setShowInactivityWarning] = useState(false);
     const [inactivityCountdown, setInactivityCountdown] = useState(60);
+// Save last active group to Firestore (user doc) // ==================== EFFECTS ====================
+useEffect(() => {
+  if (!activeGroup?.id || !user.uid) return;
+  updateDoc(doc(db, "users", user.uid), { lastActiveGroupId: activeGroup.id }).catch(() => {});
+}, [activeGroup?.id, user.uid]);
+   // Restore last active group on fresh load
+useEffect(() => {
+  if (isWorkspaceLoading || !groups.length || activeGroup) return;
+  const savedGroupId = currentUserData?.lastActiveGroupId;
+  if (savedGroupId) {
+    const g = groups.find(gr => gr.id === savedGroupId && gr.members?.includes(user.email));
+    if (g) setActiveGroup(g);
+  }
+}, [isWorkspaceLoading, groups, activeGroup, currentUserData?.lastActiveGroupId, user.email]);
 
-    // ==================== EFFECTS ====================
+useEffect(() => {
+  if (!activeGroup || isWorkspaceLoading) return;
+  // Scroll to bottom after a short delay to allow render
+  setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 200);
+}, [activeGroup?.id, isWorkspaceLoading]);
+
+    
     useEffect(() => {
         let tipIndex = 0;
         const tipInterval = setInterval(() => {
