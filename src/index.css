@@ -3,6 +3,7 @@
 @tailwind utilities;
 @import '@fortawesome/fontawesome-free/css/all.min.css';
 
+/* ========== PHASE 1 BASE (unchanged) ========== */
 :root {
     --safe-area-inset-top: env(safe-area-inset-top, 0px);
     --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
@@ -14,14 +15,23 @@ body {
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
 }
+
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(79,70,229,0.15); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(79,70,229,0.25); }
+
 .wa-bg { background-color: #F8F7F4; scroll-behavior: smooth; position: relative; }
-.doodle-watermark { position: fixed; inset: 0; pointer-events: none; user-select: none; z-index: 0; overflow: hidden; opacity: 0.04; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1.2rem; padding: 2rem 0; }
+
+/* Watermark */
+.doodle-watermark {
+    position: fixed; inset: 0; pointer-events: none; user-select: none; z-index: 0;
+    overflow: hidden; opacity: 0.04; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; gap: 1.2rem; padding: 2rem 0;
+}
 .doodle-watermark .doodle-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.5rem 3rem; }
 .doodle-watermark .doodle-item { display: inline-block; white-space: nowrap; color: #1E1B4B; text-transform: uppercase; letter-spacing: 0.05em; }
+
 @keyframes msgHighlightPulse {
     0% { box-shadow: 0 0 0 0 rgba(79,70,229,0.6); border: 2px solid transparent; }
     20% { box-shadow: 0 0 0 8px rgba(79,70,229,0.15), 0 0 20px 4px rgba(79,70,229,0.3); border: 2px solid #4F46E5; }
@@ -30,24 +40,45 @@ body {
     100% { box-shadow: 0 0 0 0 rgba(79,70,229,0); border: 2px solid transparent; }
 }
 .highlight-flash { animation: msgHighlightPulse 3s ease-out forwards; border-radius: 12px; position: relative; z-index: 5; }
+
 @keyframes liquidWave { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-.typing-gradient-text { background: linear-gradient(270deg, #4F46E5, #6366F1, #818CF8, #4F46E5); background-size: 300% 300%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: liquidWave 3s ease infinite; font-weight: bold; }
+.typing-gradient-text {
+    background: linear-gradient(270deg, #4F46E5, #6366F1, #818CF8, #4F46E5);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: liquidWave 3s ease infinite;
+    font-weight: bold;
+}
 @keyframes avatarPulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(79,70,229,0.4); } 70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(79,70,229,0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(79,70,229,0); } }
 .typing-avatar-pulse { animation: avatarPulse 1.5s infinite; }
+
 .glass-header { background: rgba(255,255,255,0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.04); }
 .glass-panel { background: rgba(255,255,255,0.98); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+
 @keyframes subtleSlideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .app-entrance { animation: subtleSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
 .custom-checkbox input:checked + div { background-color: #4F46E5; border-color: #4F46E5; }
 .custom-checkbox input:checked + div i { opacity: 1; }
+
 @keyframes flip-hourglass { 0% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } 100% { transform: rotate(180deg); } }
 .animate-sandclock { animation: flip-hourglass 2s infinite ease-in-out; }
+
 .msg-row-spacing { margin-bottom: 1.5rem; }
+
 @keyframes onlinePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0.5); } 50% { box-shadow: 0 0 0 6px rgba(13,148,136,0); } }
 .online-dot { animation: onlinePulse 2s infinite; }
-.emoji-picker-popup { position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: white; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.08); padding: 10px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; z-index: 50; width: 320px; max-width: 90vw; max-height: 260px; overflow-y: auto; }
+
+.emoji-picker-popup {
+    position: absolute; bottom: 100%; left: 0; margin-bottom: 8px;
+    background: white; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+    padding: 10px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px;
+    z-index: 50; width: 320px; max-width: 90vw; max-height: 260px; overflow-y: auto;
+}
 .emoji-picker-popup button { font-size: 22px; padding: 6px; border-radius: 8px; cursor: pointer; background: transparent; border: none; transition: background 0.15s; line-height: 1; }
 .emoji-picker-popup button:hover { background: #f1f5f9; }
+
 @media (max-width: 767px) {
     .mobile-sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; animation: fadeIn 0.2s ease-out; }
     .mobile-sidebar-panel { position: fixed; left: 0; top: 0; bottom: 0; width: 85vw; max-width: 360px; z-index: 56; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 4px 0 20px rgba(0,0,0,0.15); }
@@ -57,3 +88,44 @@ body {
 }
 .safe-top { padding-top: var(--safe-area-inset-top); }
 .safe-bottom { padding-bottom: var(--safe-area-inset-bottom); }
+
+/* ========== NEW VISIBILITY FIXES ========== */
+/* Force all interactive icons to a visible color */
+button:where(.text-slate-400),
+button:where(.text-slate-500),
+button:where(.text-slate-600),
+button:where(.text-[#54656f]) {
+    color: #4F46E5 !important;
+}
+
+/* Make the "+" button, filter, bell, etc., clearly visible */
+.fa-plus, .fa-sliders, .fa-bell, .fa-clipboard-list, .fa-chart-pie, .fa-paper-plane, .fa-clock {
+    color: inherit !important;
+}
+
+/* Improve header button hover backgrounds */
+.chat-header-btn:hover,
+button:hover:where(.hover\:bg-black\/5) {
+    background-color: rgba(79,70,229,0.08) !important;
+}
+
+/* Ensure send button when active is clearly visible */
+button:has(.fa-paper-plane) {
+    color: #4F46E5 !important;
+}
+
+/* Input area focus ring override */
+textarea:focus {
+    border-color: #4F46E5 !important;
+    box-shadow: 0 0 0 2px rgba(79,70,229,0.2) !important;
+}
+
+/* Left sidebar button improvements (already dark bg, but increase hover brightness) */
+aside .hover\:bg-white\/10:hover {
+    background-color: rgba(255,255,255,0.2) !important;
+}
+
+/* Force the welcome screen's "Create Department" button to primary */
+.bg-\[\#008069\] {
+    background-color: #4F46E5 !important;
+}
