@@ -17,6 +17,7 @@ import ScheduleSendModal from './Modals/ScheduleSendModal.jsx';
 import AdminEditUserModal from './Modals/AdminEditUserModal.jsx';
 import TaskAnalyticsModal from './Modals/TaskAnalyticsModal.jsx';
 import UploadOverlay from './Common/UploadOverlay.jsx';
+import Toast from './Common/Toast.jsx';
 import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
 import ChatView from './Chat/ChatView.jsx';
 import InputArea from './Chat/InputArea.jsx';
@@ -79,6 +80,15 @@ export default function ChatApp({ user, onLogout }) {
     const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
     const [pendingFiles, setPendingFiles] = useState([]);
     const [showFileRename, setShowFileRename] = useState(false);
+
+    // ==================== TOAST STATE & HELPERS ====================
+    const [toasts, setToasts] = useState([]);
+    const addToast = useCallback((message, type = 'message') => {
+        const id = Date.now() + Math.random();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+    }, []);
+    const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
     
     // ==================== REFS ====================
     const messagesEndRef = useRef(null);
@@ -125,28 +135,27 @@ export default function ChatApp({ user, onLogout }) {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [showInactivityWarning, setShowInactivityWarning] = useState(false);
     const [inactivityCountdown, setInactivityCountdown] = useState(60);
-// Save last active group to Firestore (user doc) // ==================== EFFECTS ====================
-useEffect(() => {
-  if (!activeGroup?.id || !user.uid) return;
-  updateDoc(doc(db, "users", user.uid), { lastActiveGroupId: activeGroup.id }).catch(() => {});
-}, [activeGroup?.id, user.uid]);
-   // Restore last active group on fresh load
-useEffect(() => {
-  if (isWorkspaceLoading || !groups.length || activeGroup) return;
-  const savedGroupId = currentUserData?.lastActiveGroupId;
-  if (savedGroupId) {
-    const g = groups.find(gr => gr.id === savedGroupId && gr.members?.includes(user.email));
-    if (g) setActiveGroup(g);
-  }
-}, [isWorkspaceLoading, groups, activeGroup, currentUserData?.lastActiveGroupId, user.email]);
 
-useEffect(() => {
-  if (!activeGroup || isWorkspaceLoading) return;
-  // Scroll to bottom after a short delay to allow render
-  setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 200);
-}, [activeGroup?.id, isWorkspaceLoading]);
+    // ==================== EFFECTS ====================
+    useEffect(() => {
+        if (!activeGroup?.id || !user.uid) return;
+        updateDoc(doc(db, "users", user.uid), { lastActiveGroupId: activeGroup.id }).catch(() => {});
+    }, [activeGroup?.id, user.uid]);
 
-    
+    useEffect(() => {
+        if (isWorkspaceLoading || !groups.length || activeGroup) return;
+        const savedGroupId = currentUserData?.lastActiveGroupId;
+        if (savedGroupId) {
+            const g = groups.find(gr => gr.id === savedGroupId && gr.members?.includes(user.email));
+            if (g) setActiveGroup(g);
+        }
+    }, [isWorkspaceLoading, groups, activeGroup, currentUserData?.lastActiveGroupId, user.email]);
+
+    useEffect(() => {
+        if (!activeGroup || isWorkspaceLoading) return;
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 200);
+    }, [activeGroup?.id, isWorkspaceLoading]);
+
     useEffect(() => {
         let tipIndex = 0;
         const tipInterval = setInterval(() => {
@@ -290,6 +299,7 @@ useEffect(() => {
                 const newMsg = loadedMessages[loadedMessages.length - 1];
                 if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
                     playAlertSound();
+                    addToast(`New message from ${(newMsg.sender || "").split('@')[0]}`, 'message');
                     if (document.hidden && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
                         navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `New Message from ${(newMsg.sender || "").split('@')[0]}`, body: newMsg.text || 'Sent an attachment' });
                     }
@@ -305,7 +315,7 @@ useEffect(() => {
         });
 
         return () => { unsubscribe(); unsubTyping(); };
-    }, [user.uid, activeGroup?.id, playAlertSound, isWorkspaceLoading]);
+    }, [user.uid, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast]);
 
     useEffect(() => {
         if (!activeGroup?.id || !user.email) return;
@@ -536,7 +546,6 @@ useEffect(() => {
             const groupMsgRef = await addDoc(collection(db, "messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, hasReminder: false, isPrivateMention: isPrivate, allowedUsers: allowedUsers, seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: activeGroup.id, reactions: {}, ...(replyData || {}) });
             logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, isPrivate ? `Private: ${uniqueMentions.join(', ')}` : "Public");
             setReplyingTo(null);
-            // Immediately scroll to bottom so the sender sees their own message
             if (chatContainerRef.current) 
                 {
                   chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -746,31 +755,51 @@ useEffect(() => {
     };
 
     const convertToTask = async () => {
-    if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
-    try {
-        const now = new Date();
-        await setDoc(doc(db, "messages", selectedMessage.id), {
-            isTask: true,
-            taskData: {
-                deadline: taskDeadline,
-                assignees: taskAssignees,
-                priority: taskPriority,
-                status: "Pending",
-                isArchived: false,
-                dismissedBy: [],
-                trail: [{
-                    action: "Task Created",
-                    by: user.email,
-                    time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(),
-                    to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ')
-                }]
-            }
-        }, { merge: true });
-        logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
-        setActiveModal(null); setTaskAssignees([]);
-        playTaskSound();
-    } catch (error) { alert("Failed to create task."); }
-};
+        if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
+        try {
+            const now = new Date();
+            await setDoc(doc(db, "messages", selectedMessage.id), {
+                isTask: true,
+                taskData: {
+                    deadline: taskDeadline,
+                    assignees: taskAssignees,
+                    priority: taskPriority,
+                    status: "Pending",
+                    isArchived: false,
+                    dismissedBy: [],
+                    trail: [{
+                        action: "Task Created",
+                        by: user.email,
+                        time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(),
+                        to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ')
+                    }]
+                }
+            }, { merge: true });
+
+            // After setting the task, notify assignees
+            taskAssignees.forEach(email => {
+                if (email !== user.email) {
+                    const assigneeUser = dbUsers.find(u => u.email === email);
+                    if (assigneeUser) {
+                        addDoc(collection(db, "notifications"), {
+                            userId: assigneeUser.uid,
+                            type: "task",
+                            text: `${(user.email||"").split('@')[0]} assigned you a task: "${selectedMessage.text}"`,
+                            messageId: selectedMessage.id,
+                            groupId: selectedMessage.groupId,
+                            timestamp: serverTimestamp(),
+                            isRead: false
+                        });
+                    }
+                }
+            });
+
+            logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
+            setActiveModal(null); setTaskAssignees([]);
+            playTaskSound();
+        } catch (error) { alert("Failed to create task."); }
+    };
+
     const handleDelegateTask = async () => {
         if (!selectedMessage || delegateAssignees.length === 0) return;
         try {
@@ -1006,7 +1035,6 @@ useEffect(() => {
       <i className="fa-solid fa-bell"></i>
       {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-danger rounded-full border border-white"></span>}
     </button>
-    {/* Notification dropdown stays unchanged */}
   </div>
 
   <button
@@ -1076,6 +1104,8 @@ useEffect(() => {
                     {activeModal === 'admin_edit_user' && <AdminEditUserModal setActiveModal={setActiveModal} adminForm={adminForm} setAdminForm={setAdminForm} handleEditUserSubmit={handleEditUserSubmit} />}
                     {activeModal === 'task_analytics' && <TaskAnalyticsModal setActiveModal={setActiveModal} analyticsData={analyticsData} />}
                     {isUploading && <UploadOverlay uploadProgress={uploadProgress} fileName="" />}
+                    
+                    <Toast toasts={toasts} removeToast={removeToast} />
                 </div>
             )}
         </div>
