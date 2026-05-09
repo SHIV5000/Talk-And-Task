@@ -81,6 +81,7 @@ export default function ChatView({
               setReplyingTo={setReplyingTo}
               setSelectedMessage={setSelectedMessage}
               setIsEditingTaskTitle={setIsEditingTaskTitle}
+              
               setActiveModal={setActiveModal}
               dbUsers={dbUsers}
               isUnreadHighlight={unreadHighlightIds.includes(msg.id)}
