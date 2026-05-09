@@ -15,9 +15,9 @@ export default defineConfig({
         background_color: '#F8F7F4',
         display: 'standalone',
         icons: [
-          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' }
-        ]
+        { src: 'https://cdn-icons-png.flaticon.com/512/825/825590.png', sizes: '192x192', type: 'image/png' },
+        { src: 'https://cdn-icons-png.flaticon.com/512/825/825590.png', sizes: '512x512', type: 'image/png' }
+    ]
       },
       workbox: {
         cleanupOutdatedCaches: true,
