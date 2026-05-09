@@ -50,7 +50,7 @@ const deliveredCount = (msg.deliveredTo || []).filter(e => e !== userEmail).leng
 
   return (
     <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu`}>
-      <div
+     <div
     id={`msg-${msg.id}`}
     className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu ${isUnreadHighlight ? 'highlight-flash' : ''}`}
 >
