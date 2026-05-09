@@ -144,3 +144,22 @@ aside .hover\:bg-white\/10:hover {
 #leftSidebarScroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.55); }
 /* Firefox */
 #leftSidebarScroll { scrollbar-color: rgba(255,255,255,0.35) rgba(255,255,255,0.05); scrollbar-width: thin; }
+
+/* Force visible scrollbar on the left sidebar */
+#leftSidebarScroll::-webkit-scrollbar {
+  width: 8px;
+}
+#leftSidebarScroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+}
+#leftSidebarScroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.4);
+  border-radius: 10px;
+}
+#leftSidebarScroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.6);
+}
+
+
+
