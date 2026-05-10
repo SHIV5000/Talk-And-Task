@@ -138,6 +138,53 @@ export default function ChatApp({ user, onLogout }) {
     const [inactivityCountdown, setInactivityCountdown] = useState(60);
 
     // ==================== EFFECTS ====================
+// 👇 ADD THIS useEffect inside ChatApp.jsx to automate Task Deadline alerts
+useEffect(() => {
+    const deadlineChecker = setInterval(() => {
+        const now = new Date();
+        const dueTasks = messages.filter(m => 
+            m.isTask && 
+            m.taskData?.status !== "Completed" && 
+            !m.taskData?.deadlineAlerted && 
+            m.taskData?.deadline && 
+            new Date(m.taskData.deadline) <= now
+        );
+
+        dueTasks.forEach(async (task) => {
+            // Mark as alerted so it doesn't spam every minute
+            await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
+
+            const involved = new Set();
+            if (task.senderEmail) involved.add(task.senderEmail);
+            (task.taskData.assignees || []).forEach(a => involved.add(a));
+
+            involved.forEach(email => {
+                const u = dbUsers.find(user => user.email === email);
+                if (u) {
+                    addDoc(collection(db, "notifications"), {
+                        userId: u.uid,
+                        type: "task",
+                        text: `⏰ DUE NOW: "${task.text}"`,
+                        messageId: task.id,
+                        groupId: task.groupId,
+                        timestamp: serverTimestamp(),
+                        isRead: false
+                    }).catch(()=>{});
+                }
+            });
+        });
+    }, 60000); // Scans once per minute
+
+    return () => clearInterval(deadlineChecker);
+}, [messages, dbUsers]);
+
+
+
+
+
+
+
+    
     useEffect(() => {
         let tipIndex = 0;
         const tipInterval = setInterval(() => {
