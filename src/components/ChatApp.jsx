@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { getDocs, query, where, deleteDoc, doc, collection } from '../firebase.js';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import RightSidebar from './Sidebar/RightSidebar.jsx';
@@ -489,7 +490,7 @@ useEffect(() => {
 
     // ==================== HANDLERS ====================
 
-import { getDocs, query, where, deleteDoc, doc, collection } from '../firebase.js';
+
 
 // ⚠️ TEMPORARY DEV TOOL: Delete this before going to production!
 const handleWipeAllTasks = async () => {
