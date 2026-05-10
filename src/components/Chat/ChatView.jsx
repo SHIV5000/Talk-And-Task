@@ -12,7 +12,7 @@ export default function ChatView({
   editingMessageId, editMessageText, setEditingMessageId, setEditMessageText,
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
-  unreadHighlightIds
+  unreadHighlightIds, jumpToPrivateSource, handleAddInlineComment // 👈 Added
 }) {
   const handleChatScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -25,17 +25,6 @@ export default function ChatView({
         top: isAtBottom ? 0 : chatContainerRef.current.scrollHeight,
         behavior: 'smooth',
       });
-    }
-  };
-
-  // 👇 FIX 1: Dedicated Jump Logic for Forwarded DMs
-  const jumpToPrivateSource = (msgId, groupId) => {
-    const targetGroup = groups.find(g => g.id === groupId);
-    if (targetGroup) {
-      setActiveGroup(targetGroup);
-      setShowRightSidebar(false);
-      setMobileSidebarOpen(false);
-      setPendingScrollTarget(msgId);
     }
   };
 
@@ -110,7 +99,8 @@ export default function ChatView({
               setIsEditingTaskTitle={setIsEditingTaskTitle}
               setActiveModal={setActiveModal}
               dbUsers={dbUsers}
-              jumpToPrivateSource={jumpToPrivateSource} // 👈 FIX 1: Passed down to Bubble
+              jumpToPrivateSource={jumpToPrivateSource}
+              handleAddInlineComment={handleAddInlineComment} // 👈 Passed down
             />
           ))}
         </div>
