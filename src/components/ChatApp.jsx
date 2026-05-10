@@ -863,7 +863,6 @@ const convertToTask = async () => {
   };
 
 
-
     
       logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
       setActiveModal(null); setTaskAssignees([]);
