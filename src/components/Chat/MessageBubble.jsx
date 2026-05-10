@@ -11,7 +11,8 @@ const MessageBubble = React.memo(({
   setEditingMessageId, setEditMessageText, handleSaveEdit,
   scrollToMessageDirect, handleReaction, handleToggleBookmark,
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
-  setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers
+  setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
+  jumpToPrivateSource // 👈 Trigger function
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -62,7 +63,6 @@ const MessageBubble = React.memo(({
           <span className="text-xs font-semibold text-primary">{senderName}</span>
         </div>
         
-        {/* 👇 FIX: Replaced massive red dot with a clean Chevron Down arrow */}
         <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-primary hover:bg-slate-100 p-1.5 rounded-full flex items-center justify-center">
           <i className="fa-solid fa-chevron-down text-[12px]"></i>
         </button>
@@ -135,18 +135,32 @@ const MessageBubble = React.memo(({
               </div>
             )}
 
-            {!msg.isTask && msg.isPrivateMention && <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> {msg.text?.startsWith('[Forwarded') ? 'FORWARDED DM' : 'PRIVATE'}</div>}
-            {!msg.isTask && msg.isPrivateForward && (
-    <div 
-        onClick={() => navigateToMessageFromNotification(msg.originalMsgId, msg.originalGroupId)}
-        className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700 cursor-pointer hover:underline bg-purple-50 p-2 rounded-lg border border-purple-100"
-    >
-        <i className="fa-solid fa-share-from-square"></i> 
-        Private Mention from {msg.forwardedFromGroupName} - Click to view source
-    </div>
-)}
+            {!msg.isTask && msg.isPrivateMention && !msg.isPrivateForward && (
+              <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700">
+                <i className="fa-solid fa-lock"></i> PRIVATE
+              </div>
+            )}
             
-            {!msg.isTask && msg.fileUrl ? (
+            {/* 👇 FIX 2: Beautiful UI Card for Forwarded Mentions in DMs */}
+            {!msg.isTask && msg.isPrivateForward ? (
+              <div 
+                onClick={(e) => { e.stopPropagation(); jumpToPrivateSource(msg.originalMsgId, msg.originalGroupId); }}
+                className="mt-1 mb-2 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-3 shadow-sm cursor-pointer hover:shadow-md hover:border-purple-300 transition-all group/forward relative"
+              >
+                 <div className="flex items-center gap-2 mb-2">
+                   <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                     <i className="fa-solid fa-share-nodes text-[10px]"></i>
+                   </div>
+                   <span className="text-xs font-bold text-purple-700 leading-tight">Mentioned in {msg.forwardedFromGroupName}</span>
+                 </div>
+                 <p className="text-[13px] text-slate-700 font-medium italic border-l-[3px] border-purple-300 pl-3 ml-1 break-words">
+                   "{msg.text?.replace('[Forwarded Private Mention] ', '')}"
+                 </p>
+                 <div className="mt-2 text-[10px] font-bold text-indigo-500 flex items-center gap-1 opacity-70 group-hover/forward:opacity-100 transition-opacity">
+                    Click to view original context <i className="fa-solid fa-arrow-right mt-[1px]"></i>
+                 </div>
+              </div>
+            ) : !msg.isTask && msg.fileUrl ? (
               <div className="flex flex-col gap-1 my-1">
                 {msg.fileType?.startsWith('image/') ? <img src={msg.fileUrl} alt="Shared" className="rounded max-w-full max-h-64 object-cover cursor-pointer" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }} /> :
                 <div className="flex items-center gap-3 p-2 rounded bg-gray-50 cursor-pointer hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}>
