@@ -56,21 +56,22 @@ const MessageBubble = React.memo(({
     >
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3' : 'mr-3'} />
       
-      {/* 👇 FIX: Removed flex-1, added max-w-[85%] md:max-w-[75%], w-fit, and break-words 👇 */}
+      {/* INNER BUBBLE */}
       <div className={`w-fit max-w-[85%] md:max-w-[75%] bg-white rounded-xl shadow-sm border border-gray-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words`}>
         
-        {/* 👇 FIX: Added gap-4 to keep name and time separated on small messages 👇 */}
         <div className="flex justify-between items-baseline mb-1 gap-4">
           <span className="text-xs font-semibold text-primary">{senderName}</span>
           <span className="text-[11px] text-text-secondary whitespace-nowrap">{msg.time}</span> 
         </div>
         
-        <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-text-secondary hover:text-primary p-1 rounded-full hover:bg-primary/5">
-          <i className="fa-solid fa-ellipsis-vertical text-xs"></i>
+        {/* 👈 FIX 3: RED DOT MENU BUTTON */}
+        <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2.5 right-3 opacity-0 group-hover/msg:opacity-100 transition-opacity p-1">
+          <div className="w-2.5 h-2.5 bg-red-500 rounded-full shadow-sm hover:scale-110 transition-transform"></div>
         </button>
         
+        {/* 👈 FIX 3: MENU SLIDES DOWN FROM THE TOP NOW */}
         {menuOpen && (
-          <div ref={menuRef} className="absolute bottom-full right-0 mb-2 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-2 w-56 animate-in fade-in slide-in-from-bottom-2" onClick={(e) => e.stopPropagation()}>
+          <div ref={menuRef} className="absolute top-8 right-2 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-2 w-56 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => { setMenuOpen(false); setReplyingTo(msg); setTimeout(() => chatInputRef.current?.focus(), 100); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-primary-light hover:text-primary"><i className="fa-solid fa-reply w-5"></i> Reply</button>
             {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
             <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
@@ -164,27 +165,31 @@ const MessageBubble = React.memo(({
             </div>
           </>
         )}
+
+        {/* 👈 FIX 1: EMOJI PICKER IS NOW SAFELY INSIDE THE BUBBLE WRAPPER */}
+        {emojiPickerOpen && (
+          <div ref={emojiRef} className="absolute bottom-full right-0 mb-2 z-50 bg-white rounded-xl shadow-lg border border-gray-200 p-1.5 flex gap-1 animate-in fade-in slide-in-from-bottom-2" onClick={(e) => e.stopPropagation()}>
+            {QUICK_EMOJIS.map(emoji => (<button key={emoji} onClick={() => { setEmojiPickerOpen(false); handleReaction(msg.id, emoji); }} className="text-[18px] hover:scale-125 transition-transform p-1">{emoji}</button>))}
+          </div>
+        )}
+        
+        {/* 👈 FIX 1: REACTIONS ARE ANCHORED INSIDE THE BUBBLE WRAPPER */}
+        {Object.keys(msg.reactions || {}).length > 0 && (
+          <div className="absolute -bottom-3.5 right-2 flex gap-1 z-10">
+            {Object.entries(msg.reactions).map(([emoji, users]) => (
+              <div key={emoji} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, emoji); }} className={`text-[13px] bg-white border border-gray-200 rounded-full px-2 py-[1px] shadow-sm flex items-center gap-1 cursor-pointer hover:scale-110 transition-transform ${users.includes(userEmail) ? 'bg-indigo-50 border-indigo-200' : ''}`}>
+                <span>{emoji}</span><span className="font-semibold text-text-secondary text-[10px]">{users.length}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       
+      {/* Outer smile button */}
       <button onClick={(e) => { e.stopPropagation(); setEmojiPickerOpen(prev => !prev); }} className="ml-2 self-end opacity-0 group-hover/msg:opacity-100 transition-opacity text-text-secondary hover:text-primary p-1 rounded-full hover:bg-primary/5 shrink-0">
         <i className="fa-regular fa-face-smile text-sm"></i>
       </button>
-      
-      {emojiPickerOpen && (
-        <div ref={emojiRef} className="absolute bottom-full right-0 z-50 bg-white rounded-xl shadow-lg border border-gray-200 p-1.5 flex gap-1 animate-in fade-in slide-in-from-bottom-2" onClick={(e) => e.stopPropagation()}>
-          {QUICK_EMOJIS.map(emoji => (<button key={emoji} onClick={() => { setEmojiPickerOpen(false); handleReaction(msg.id, emoji); }} className="text-[18px] hover:scale-125 transition-transform p-1">{emoji}</button>))}
-        </div>
-      )}
-      
-      {Object.keys(msg.reactions || {}).length > 0 && (
-        <div className="absolute -bottom-4 right-0 flex gap-1 z-10">
-          {Object.entries(msg.reactions).map(([emoji, users]) => (
-            <div key={emoji} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, emoji); }} className={`text-[13px] bg-white border border-gray-200 rounded-full px-2 py-[1px] shadow-sm flex items-center gap-1 cursor-pointer hover:scale-110 transition-transform ${users.includes(userEmail) ? 'bg-indigo-50 border-indigo-200' : ''}`}>
-              <span>{emoji}</span><span className="font-semibold text-text-secondary text-[10px]">{users.length}</span>
-            </div>
-          ))}
-        </div>
-      )}
+
     </div>
   );
 });
