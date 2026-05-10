@@ -6,7 +6,7 @@ const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢'];
 
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
-  hasReplies, isHighlighted, isUnreadHighlight, // 👈 FIX 1: Added missing prop here
+  hasReplies, isHighlighted, isUnreadHighlight,
   editingMessageId, editMessageText,
   setEditingMessageId, setEditMessageText, handleSaveEdit,
   scrollToMessageDirect, handleReaction, handleToggleBookmark,
@@ -50,16 +50,19 @@ const MessageBubble = React.memo(({
   }, [menuOpen, emojiPickerOpen]);
 
   return (
-    // 👈 FIX 2: Removed the duplicated inner div and merged the classes correctly
     <div
       id={`msg-${msg.id}`}
       className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''}`}
     >
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3' : 'mr-3'} />
-      <div className={`flex-1 bg-white rounded-xl shadow-sm border border-gray-100 ${getBorderColor()} border-l-4 px-4 py-3 relative`}>
-        <div className="flex justify-between items-center mb-1">
+      
+      {/* 👇 FIX: Removed flex-1, added max-w-[85%] md:max-w-[75%], w-fit, and break-words 👇 */}
+      <div className={`w-fit max-w-[85%] md:max-w-[75%] bg-white rounded-xl shadow-sm border border-gray-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words`}>
+        
+        {/* 👇 FIX: Added gap-4 to keep name and time separated on small messages 👇 */}
+        <div className="flex justify-between items-baseline mb-1 gap-4">
           <span className="text-xs font-semibold text-primary">{senderName}</span>
-          <span className="text-[11px] text-text-secondary">{msg.time}</span> 
+          <span className="text-[11px] text-text-secondary whitespace-nowrap">{msg.time}</span> 
         </div>
         
         <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-text-secondary hover:text-primary p-1 rounded-full hover:bg-primary/5">
@@ -91,7 +94,6 @@ const MessageBubble = React.memo(({
           </div>
         ) : (
           <>
-            {/* ===== NEW JIRA‑STYLE TASK CARD ===== */}
             {msg.isTask && (
               <div
                 className="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
@@ -99,14 +101,12 @@ const MessageBubble = React.memo(({
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    {/* Priority flag */}
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                       msg.taskData.priority === 'High'   ? 'bg-red-100 text-red-700' :
                       msg.taskData.priority === 'Medium' ? 'bg-amber-100 text-amber-700' :
                       'bg-green-100 text-green-700'}`}>
                       {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
                     </span>
-                    {/* Status badge */}
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                       msg.taskData.status === 'Completed' ? 'bg-teal-100 text-teal-700' :
                       msg.taskData.status === 'In Progress' ? 'bg-indigo-100 text-indigo-700' :
@@ -130,14 +130,12 @@ const MessageBubble = React.memo(({
                       <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-text-secondary border-2 border-white">+{msg.taskData.assignees.length - 3}</div>
                     )}
                   </div>
-                  {/* Progress indicator placeholder */}
                   <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${msg.taskData.status === 'Completed' ? 'bg-teal-500 w-full' : msg.taskData.status === 'In Progress' ? 'bg-indigo-500 w-1/2' : 'bg-amber-500 w-1/4'}`}></div>
                   </div>
                 </div>
               </div>
             )}
-            {/* ===== END TASK CARD ===== */}
 
             {!msg.isTask && msg.isPrivateMention && <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> {msg.text?.startsWith('[Forwarded') ? 'FORWARDED DM' : 'PRIVATE'}</div>}
             {!msg.isTask && msg.isPrivateForward && <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> Private from {msg.forwardedFromGroup}</div>}
@@ -157,7 +155,6 @@ const MessageBubble = React.memo(({
               {msg.isEdited && <span className="italic">(edited)</span>}
               {msg.hasReminder && <i className="fa-regular fa-clock text-amber-500"></i>}
               {isBookmarked && <i className="fa-solid fa-bookmark text-primary"></i>}
-              {/* Read receipt indicator */}
               {msg.isMine && !seenByOthers && deliveredCount > 0 && (
                 <span className="text-[11px] font-medium text-[#800000] ml-1">Delivered</span>
               )}
