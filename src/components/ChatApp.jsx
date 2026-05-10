@@ -813,7 +813,7 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) { alert("Failed to save reminder."); }
     };
 
-    cconst convertToTask = async () => {
+    const convertToTask = async () => {
     if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
     try {
       const now = new Date();
