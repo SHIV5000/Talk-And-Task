@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
@@ -12,30 +12,25 @@ export default function ChatView({
   editingMessageId, editMessageText, setEditingMessageId, setEditMessageText,
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
-  unreadHighlightIds, jumpToPrivateSource, handleAddInlineComment // 👈 Added
+  unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource // 👈 Clean props mapping
 }) {
+  
   const handleChatScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
     setIsAtBottom(Math.abs(scrollHeight - clientHeight - scrollTop) < 50);
   };
 
-  const scrollToPosition = () => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTo({
-        top: isAtBottom ? 0 : chatContainerRef.current.scrollHeight,
-        behavior: 'smooth',
-      });
-    }
-  };
-
-  React.useEffect(() => {
+  // 👇 FIX: The Magic Jump & Highlight Logic (Now beats the bottom-snap!)
+  useEffect(() => {
     if (pendingScrollTarget && messagesToRender.length > 0) {
       const targetExists = messagesToRender.some(m => m.id === pendingScrollTarget);
       if (targetExists) {
+        // We wait 400ms so the app's default "snap to bottom" finishes first.
+        // Then, we smoothly glide up to the target message and highlight it.
         const timer = setTimeout(() => {
           scrollToMessageDirect(pendingScrollTarget);
           setPendingScrollTarget(null); 
-        }, 50); 
+        }, 400); 
         return () => clearTimeout(timer);
       }
     }
@@ -44,6 +39,8 @@ export default function ChatView({
   return (
     <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] wa-bg relative">
       <div className="flex flex-col min-h-full justify-end py-4 pb-10">
+        
+        {/* Watermark */}
         {toolPreferences.showWatermark !== false && (
           <div className="doodle-watermark">
             {Array.from({ length: 15 }).map((_, rowIdx) => (
@@ -57,11 +54,15 @@ export default function ChatView({
             ))}
           </div>
         )}
+
+        {/* E2E Notice */}
         <div className="text-center mb-6 mt-4 relative z-[1]">
           <span className="text-[12.5px] text-text-secondary bg-primary-light px-4 py-1.5 rounded-lg shadow-sm font-medium">
             <i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.
           </span>
         </div>
+
+        {/* Pinned Messages */}
         {pinnedMessages.length > 0 && (
           <div className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
             <div className="flex justify-between items-center text-xs text-text-secondary font-medium mb-1">
@@ -70,6 +71,8 @@ export default function ChatView({
             <div className="text-sm text-text-primary line-clamp-1 truncate">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
           </div>
         )}
+
+        {/* The Bubbles */}
         <div className="relative z-[1] flex flex-col justify-end">
           {messagesToRender.map(msg => (
             <MessageBubble
@@ -99,11 +102,13 @@ export default function ChatView({
               setIsEditingTaskTitle={setIsEditingTaskTitle}
               setActiveModal={setActiveModal}
               dbUsers={dbUsers}
-              jumpToPrivateSource={jumpToPrivateSource}
-              handleAddInlineComment={handleAddInlineComment} // 👈 Passed down
+              jumpToPrivateSource={jumpToPrivateSource} 
+              handleAddInlineComment={handleAddInlineComment} 
             />
           ))}
         </div>
+
+        {/* Typing Indicator */}
         {typingStatus.length > 0 && (
           <div className="flex items-start mt-2 relative z-[1]">
             <div className="bg-white px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 border border-primary/10">
@@ -118,8 +123,11 @@ export default function ChatView({
             </div>
           </div>
         )}
+        
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
+
+      {/* Scroll to Bottom FAB */}
       <button
         onClick={() => {
           if (chatContainerRef.current) {
