@@ -470,31 +470,34 @@ export default function ChatApp({ user, onLogout }) {
     }, [groups]);
 
     const notifyInvolvedInTask = async (taskMsg, actionText) => {
-        const involved = new Set();
-        if (taskMsg.senderEmail) involved.add(taskMsg.senderEmail);
-        (taskMsg.taskData?.assignees || []).forEach(a => involved.add(a));
-        (taskMsg.taskData?.trail || []).forEach(t => {
-            if (t.by) involved.add(t.by);
+    const involved = new Set();
+    if (taskMsg.senderEmail) involved.add(taskMsg.senderEmail);
+    (taskMsg.taskData?.assignees || []).forEach(a => involved.add(a));
+    (taskMsg.taskData?.trail || []).forEach(t => {
+      if (t.by) involved.add(t.by);
+    });
+    involved.delete(user.email);
+    const uidsToNotify = dbUsers
+      .filter(u => involved.has(u.email))
+      .map(u => u.uid);
+      
+    for (const uid of uidsToNotify) {
+      try {
+        await addDoc(collection(db, "notifications"), {
+          userId: uid,
+          type: "task",
+          // 👇 NEW FORMAT: "Task Title" - User updated ✅
+          text: `"${taskMsg.text}" - ${(user.email || "").split('@')[0]} updated ✅`,
+          messageId: taskMsg.id,
+          groupId: taskMsg.groupId,
+          timestamp: serverTimestamp(),
+          isRead: false,
         });
-        involved.delete(user.email);
-        const uidsToNotify = dbUsers
-            .filter(u => involved.has(u.email))
-            .map(u => u.uid);
-        for (const uid of uidsToNotify) {
-            try {
-                await addDoc(collection(db, "notifications"), {
-                    userId: uid,
-                    type: "task",
-                    text: actionText,
-                    messageId: taskMsg.id,
-                    groupId: taskMsg.groupId,
-                    timestamp: serverTimestamp(),
-                    isRead: false,
-                });
-            } catch (e) {}
-        }
-    };
+      } catch (e) {}
+    }
+  };
 
+    
     const openDraftDB = () => new Promise((resolve, reject) => {
         const req = indexedDB.open("TalkTaskDrafts", 1);
         req.onupgradeneeded = e => { e.target.result.createObjectStore("drafts", { keyPath: "id", autoIncrement: true }); };
@@ -810,46 +813,52 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) { alert("Failed to save reminder."); }
     };
 
-    const convertToTask = async () => {
-        if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
-        try {
-            const now = new Date();
-            await setDoc(doc(db, "messages", selectedMessage.id), {
-                isTask: true,
-                taskData: {
-                    deadline: taskDeadline,
-                    assignees: taskAssignees,
-                    priority: taskPriority,
-                    status: "Pending",
-                    isArchived: false,
-                    dismissedBy: [],
-                    trail: [{
-                        action: "Task Created",
-                        by: user.email,
-                        time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(),
-                        to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ')
-                    }]
-                }
-            }, { merge: true });
+    cconst convertToTask = async () => {
+    if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
+    try {
+      const now = new Date();
+      await setDoc(doc(db, "messages", selectedMessage.id), {
+        isTask: true,
+        taskData: {
+          deadline: taskDeadline,
+          assignees: taskAssignees,
+          priority: taskPriority,
+          status: "Pending",
+          isArchived: false,
+          dismissedBy: [],
+          trail: [{
+            action: "Task Created",
+            by: user.email,
+            time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(),
+            to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ')
+          }]
+        }
+      }, { merge: true });
 
-            // Notify assignees
-            taskAssignees.forEach(email => {
-                if (email !== user.email) {
-                    const assigneeUser = dbUsers.find(u => u.email === email);
-                    if (assigneeUser) {
-                        addDoc(collection(db, "notifications"), {
-                            userId: assigneeUser.uid,
-                            type: "task",
-                            text: `${(user.email || "").split('@')[0]} assigned you a task: "${selectedMessage.text}"`,
-                            messageId: selectedMessage.id,
-                            groupId: selectedMessage.groupId,
-                            timestamp: serverTimestamp(),
-                            isRead: false
-                        }).catch(() => {});
-                    }
-                }
-            });
+      // Notify assignees
+      taskAssignees.forEach(email => {
+        if (email !== user.email) {
+          const assigneeUser = dbUsers.find(u => u.email === email);
+          if (assigneeUser) {
+            addDoc(collection(db, "notifications"), {
+              userId: assigneeUser.uid,
+              type: "task",
+              // 👇 NEW FORMAT: "Task Title" - Assigned to You 🕒
+              text: `"${selectedMessage.text}" - Assigned to You 🕒`,
+              messageId: selectedMessage.id,
+              groupId: selectedMessage.groupId,
+              timestamp: serverTimestamp(),
+              isRead: false
+            }).catch(() => {});
+          }
+        }
+      });
 
+      logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
+      setActiveModal(null); setTaskAssignees([]);
+      playTaskSound();
+    } catch (error) { alert("Failed to create task."); }
+  };
             logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
             setActiveModal(null); setTaskAssignees([]);
             playTaskSound();
