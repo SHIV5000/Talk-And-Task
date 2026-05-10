@@ -1145,6 +1145,10 @@ export default function ChatApp({ user, onLogout }) {
                   <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">
                     "{task.text}"
                   </div>
+                  {/* 👇 FIX: Added subscript for Pending Tasks 👇 */}
+                  <div className="text-[12px] text-[#00a884] font-semibold mt-1">
+                    Assigned to You 🕒
+                  </div>
                 </div>
               );
             })}
@@ -1173,7 +1177,7 @@ export default function ChatApp({ user, onLogout }) {
                       }
                     ></i>
                   </div>
-                  <div className="flex-1 overflow-hidden">
+                  <div className="flex-1 overflow-hidden pb-4">
                     <div className="text-[14px] font-bold text-[#111b21]">
                       {n.type === 'reply'
                         ? 'New Reply'
@@ -1185,11 +1189,12 @@ export default function ChatApp({ user, onLogout }) {
                         ? 'Task Update'
                         : 'New Reaction'}
                     </div>
-                    <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug truncate pr-8 font-medium">
+                    {/* 👇 FIX: Replaced truncate with line-clamp-2 break-words 👇 */}
+                    <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug line-clamp-2 break-words font-medium">
                       {n.text}
                     </div>
                   </div>
-                  <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold">
+                  <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold bg-white pl-2">
                     {timeStr}
                   </div>
                 </div>
@@ -1200,8 +1205,6 @@ export default function ChatApp({ user, onLogout }) {
       </div>
     </div>
   )}
-</div>
-
   <button
     onClick={() => setShowRightSidebar(!showRightSidebar)}
     className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`}
