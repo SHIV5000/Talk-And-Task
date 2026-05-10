@@ -6,7 +6,7 @@ export default function ChatView({
   messagesToRender, messages, activeGroup, user, currentUserData, isVipAdmin,
   pinnedMessages, typingStatus, replyingTo, setReplyingTo, toolPreferences,
   dbUsers, groups, setActiveGroup, setShowRightSidebar, setMobileSidebarOpen,
-  pendingScrollTarget, setPendingScrollTarget, // 👈 Added prop
+  pendingScrollTarget, setPendingScrollTarget,
   setActiveModal, scrollToMessageDirect, handleReaction,
   handleToggleBookmark, handleTogglePin, handleDeleteMessage, chatInputRef,
   editingMessageId, editMessageText, setEditingMessageId, setEditMessageText,
@@ -28,15 +28,15 @@ export default function ChatView({
     }
   };
 
-  // 👈 FIX 2: Added logic to auto-scroll when a notification is clicked
+  // 👇 FIX 1: Lightning-fast 50ms scroll resolution prevents cancelled clicks
   React.useEffect(() => {
     if (pendingScrollTarget && messagesToRender.length > 0) {
       const targetExists = messagesToRender.some(m => m.id === pendingScrollTarget);
       if (targetExists) {
         const timer = setTimeout(() => {
           scrollToMessageDirect(pendingScrollTarget);
-          setPendingScrollTarget(null); // Clear the target after scrolling
-        }, 400); // Wait 400ms to ensure the group UI has fully painted
+          setPendingScrollTarget(null); 
+        }, 50); 
         return () => clearTimeout(timer);
       }
     }
