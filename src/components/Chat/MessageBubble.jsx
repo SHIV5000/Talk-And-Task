@@ -52,25 +52,23 @@ const MessageBubble = React.memo(({
   return (
     <div
       id={`msg-${msg.id}`}
-      // 👇 FIX 2: Added dynamic z-index tracking. If menu is open, this row pops to absolute front!
       className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen || emojiPickerOpen ? 'relative z-50' : 'relative z-[1]'}`}
     >
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3' : 'mr-3'} />
       
       <div className={`w-fit max-w-[85%] md:max-w-[75%] bg-white rounded-xl shadow-sm border border-gray-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words`}>
         
-        {/* 👇 FIX 3: Added pr-10 to top row, moved Time completely out of this container */}
         <div className="flex items-baseline mb-1 pr-10">
           <span className="text-xs font-semibold text-primary">{senderName}</span>
         </div>
         
-        {/* 👇 FIX 3: Massive 30px Red Dot */}
-        <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2.5 right-3 opacity-0 group-hover/msg:opacity-100 transition-opacity p-1">
-          <div className="w-[30px] h-[30px] bg-red-500 rounded-full shadow-md hover:scale-110 transition-transform"></div>
+        {/* 👇 FIX: Replaced massive red dot with a clean Chevron Down arrow */}
+        <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-primary hover:bg-slate-100 p-1.5 rounded-full flex items-center justify-center">
+          <i className="fa-solid fa-chevron-down text-[12px]"></i>
         </button>
         
         {menuOpen && (
-          <div ref={menuRef} className="absolute top-10 right-2 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-2 w-56 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
+          <div ref={menuRef} className="absolute top-8 right-2 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-2 w-56 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => { setMenuOpen(false); setReplyingTo(msg); setTimeout(() => chatInputRef.current?.focus(), 100); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-primary-light hover:text-primary"><i className="fa-solid fa-reply w-5"></i> Reply</button>
             {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
             <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
@@ -152,7 +150,6 @@ const MessageBubble = React.memo(({
               <p className={`text-sm leading-relaxed whitespace-pre-wrap ${currentUserData?.fontSize || 'text-sm'}`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text || '') }}></p>
             )}
             
-            {/* 👇 FIX 3: Time moved entirely to the bottom row, far left */}
             <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-secondary">
               <span className="font-semibold text-slate-400 mr-2">{msg.time}</span>
               {msg.isEdited && <span className="italic">(edited)</span>}
