@@ -575,7 +575,8 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [activeGroup, user.uid, currentUserData?.name, user.email]);
 
-    const handleSendMessage = async () => {
+    const handleSendMessage = async () => 
+        {
         if (!inputText.trim() || !activeGroup) return;
         const messageText = inputText.trim();
         setInputText(""); setEmojiPickerOpen(false);
@@ -608,9 +609,39 @@ export default function ChatApp({ user, onLogout }) {
                   chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
                   setIsAtBottom(true);
                 }
+
+// Inside handleSendMessage, after the groupMsgRef is created:
+if (isPrivate && uniqueMentions.length > 0) {
+    uniqueMentions.forEach(async (mentionEmail) => {
+        if (mentionEmail === user.email) return; // Don't notify yourself
+
+        const recipient = dbUsers.find(u => u.email === mentionEmail);
+        if (recipient) {
+            await addDoc(collection(db, "notifications"), {
+                userId: recipient.uid,
+                type: "mention",
+                text: `You were privately mentioned in ${activeGroup.name} 🔒`,
+                messageId: groupMsgRef.id,   // Original Message ID
+                groupId: activeGroup.id,      // Original Group ID (Source)
+                timestamp: serverTimestamp(),
+                isRead: false
+            });
+        }
+    });
+}
+
+
+
+            
             
         } catch (error) { alert("Failed to send message."); }
     };
+
+
+
+
+
+    
 
     const handleReaction = async (msgId, emoji) => {
         const msg = messages.find(m => m.id === msgId);
