@@ -982,10 +982,8 @@ export default function ChatApp({ user, onLogout }) {
         return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
     }, [messages, user.uid, user.email]);
 
-    // 👇 NEW: Helper to calculate Green Dots for Groups
     const getUnreadInfoForGroup = useCallback((groupId) => {
         const groupMsgs = messages.filter(m => m.groupId === groupId);
-        // Ensure private mentions not for this user are hidden from count
         const visibleMsgs = groupMsgs.filter(m => !m.isPrivateMention || m.allowedUsers?.includes(user.email));
         const unreadMsgs = visibleMsgs.filter(m => m.senderUid !== user.uid && !(m.seenBy || []).includes(user.email));
         const pendingTasks = visibleMsgs.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid) && !m.taskData?.isArchived);
@@ -1060,7 +1058,7 @@ export default function ChatApp({ user, onLogout }) {
                         user={user} currentUserData={currentUserData} myGroups={myGroups} dmUsers={dmUsers} activeGroup={activeGroup} setActiveGroup={setActiveGroup}
                         setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} 
                         getUnreadInfoForUser={getUnreadInfoForUser}
-                        getUnreadInfoForGroup={getUnreadInfoForGroup} // 👇 Added this line
+                        getUnreadInfoForGroup={getUnreadInfoForGroup}
                         messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
                         sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={isVipAdmin} setViewMode={setViewMode}
                     />
@@ -1150,80 +1148,72 @@ export default function ChatApp({ user, onLogout }) {
                                       )}
                                     </button>
 
-                                      {showNotifications && (
-    <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-100">
-      {/* Header */}
-      <div className="p-3 bg-white flex justify-between items-center border-b border-slate-100">
-        <span className="text-[15px] font-bold text-slate-800">Activity Feed</span>
-        <button onClick={handleClearNotifications} className="text-[12px] text-[#00a884] font-semibold hover:underline">Clear All</button>
-      </div>
+                                    {showNotifications && (
+                                      <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-100">
+                                        <div className="p-3 bg-white flex justify-between items-center border-b border-slate-100">
+                                          <span className="text-[15px] font-bold text-slate-800">Activity Feed</span>
+                                          <button onClick={handleClearNotifications} className="text-[12px] text-[#00a884] font-semibold hover:underline">Clear All</button>
+                                        </div>
+                                        <div className="max-h-[70vh] overflow-y-auto bg-slate-50 p-2">
+                                          {totalNotifications === 0 ? (
+                                            <div className="p-8 text-center text-[14px] text-[#54656f]">No new activity</div>
+                                          ) : (
+                                            <div className="flex flex-col gap-1">
+                                              
+                                              {activeActionableTasks.length > 0 && (
+                                                <div className="mb-2">
+                                                  <div className="px-2 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Action Required</div>
+                                                  <div className="space-y-2">
+                                                    {[...activeActionableTasks]
+                                                      .sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0))
+                                                      .map(task => {
+                                                        const timeStr = task.timestamp?.toDate ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                                        return (
+                                                          <div key={task.id} onClick={() => navigateToMessageFromNotification(task.id, task.groupId)} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative">
+                                                            <div className="text-[13px] font-bold text-[#00a884] mb-1.5 flex items-center justify-between">
+                                                              <span className="flex items-center"><i className="fa-regular fa-square-check mr-1.5"></i>Pending Task</span>
+                                                              <span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span>
+                                                            </div>
+                                                            <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">"{task.text}"</div>
+                                                            <div className="text-[12px] text-[#00a884] font-semibold mt-1">Assigned to You 🕒</div>
+                                                          </div>
+                                                        );
+                                                      })}
+                                                  </div>
+                                                </div>
+                                              )}
 
-      {/* Scrollable list */}
-      <div className="max-h-[70vh] overflow-y-auto bg-slate-50 p-2">
-        {totalNotifications === 0 ? (
-          <div className="p-8 text-center text-[14px] text-[#54656f]">No new activity</div>
-        ) : (
-          <div className="flex flex-col gap-1">
-            
-            {/* SECTION 1: PENDING TASKS */}
-            {activeActionableTasks.length > 0 && (
-              <div className="mb-2">
-                <div className="px-2 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Action Required</div>
-                <div className="space-y-2">
-                  {/* 👇 FIX: Enforced Descending Sort (Newest First) on pending tasks */}
-                  {[...activeActionableTasks]
-                    .sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0))
-                    .map(task => {
-                      const timeStr = task.timestamp?.toDate ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                      return (
-                        <div key={task.id} onClick={() => navigateToMessageFromNotification(task.id, task.groupId)} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative">
-                          <div className="text-[13px] font-bold text-[#00a884] mb-1.5 flex items-center justify-between">
-                            <span className="flex items-center"><i className="fa-regular fa-square-check mr-1.5"></i>Pending Task</span>
-                            <span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span>
-                          </div>
-                          <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">"{task.text}"</div>
-                          <div className="text-[12px] text-[#00a884] font-semibold mt-1">Assigned to You 🕒</div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
+                                              {genericNotifications.length > 0 && (
+                                                <div>
+                                                  {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
+                                                  <div className="px-2 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
+                                                  <div className="space-y-2">
+                                                    {genericNotifications.map(n => {
+                                                      const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
+                                                      return (
+                                                        <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative">
+                                                          <div className="w-8 h-8 rounded-full bg-[#d9fdd3] flex items-center justify-center text-[#00a884] shrink-0 mt-0.5">
+                                                            <i className={n.type === 'reply' ? 'fa-solid fa-reply text-xs' : n.type === 'mention' ? 'fa-solid fa-at text-xs' : 'fa-solid fa-bolt text-xs'}></i>
+                                                          </div>
+                                                          <div className="flex-1 overflow-hidden pb-4">
+                                                            <div className="text-[14px] font-bold text-[#111b21]">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : n.type === 'task' ? 'Task Update' : 'New Reaction'}</div>
+                                                            <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug line-clamp-2 break-words font-medium">{n.text}</div>
+                                                          </div>
+                                                          <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold bg-white pl-2">{timeStr}</div>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                </div>
+                                              )}
 
-            {/* SECTION 2: GENERIC UPDATES */}
-            {genericNotifications.length > 0 && (
-              <div>
-                {/* 👇 FIX: Subtle line separator if both sections exist */}
-                {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
-                
-                <div className="px-2 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
-                <div className="space-y-2">
-                  {/* Generic notifications are already sorted descending in your useEffect! */}
-                  {genericNotifications.map(n => {
-                    const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
-                    return (
-                      <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative">
-                        <div className="w-8 h-8 rounded-full bg-[#d9fdd3] flex items-center justify-center text-[#00a884] shrink-0 mt-0.5">
-                          <i className={n.type === 'reply' ? 'fa-solid fa-reply text-xs' : n.type === 'mention' ? 'fa-solid fa-at text-xs' : 'fa-solid fa-bolt text-xs'}></i>
-                        </div>
-                        <div className="flex-1 overflow-hidden pb-4">
-                          <div className="text-[14px] font-bold text-[#111b21]">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : n.type === 'task' ? 'Task Update' : 'New Reaction'}</div>
-                          <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug line-clamp-2 break-words font-medium">{n.text}</div>
-                        </div>
-                        <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold bg-white pl-2">{timeStr}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
 
-          </div>
-        )}
-      </div>
-    </div>
-  )}
-                                   
                                   <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub">
                                     <i className="fa-solid fa-clipboard-list"></i>
                                   </button>
