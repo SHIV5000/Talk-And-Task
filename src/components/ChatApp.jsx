@@ -258,12 +258,13 @@ export default function ChatApp({ user, onLogout }) {
     }, [toolPreferences.soundProfile]);
 
     const playTaskSound = useCallback(() => {
-    try {
-        const audio = new Audio("https://cdn.freesound.org/previews/270/270404_5123851-lq.mp3");
-        audio.volume = 0.8;
-        audio.play().catch(() => {});
-    } catch (e) {}
-}, []);
+        try {
+            const audio = new Audio("https://cdn.freesound.org/previews/270/270404_5123851-lq.mp3");
+            audio.volume = 0.8;
+            audio.play().catch(() => {});
+        } catch (e) {}
+    }, []);
+
     useEffect(() => {
         const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -361,9 +362,12 @@ export default function ChatApp({ user, onLogout }) {
         const unread = messages
             .filter(m => m.groupId === activeGroup.id && !m.isMine && !(m.seenBy || []).includes(user.email))
             .map(m => m.id);
-        setUnreadHighlightIds(unread);
-        const timer = setTimeout(() => setUnreadHighlightIds([]), 4000);
-        return () => clearTimeout(timer);
+        if (unread.length > 0) {
+            setUnreadHighlightIds(unread);
+            const timer = setTimeout(() => setUnreadHighlightIds([]), 4000);
+            return () => clearTimeout(timer);
+        }
+        setUnreadHighlightIds([]);
     }, [activeGroup?.id, user.email, messages]);
 
     // ==================== MEMOS ====================
