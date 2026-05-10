@@ -105,7 +105,6 @@ export default function ChatApp({ user, onLogout }) {
     const inactivityTimerRef = useRef(null);
     const inactivityCountdownRef = useRef(null);
     const lastActivityRef = useRef(Date.now());
-    
 
     // ==================== OTHER STATES ====================
     const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
@@ -487,7 +486,7 @@ export default function ChatApp({ user, onLogout }) {
                 await addDoc(collection(db, "notifications"), {
                     userId: uid,
                     type: "task",
-                    text: `"${taskMsg.text}" - ${(user.email || "").split('@')[0]} updated 🔄`,
+                    text: `"${taskMsg.text}" - ${(user.email || "").split('@')[0]} updated ✅`,
                     messageId: taskMsg.id,
                     groupId: taskMsg.groupId,
                     timestamp: serverTimestamp(),
@@ -575,7 +574,7 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [activeGroup, user.uid, currentUserData?.name, user.email]);
 
-   const handleSendMessage = async () => {
+    const handleSendMessage = async () => {
         if (!inputText.trim() || !activeGroup) return;
         const messageText = inputText.trim();
         setInputText(""); setEmojiPickerOpen(false);
@@ -597,7 +596,6 @@ export default function ChatApp({ user, onLogout }) {
         }
 
         try {
-            // 1. Create the original message in the Group
             const groupMsgRef = await addDoc(collection(db, "messages"), { 
                 text: messageText, 
                 senderUid: user.uid, 
@@ -614,31 +612,25 @@ export default function ChatApp({ user, onLogout }) {
 
             logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, isPrivate ? `Private: ${uniqueMentions.join(', ')}` : "Public");
 
-            // 2. 👇 NEW: Create the Copy in the Mentioned User's DM
             if (isPrivate && uniqueMentions.length > 0) {
                 uniqueMentions.forEach(async (mentionEmail) => {
                     if (mentionEmail === user.email) return; 
-
                     const recipient = dbUsers.find(u => u.email === mentionEmail);
                     if (recipient) {
-                        // Calculate DM ID (e.g., "uid1_uid2")
                         const dmId = [user.uid, recipient.uid].sort().join('_');
-                        
                         await addDoc(collection(db, "messages"), {
                             text: `[Forwarded Private Mention] ${messageText}`,
                             senderUid: user.uid,
                             senderEmail: user.email,
                             timestamp: serverTimestamp(),
-                            groupId: dmId, // 👈 Saves it to the DM folder
+                            groupId: dmId,
                             isPrivateForward: true,
-                            originalMsgId: groupMsgRef.id, // 👈 Used for "Go to Source"
+                            originalMsgId: groupMsgRef.id,
                             originalGroupId: activeGroup.id,
                             forwardedFromGroupName: activeGroup.name,
                             seenBy: [user.email],
                             reactions: {}
                         });
-
-                        // Also push the actual notification bell item
                         await addDoc(collection(db, "notifications"), {
                             userId: recipient.uid,
                             type: "mention",
@@ -658,7 +650,7 @@ export default function ChatApp({ user, onLogout }) {
                 setIsAtBottom(true);
             }
         } catch (error) { alert("Failed to send message."); }
-    }; 
+    };
 
     const handleReaction = async (msgId, emoji) => {
         const msg = messages.find(m => m.id === msgId);
@@ -777,7 +769,7 @@ export default function ChatApp({ user, onLogout }) {
                 const now = new Date();
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
-                await notifyInvolvedInTask(selectedMessage, `${(user.email||"").split('@')[0]} : attached a file to a task.`);
+                await notifyInvolvedInTask(selectedMessage, `${(user.email||"").split('@')[0]} attached a file to a task.`);
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
                 playTaskSound();
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
@@ -862,7 +854,6 @@ export default function ChatApp({ user, onLogout }) {
 
     const convertToTask = async () => {
         if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
-        
         try {
             const now = new Date();
             await setDoc(doc(db, "messages", selectedMessage.id), {
@@ -883,7 +874,6 @@ export default function ChatApp({ user, onLogout }) {
                 }
             }, { merge: true });
 
-            // Notify assignees
             taskAssignees.forEach(email => {
                 if (email !== user.email) {
                     const assigneeUser = dbUsers.find(u => u.email === email);
@@ -904,9 +894,7 @@ export default function ChatApp({ user, onLogout }) {
             logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
             setActiveModal(null); setTaskAssignees([]);
             playTaskSound();
-        } catch (error) { 
-            alert("Failed to create task."); 
-        }
+        } catch (error) { alert("Failed to create task."); }
     };
 
     const handleDelegateTask = async () => {
@@ -994,6 +982,16 @@ export default function ChatApp({ user, onLogout }) {
         return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
     }, [messages, user.uid, user.email]);
 
+    // 👇 NEW: Helper to calculate Green Dots for Groups
+    const getUnreadInfoForGroup = useCallback((groupId) => {
+        const groupMsgs = messages.filter(m => m.groupId === groupId);
+        // Ensure private mentions not for this user are hidden from count
+        const visibleMsgs = groupMsgs.filter(m => !m.isPrivateMention || m.allowedUsers?.includes(user.email));
+        const unreadMsgs = visibleMsgs.filter(m => m.senderUid !== user.uid && !(m.seenBy || []).includes(user.email));
+        const pendingTasks = visibleMsgs.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid) && !m.taskData?.isArchived);
+        return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
+    }, [messages, user.uid, user.email]);
+
     const handleScheduleMessage = async (isTask = false, taskData = null) => {
         const text = pendingScheduledText || inputText.trim();
         const dt = scheduleDateTime || msgScheduleDateTime;
@@ -1060,7 +1058,9 @@ export default function ChatApp({ user, onLogout }) {
                 <div className="flex h-full w-full relative">
                     <LeftSidebar 
                         user={user} currentUserData={currentUserData} myGroups={myGroups} dmUsers={dmUsers} activeGroup={activeGroup} setActiveGroup={setActiveGroup}
-                        setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} getUnreadInfoForUser={getUnreadInfoForUser}
+                        setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} 
+                        getUnreadInfoForUser={getUnreadInfoForUser}
+                        getUnreadInfoForGroup={getUnreadInfoForGroup} // 👇 Added this line
                         messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
                         sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={isVipAdmin} setViewMode={setViewMode}
                     />
@@ -1083,7 +1083,6 @@ export default function ChatApp({ user, onLogout }) {
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col relative h-full bg-[#efeae2] overflow-hidden wa-bg">
-                            {/* --- HEADER --- */}
                             <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200/60 safe-top">
                                 <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-primary/10 flex items-center justify-center text-primary mr-1 shrink-0">
                                   <i className="fa-solid fa-bars text-xl"></i>
@@ -1138,7 +1137,6 @@ export default function ChatApp({ user, onLogout }) {
                                     <i className="fa-solid fa-chart-pie"></i>
                                   </button>
 
-                                  {/* Bell button + dropdown */}
                                   <div className="relative">
                                     <button
                                       onClick={() => setShowNotifications(!showNotifications)}
@@ -1154,95 +1152,40 @@ export default function ChatApp({ user, onLogout }) {
 
                                     {showNotifications && (
                                       <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-100">
-                                        {/* Header */}
                                         <div className="p-3 bg-white flex justify-between items-center border-b border-slate-100">
                                           <span className="text-[15px] font-bold text-slate-800">Activity Feed</span>
-                                          <button
-                                            onClick={handleClearNotifications}
-                                            className="text-[12px] text-[#00a884] font-semibold hover:underline"
-                                          >
-                                            Clear All
-                                          </button>
+                                          <button onClick={handleClearNotifications} className="text-[12px] text-[#00a884] font-semibold hover:underline">Clear All</button>
                                         </div>
-
-                                        {/* Scrollable list */}
                                         <div className="max-h-[70vh] overflow-y-auto bg-slate-50 p-2 space-y-2">
                                           {totalNotifications === 0 ? (
-                                            <div className="p-8 text-center text-[14px] text-[#54656f]">
-                                              No new activity
-                                            </div>
+                                            <div className="p-8 text-center text-[14px] text-[#54656f]">No new activity</div>
                                           ) : (
                                             <>
-                                              {/* Pending tasks assigned to me */}
                                               {activeActionableTasks.map(task => {
-                                                const timeStr = task.timestamp?.toDate
-                                                  ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                  : '';
+                                                const timeStr = task.timestamp?.toDate ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                                                 return (
-                                                  <div
-                                                    key={task.id}
-                                                    onClick={() => navigateToMessageFromNotification(task.id, task.groupId)}
-                                                    className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative mb-2"
-                                                  >
+                                                  <div key={task.id} onClick={() => navigateToMessageFromNotification(task.id, task.groupId)} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative mb-2">
                                                     <div className="text-[13px] font-bold text-[#00a884] mb-1.5 flex items-center justify-between">
-                                                      <span className="flex items-center">
-                                                        <i className="fa-regular fa-square-check mr-1.5"></i>Pending Task
-                                                      </span>
+                                                      <span className="flex items-center"><i className="fa-regular fa-square-check mr-1.5"></i>Pending Task</span>
                                                       <span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span>
                                                     </div>
-                                                    <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">
-                                                      "{task.text}"
-                                                    </div>
-                                                    <div className="text-[12px] text-[#00a884] font-semibold mt-1">
-                                                      Assigned to You 🕒
-                                                    </div>
+                                                    <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">"{task.text}"</div>
+                                                    <div className="text-[12px] text-[#00a884] font-semibold mt-1">Assigned to You 🕒</div>
                                                   </div>
                                                 );
                                               })}
-
-                                              {/* All other notifications (mentions, replies, reactions, task updates) */}
                                               {genericNotifications.map(n => {
-                                                const timeStr = n.timestamp?.toDate
-                                                  ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                  : 'Just now';
+                                                const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
                                                 return (
-                                                  <div
-                                                    key={n.id}
-                                                    onClick={() => {
-                                                      if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id);
-                                                    }}
-                                                    className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative mb-2"
-                                                  >
+                                                  <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative mb-2">
                                                     <div className="w-8 h-8 rounded-full bg-[#d9fdd3] flex items-center justify-center text-[#00a884] shrink-0 mt-0.5">
-                                                      <i
-                                                        className={
-                                                          n.type === 'reply'
-                                                            ? 'fa-solid fa-reply text-xs'
-                                                            : n.type === 'mention'
-                                                            ? 'fa-solid fa-at text-xs'
-                                                            : 'fa-solid fa-bolt text-xs'
-                                                        }
-                                                      ></i>
+                                                      <i className={n.type === 'reply' ? 'fa-solid fa-reply text-xs' : n.type === 'mention' ? 'fa-solid fa-at text-xs' : 'fa-solid fa-bolt text-xs'}></i>
                                                     </div>
                                                     <div className="flex-1 overflow-hidden pb-4">
-                                                      <div className="text-[14px] font-bold text-[#111b21]">
-                                                        {n.type === 'reply'
-                                                          ? 'New Reply'
-                                                          : n.type === 'message'
-                                                          ? 'Direct Message'
-                                                          : n.type === 'mention'
-                                                          ? 'Mentioned You'
-                                                          : n.type === 'task'
-                                                          ? 'Task Update'
-                                                          : 'New Reaction'}
-                                                      </div>
-                                                      <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug line-clamp-2 break-words font-medium">
-                                                        {n.text}
-                                                      </div>
+                                                      <div className="text-[14px] font-bold text-[#111b21]">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : n.type === 'task' ? 'Task Update' : 'New Reaction'}</div>
+                                                      <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug line-clamp-2 break-words font-medium">{n.text}</div>
                                                     </div>
-                                                    <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold bg-white pl-2">
-                                                      {timeStr}
-                                                    </div>
+                                                    <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold bg-white pl-2">{timeStr}</div>
                                                   </div>
                                                 );
                                               })}
@@ -1253,24 +1196,18 @@ export default function ChatApp({ user, onLogout }) {
                                     )}
                                   </div>
 
-                                  <button
-                                    onClick={() => setShowRightSidebar(!showRightSidebar)}
-                                    className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`}
-                                    title="Task Hub"
-                                  >
+                                  <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub">
                                     <i className="fa-solid fa-clipboard-list"></i>
                                   </button>
                                 </div>
                             </div>
                             
-                            {/* --- CHAT VIEW COMPONENT --- */}
                             <ChatView
                                 messagesToRender={messagesToRender} messages={messages} activeGroup={activeGroup} user={user} currentUserData={currentUserData}
                                 isVipAdmin={isVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo}
                                 setReplyingTo={setReplyingTo} toolPreferences={toolPreferences} dbUsers={dbUsers} groups={groups} setActiveGroup={setActiveGroup}
                                 setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} 
-                                pendingScrollTarget={pendingScrollTarget} // 👈 FIX 1: ADD THIS LINE HERE
-                                setPendingScrollTarget={setPendingScrollTarget}
+                                pendingScrollTarget={pendingScrollTarget} setPendingScrollTarget={setPendingScrollTarget}
                                 setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReaction}
                                 handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin} handleDeleteMessage={handleDeleteMessage}
                                 chatInputRef={chatInputRef} editingMessageId={editingMessageId} editMessageText={editMessageText}
@@ -1279,7 +1216,7 @@ export default function ChatApp({ user, onLogout }) {
                                 chatContainerRef={chatContainerRef} isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId}
                                 unreadHighlightIds={unreadHighlightIds}
                             />
-                            {/* --- INPUT AREA COMPONENT --- */}
+
                             <InputArea
                                 inputText={inputText} setInputText={setInputText} isOnline={isOnline} isUploading={isUploading} activeGroup={activeGroup}
                                 replyingTo={replyingTo} setReplyingTo={setReplyingTo} handleSendOfflineAware={handleSendOfflineAware}
@@ -1295,17 +1232,9 @@ export default function ChatApp({ user, onLogout }) {
 
                     {showRightSidebar && (
                       <RightSidebar
-                        showRightSidebar={showRightSidebar}
-                        setShowRightSidebar={setShowRightSidebar}
-                        tasksAssignedToMe={tasksAssignedToMe}
-                        tasksAssignedByMe={tasksAssignedByMe}
-                        groups={groups}
-                        dbUsers={dbUsers}
-                        user={user}
-                        setActiveGroup={setActiveGroup}
-                        setSelectedMessage={setSelectedMessage}
-                        setIsEditingTaskTitle={setIsEditingTaskTitle}
-                        setActiveModal={setActiveModal}
+                        showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
+                        tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
+                        setSelectedMessage={setSelectedMessage} setIsEditingTaskTitle={setIsEditingTaskTitle} setActiveModal={setActiveModal}
                       />
                     )}
 
