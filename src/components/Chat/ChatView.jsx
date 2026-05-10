@@ -11,6 +11,7 @@ export default function ChatView({
   editingMessageId, editMessageText, setEditingMessageId, setEditMessageText,
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
+  unreadHighlightIds // 👈 ADDED THIS PROP HERE TO FIX THE REFERENCE ERROR
 }) {
   const handleChatScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -66,7 +67,7 @@ export default function ChatView({
               isVipAdmin={isVipAdmin}
               hasReplies={messages.some(m => m.replyToId === msg.id)}
               isHighlighted={highlightedMsgId === msg.id}
-              isUnreadHighlight={unreadHighlightIds.includes(msg.id)}
+              isUnreadHighlight={unreadHighlightIds?.includes(msg.id)}
               editingMessageId={editingMessageId}
               editMessageText={editMessageText}
               setEditingMessageId={setEditingMessageId}
@@ -84,7 +85,6 @@ export default function ChatView({
               setIsEditingTaskTitle={setIsEditingTaskTitle}
               setActiveModal={setActiveModal}
               dbUsers={dbUsers}
-              
             />
           ))}
         </div>
@@ -105,19 +105,19 @@ export default function ChatView({
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
       <button
-  onClick={() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTo({
-        top: isAtBottom ? 0 : chatContainerRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
-  }}
-  className="absolute bottom-[80px] right-4 bg-primary text-white shadow-lg rounded-full w-10 h-10 flex items-center justify-center z-30 transition-transform hover:scale-110"
-  title={isAtBottom ? 'Scroll to top' : 'Scroll to latest'}
->
-  <i className={`fa-solid ${isAtBottom ? 'fa-arrow-up' : 'fa-arrow-down'} text-lg`}></i>
-</button>
+        onClick={() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+              top: isAtBottom ? 0 : chatContainerRef.current.scrollHeight,
+              behavior: 'smooth'
+            });
+          }
+        }}
+        className="absolute bottom-[80px] right-4 bg-primary text-white shadow-lg rounded-full w-10 h-10 flex items-center justify-center z-30 transition-transform hover:scale-110"
+        title={isAtBottom ? 'Scroll to top' : 'Scroll to latest'}
+      >
+        <i className={`fa-solid ${isAtBottom ? 'fa-arrow-up' : 'fa-arrow-down'} text-lg`}></i>
+      </button>
     </div>
   );
 }
