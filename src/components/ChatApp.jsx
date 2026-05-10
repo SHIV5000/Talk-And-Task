@@ -486,7 +486,7 @@ export default function ChatApp({ user, onLogout }) {
                 await addDoc(collection(db, "notifications"), {
                     userId: uid,
                     type: "task",
-                    text: `"${taskMsg.text}" - ${(user.email || "").split('@')[0]} updated ✅`,
+                    text: `"${taskMsg.text}" - ${(user.email || "").split('@')[0]} updated 🔄`,
                     messageId: taskMsg.id,
                     groupId: taskMsg.groupId,
                     timestamp: serverTimestamp(),
@@ -728,7 +728,7 @@ export default function ChatApp({ user, onLogout }) {
                 const now = new Date();
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
-                await notifyInvolvedInTask(selectedMessage, `${(user.email||"").split('@')[0]} attached a file to a task.`);
+                await notifyInvolvedInTask(selectedMessage, `${(user.email||"").split('@')[0]} : attached a file to a task.`);
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
                 playTaskSound();
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
