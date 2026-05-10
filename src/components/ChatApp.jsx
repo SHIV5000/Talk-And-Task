@@ -974,26 +974,25 @@ export default function ChatApp({ user, onLogout }) {
     }
 
     if (isWorkspaceLoading) {
-  return (
-    <div className="flex flex-col items-center justify-center h-screen w-full bg-surface fixed inset-0 z-50">
-      <div className="relative mb-8">
-        {/* Pulsing logo */}
-        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-primary-hover animate-pulse flex items-center justify-center shadow-2xl">
-          <i className="fa-solid fa-list-check text-4xl text-white drop-shadow-lg"></i>
+      return (
+        <div className="flex flex-col items-center justify-center h-screen w-full bg-surface fixed inset-0 z-50">
+          <div className="relative mb-8">
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-primary-hover animate-pulse flex items-center justify-center shadow-2xl">
+              <i className="fa-solid fa-list-check text-4xl text-white drop-shadow-lg"></i>
+            </div>
+            <div className="absolute -inset-3 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          </div>
+          <h2 className="text-2xl font-bold text-text-primary mb-3 tracking-tight">Talk & Task</h2>
+          <div className="w-56 h-2 bg-gray-200 rounded-full overflow-hidden mb-6">
+            <div className="h-full bg-gradient-to-r from-primary via-primary-hover to-success animate-loading-bar rounded-full"></div>
+          </div>
+          <div className="text-text-secondary text-sm font-medium italic">
+            {currentTip}
+          </div>
         </div>
-        {/* Spinning ring */}
-        <div className="absolute -inset-3 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-      </div>
-      <h2 className="text-2xl font-bold text-text-primary mb-3 tracking-tight">Talk & Task</h2>
-      <div className="w-56 h-2 bg-gray-200 rounded-full overflow-hidden mb-6">
-        <div className="h-full bg-gradient-to-r from-primary via-primary-hover to-success animate-loading-bar rounded-full"></div>
-      </div>
-      <div className="text-text-secondary text-sm font-medium italic">
-        {currentTip}
-      </div>
-    </div>
-  );
-}
+      );
+    }
+    
     return (
         <div className="flex h-screen w-full bg-[#f3f4f6] text-[#111b21] overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100">
             <audio id="app-sound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3" preload="auto" className="hidden"></audio>
@@ -1038,8 +1037,8 @@ export default function ChatApp({ user, onLogout }) {
                             {/* --- HEADER --- */}
                             <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200/60 safe-top">
                                 <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-primary/10 flex items-center justify-center text-primary mr-1 shrink-0">
-  <i className="fa-solid fa-bars text-xl"></i>
-</button>
+                                  <i className="fa-solid fa-bars text-xl"></i>
+                                </button>
                                 
                                 <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) setActiveModal('group_settings'); }}>
                                     {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-[#800020] shadow-sm"><i className="fa-solid fa-users"></i></div>}
@@ -1064,155 +1063,155 @@ export default function ChatApp({ user, onLogout }) {
                                 </div>
                                 
                                 <div className="flex items-center gap-1 shrink-0 relative">
-  <button
-    onClick={() => setShowFilterMenu(!showFilterMenu)}
-    className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10"
-    title="Filter Messages"
-  >
-    <i className="fa-solid fa-sliders"></i>
-  </button>
+                                  <button
+                                    onClick={() => setShowFilterMenu(!showFilterMenu)}
+                                    className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10"
+                                    title="Filter Messages"
+                                  >
+                                    <i className="fa-solid fa-sliders"></i>
+                                  </button>
 
-  {showFilterMenu && (
-    <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-lg z-50 overflow-hidden animate-in fade-in py-2 w-48 border">
-      {['all','tasks-pending','tasks-completed','messages','today','bookmarked'].map(f => (
-        <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-primary-light text-primary' : 'text-text-primary hover:bg-gray-50'}`}>
-          {f === 'bookmarked' ? 'Saved Messages' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-        </div>
-      ))}
-    </div>
-  )}
+                                  {showFilterMenu && (
+                                    <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-lg z-50 overflow-hidden animate-in fade-in py-2 w-48 border">
+                                      {['all','tasks-pending','tasks-completed','messages','today','bookmarked'].map(f => (
+                                        <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-primary-light text-primary' : 'text-text-primary hover:bg-gray-50'}`}>
+                                          {f === 'bookmarked' ? 'Saved Messages' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
 
-  <button
-    onClick={() => setActiveModal('task_analytics')}
-    className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10"
-    title="Task Analytics"
-  >
-    <i className="fa-solid fa-chart-pie"></i>
-  </button>
+                                  <button
+                                    onClick={() => setActiveModal('task_analytics')}
+                                    className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10"
+                                    title="Task Analytics"
+                                  >
+                                    <i className="fa-solid fa-chart-pie"></i>
+                                  </button>
 
-  {/* Bell button + dropdown */}
-<div className="relative">
-  <button
-    onClick={() => setShowNotifications(!showNotifications)}
-    className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${
-      showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'
-    } text-[19px] relative`}
-  >
-    <i className="fa-solid fa-bell"></i>
-    {totalNotifications > 0 && (
-      <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-success rounded-full border border-white"></span>
-    )}
-  </button>
+                                  {/* Bell button + dropdown */}
+                                  <div className="relative">
+                                    <button
+                                      onClick={() => setShowNotifications(!showNotifications)}
+                                      className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${
+                                        showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'
+                                      } text-[19px] relative`}
+                                    >
+                                      <i className="fa-solid fa-bell"></i>
+                                      {totalNotifications > 0 && (
+                                        <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-success rounded-full border border-white"></span>
+                                      )}
+                                    </button>
 
-  {showNotifications && (
-    <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-100">
-      {/* Header */}
-      <div className="p-3 bg-white flex justify-between items-center border-b border-slate-100">
-        <span className="text-[15px] font-bold text-slate-800">Activity Feed</span>
-        <button
-          onClick={handleClearNotifications}
-          className="text-[12px] text-[#00a884] font-semibold hover:underline"
-        >
-          Clear All
-        </button>
-      </div>
+                                    {showNotifications && (
+                                      <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-[0_2px_5px_0_rgba(11,20,26,.26),0_2px_10px_0_rgba(11,20,26,.16)] z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-100">
+                                        {/* Header */}
+                                        <div className="p-3 bg-white flex justify-between items-center border-b border-slate-100">
+                                          <span className="text-[15px] font-bold text-slate-800">Activity Feed</span>
+                                          <button
+                                            onClick={handleClearNotifications}
+                                            className="text-[12px] text-[#00a884] font-semibold hover:underline"
+                                          >
+                                            Clear All
+                                          </button>
+                                        </div>
 
-      {/* Scrollable list */}
-      <div className="max-h-[70vh] overflow-y-auto bg-slate-50 p-2 space-y-2">
-        {totalNotifications === 0 ? (
-          <div className="p-8 text-center text-[14px] text-[#54656f]">
-            No new activity
-          </div>
-        ) : (
-          <>
-            {/* Pending tasks assigned to me */}
-            {activeActionableTasks.map(task => {
-              const timeStr = task.timestamp?.toDate
-                ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                : '';
-              return (
-                <div
-                  key={task.id}
-                  onClick={() => navigateToMessageFromNotification(task.id, task.groupId)}
-                  className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative mb-2"
-                >
-                  <div className="text-[13px] font-bold text-[#00a884] mb-1.5 flex items-center justify-between">
-                    <span className="flex items-center">
-                      <i className="fa-regular fa-square-check mr-1.5"></i>Pending Task
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span>
-                  </div>
-                  <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">
-                    "{task.text}"
-                  </div>
-                  {/* 👇 FIX: Added subscript for Pending Tasks 👇 */}
-                  <div className="text-[12px] text-[#00a884] font-semibold mt-1">
-                    Assigned to You 🕒
-                  </div>
-                </div>
-              );
-            })}
+                                        {/* Scrollable list */}
+                                        <div className="max-h-[70vh] overflow-y-auto bg-slate-50 p-2 space-y-2">
+                                          {totalNotifications === 0 ? (
+                                            <div className="p-8 text-center text-[14px] text-[#54656f]">
+                                              No new activity
+                                            </div>
+                                          ) : (
+                                            <>
+                                              {/* Pending tasks assigned to me */}
+                                              {activeActionableTasks.map(task => {
+                                                const timeStr = task.timestamp?.toDate
+                                                  ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                  : '';
+                                                return (
+                                                  <div
+                                                    key={task.id}
+                                                    onClick={() => navigateToMessageFromNotification(task.id, task.groupId)}
+                                                    className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all relative mb-2"
+                                                  >
+                                                    <div className="text-[13px] font-bold text-[#00a884] mb-1.5 flex items-center justify-between">
+                                                      <span className="flex items-center">
+                                                        <i className="fa-regular fa-square-check mr-1.5"></i>Pending Task
+                                                      </span>
+                                                      <span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span>
+                                                    </div>
+                                                    <div className="text-[14px] text-[#111b21] line-clamp-2 leading-snug font-medium">
+                                                      "{task.text}"
+                                                    </div>
+                                                    <div className="text-[12px] text-[#00a884] font-semibold mt-1">
+                                                      Assigned to You 🕒
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
 
-            {/* All other notifications (mentions, replies, reactions, task updates) */}
-            {genericNotifications.map(n => {
-              const timeStr = n.timestamp?.toDate
-                ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                : 'Just now';
-              return (
-                <div
-                  key={n.id}
-                  onClick={() => {
-                    if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id);
-                  }}
-                  className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative mb-2"
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#d9fdd3] flex items-center justify-center text-[#00a884] shrink-0 mt-0.5">
-                    <i
-                      className={
-                        n.type === 'reply'
-                          ? 'fa-solid fa-reply text-xs'
-                          : n.type === 'mention'
-                          ? 'fa-solid fa-at text-xs'
-                          : 'fa-solid fa-bolt text-xs'
-                      }
-                    ></i>
-                  </div>
-                  <div className="flex-1 overflow-hidden pb-4">
-                    <div className="text-[14px] font-bold text-[#111b21]">
-                      {n.type === 'reply'
-                        ? 'New Reply'
-                        : n.type === 'message'
-                        ? 'Direct Message'
-                        : n.type === 'mention'
-                        ? 'Mentioned You'
-                        : n.type === 'task'
-                        ? 'Task Update'
-                        : 'New Reaction'}
-                    </div>
-                    {/* 👇 FIX: Replaced truncate with line-clamp-2 break-words 👇 */}
-                    <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug line-clamp-2 break-words font-medium">
-                      {n.text}
-                    </div>
-                  </div>
-                  <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold bg-white pl-2">
-                    {timeStr}
-                  </div>
-                </div>
-              );
-            })}
-          </>
-        )}
-      </div>
-    </div>
-  )}
-  <button
-    onClick={() => setShowRightSidebar(!showRightSidebar)}
-    className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`}
-    title="Task Hub"
-  >
-    <i className="fa-solid fa-clipboard-list"></i>
-  </button>
-</div>
+                                              {/* All other notifications (mentions, replies, reactions, task updates) */}
+                                              {genericNotifications.map(n => {
+                                                const timeStr = n.timestamp?.toDate
+                                                  ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                  : 'Just now';
+                                                return (
+                                                  <div
+                                                    key={n.id}
+                                                    onClick={() => {
+                                                      if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id);
+                                                    }}
+                                                    className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all flex items-start gap-3 relative mb-2"
+                                                  >
+                                                    <div className="w-8 h-8 rounded-full bg-[#d9fdd3] flex items-center justify-center text-[#00a884] shrink-0 mt-0.5">
+                                                      <i
+                                                        className={
+                                                          n.type === 'reply'
+                                                            ? 'fa-solid fa-reply text-xs'
+                                                            : n.type === 'mention'
+                                                            ? 'fa-solid fa-at text-xs'
+                                                            : 'fa-solid fa-bolt text-xs'
+                                                        }
+                                                      ></i>
+                                                    </div>
+                                                    <div className="flex-1 overflow-hidden pb-4">
+                                                      <div className="text-[14px] font-bold text-[#111b21]">
+                                                        {n.type === 'reply'
+                                                          ? 'New Reply'
+                                                          : n.type === 'message'
+                                                          ? 'Direct Message'
+                                                          : n.type === 'mention'
+                                                          ? 'Mentioned You'
+                                                          : n.type === 'task'
+                                                          ? 'Task Update'
+                                                          : 'New Reaction'}
+                                                      </div>
+                                                      <div className="text-[13px] text-[#54656f] mt-0.5 leading-snug line-clamp-2 break-words font-medium">
+                                                        {n.text}
+                                                      </div>
+                                                    </div>
+                                                    <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 font-semibold bg-white pl-2">
+                                                      {timeStr}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <button
+                                    onClick={() => setShowRightSidebar(!showRightSidebar)}
+                                    className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`}
+                                    title="Task Hub"
+                                  >
+                                    <i className="fa-solid fa-clipboard-list"></i>
+                                  </button>
+                                </div>
                             </div>
                             
                             {/* --- CHAT VIEW COMPONENT --- */}
@@ -1245,20 +1244,20 @@ export default function ChatApp({ user, onLogout }) {
                     )}
 
                     {showRightSidebar && (
-  <RightSidebar
-    showRightSidebar={showRightSidebar}
-    setShowRightSidebar={setShowRightSidebar}
-    tasksAssignedToMe={tasksAssignedToMe}
-    tasksAssignedByMe={tasksAssignedByMe}
-    groups={groups}
-    dbUsers={dbUsers}
-    user={user}
-    setActiveGroup={setActiveGroup}
-    setSelectedMessage={setSelectedMessage}
-    setIsEditingTaskTitle={setIsEditingTaskTitle}
-    setActiveModal={setActiveModal}
-  />
-)}
+                      <RightSidebar
+                        showRightSidebar={showRightSidebar}
+                        setShowRightSidebar={setShowRightSidebar}
+                        tasksAssignedToMe={tasksAssignedToMe}
+                        tasksAssignedByMe={tasksAssignedByMe}
+                        groups={groups}
+                        dbUsers={dbUsers}
+                        user={user}
+                        setActiveGroup={setActiveGroup}
+                        setSelectedMessage={setSelectedMessage}
+                        setIsEditingTaskTitle={setIsEditingTaskTitle}
+                        setActiveModal={setActiveModal}
+                      />
+                    )}
 
                     {/* --- MODALS --- */}
                     {activeModal === 'context' && <ContextMenuModal selectedMessage={selectedMessage} setActiveModal={setActiveModal} setReplyingTo={setReplyingTo} chatInputRef={chatInputRef} />}
@@ -1266,8 +1265,7 @@ export default function ChatApp({ user, onLogout }) {
                     {activeModal === 'group_form_modal' && <GroupFormModal setActiveModal={setActiveModal} groupForm={groupForm} setGroupForm={setGroupForm} editingGroup={editingGroup} handleGroupSubmit={handleGroupSubmit} groupPicInputRef={groupPicInputRef} handleGroupPicUpload={handleGroupPicUpload} groupPicUploadProgress={groupPicUploadProgress} dbUsers={dbUsers} user={user} />}
                     {activeModal === 'group_settings' && <GroupSettingsModal setActiveModal={setActiveModal} activeGroup={activeGroup} groupForm={groupForm} setGroupForm={setGroupForm} dbUsers={dbUsers} user={user} currentUserData={currentUserData} isVipAdmin={isVipAdmin} handleUpdateGroupMembers={handleUpdateGroupMembers} onGroupUpdate={onGroupUpdate} />}
                     {activeModal === 'task_trail' && selectedMessage?.taskData && <TaskTrailModal selectedMessage={selectedMessage} setSelectedMessage={setSelectedMessage} activeModal={activeModal} setActiveModal={setActiveModal} isEditingTaskTitle={isEditingTaskTitle} setIsEditingTaskTitle={setIsEditingTaskTitle} newTaskTitle={newTaskTitle} setNewTaskTitle={setNewTaskTitle} handleSaveTaskTitle={handleSaveTaskTitle} delegateAssignees={delegateAssignees} setDelegateAssignees={setDelegateAssignees} showDelegateDropdown={showDelegateDropdown} setShowDelegateDropdown={setShowDelegateDropdown} handleDelegateTask={handleDelegateTask} trailComment={trailComment} setTrailComment={setTrailComment} handleAddComment={handleAddComment} handleCompleteTask={handleCompleteTask} handleArchiveTask={handleArchiveTask} trailFileInputRef={trailFileInputRef} handleTrailFileUpload={handleTrailFileUpload} activeGroup={activeGroup} dbUsers={dbUsers} user={user} currentUserData={currentUserData} isVipAdmin={isVipAdmin} />}
-                    {activeModal === 'task_convert' && <TaskConvertModal setActiveModal={setActiveModal} taskAssignees={taskAssignees} setTaskAssignees={setTaskAssignees} taskDeadline={taskDeadline} setTaskDeadline={setTaskDeadline} convertToTask={convertToTask} activeGroup={activeGroup} taskPriority={taskPriority}
-  setTaskPriority={setTaskPriority} dbUsers={dbUsers} />}
+                    {activeModal === 'task_convert' && <TaskConvertModal setActiveModal={setActiveModal} taskAssignees={taskAssignees} setTaskAssignees={setTaskAssignees} taskDeadline={taskDeadline} setTaskDeadline={setTaskDeadline} convertToTask={convertToTask} activeGroup={activeGroup} taskPriority={taskPriority} setTaskPriority={setTaskPriority} dbUsers={dbUsers} />}
                     {activeModal === 'reminder' && <ReminderModal setActiveModal={setActiveModal} reminderDateTime={reminderDateTime} setReminderDateTime={setReminderDateTime} setReminder={setReminder} />}
                     {activeModal === 'schedule_send' && <ScheduleSendModal setActiveModal={setActiveModal} scheduleDateTime={scheduleDateTime} setScheduleDateTime={setScheduleDateTime} pendingScheduledText={pendingScheduledText} handleScheduleMessage={handleScheduleMessage} />}
                     {activeModal === 'admin_edit_user' && <AdminEditUserModal setActiveModal={setActiveModal} adminForm={adminForm} setAdminForm={setAdminForm} handleEditUserSubmit={handleEditUserSubmit} />}
