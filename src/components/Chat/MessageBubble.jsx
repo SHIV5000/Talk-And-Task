@@ -12,10 +12,11 @@ const MessageBubble = React.memo(({
   scrollToMessageDirect, handleReaction, handleToggleBookmark,
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
-  jumpToPrivateSource // 👈 Trigger function
+  jumpToPrivateSource
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [isTaskExpanded, setIsTaskExpanded] = useState(false); // 👈 New state for inline accordion
   const menuRef = useRef(null);
   const emojiRef = useRef(null);
 
@@ -50,6 +51,18 @@ const MessageBubble = React.memo(({
     };
   }, [menuOpen, emojiPickerOpen]);
 
+  // Handle the "Update" action: locks focus to main chat input just like "Reply"
+  const handleInlineUpdateClick = (e) => {
+    e.stopPropagation();
+    setSelectedMessage(msg);
+    // Setting replyingTo creates the context bar above the main input
+    setReplyingTo({
+      ...msg,
+      text: `[Task Update] ${msg.text}` // Custom prefix so backend knows it's an update
+    });
+    setTimeout(() => chatInputRef.current?.focus(), 100);
+  };
+
   return (
     <div
       id={`msg-${msg.id}`}
@@ -78,7 +91,7 @@ const MessageBubble = React.memo(({
           </div>
         )}
         
-        {msg.replyToId && (
+        {msg.replyToId && !msg.text?.startsWith('[Task Update]') && (
           <div onClick={(e) => { e.stopPropagation(); scrollToMessageDirect(msg.replyToId); }} className="p-2 rounded bg-gray-50 mb-2 border-l-2 border-primary cursor-pointer opacity-80 hover:opacity-100">
             <div className="font-semibold text-[11px] text-primary">{(msg.originalSender||'').split('@')[0]}</div>
             <div className="line-clamp-2 text-xs text-text-secondary mt-0.5">{msg.originalText}</div>
@@ -92,56 +105,143 @@ const MessageBubble = React.memo(({
           </div>
         ) : (
           <>
+            {/* 👇 INLINE TASK ENGINE 👇 */}
             {msg.isTask && (
-              <div
-                className="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => { setSelectedMessage(msg); setIsEditingTaskTitle(false); setActiveModal('task_trail'); }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      msg.taskData.priority === 'High'   ? 'bg-red-100 text-red-700' :
-                      msg.taskData.priority === 'Medium' ? 'bg-amber-100 text-amber-700' :
-                      'bg-green-100 text-green-700'}`}>
-                      {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
+              <div className="mt-2 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                
+                {/* 1. Core Task View (Always Visible) */}
+                <div className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                        msg.taskData.priority === 'High'   ? 'bg-red-50 text-red-700 border-red-200' :
+                        msg.taskData.priority === 'Medium' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                        'bg-green-50 text-green-700 border-green-200'}`}>
+                        {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                        msg.taskData.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                        msg.taskData.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                        'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                        {msg.taskData.status}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                      <i className="fa-regular fa-calendar-check"></i>
+                      Due {new Date(msg.taskData.deadline).toLocaleDateString()}
                     </span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                      msg.taskData.status === 'Completed' ? 'bg-teal-100 text-teal-700' :
-                      msg.taskData.status === 'In Progress' ? 'bg-indigo-100 text-indigo-700' :
-                      'bg-amber-100 text-amber-700'}`}>
-                      {msg.taskData.status}
-                    </span>
                   </div>
-                  <span className="text-[11px] text-text-secondary flex items-center gap-1">
-                    <i className="fa-regular fa-calendar"></i>
-                    Due {new Date(msg.taskData.deadline).toLocaleDateString()}
-                  </span>
-                </div>
-                <p className="text-sm font-medium text-text-primary mb-2">{msg.text}</p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center -space-x-2">
-                    {(msg.taskData.assignees || []).slice(0, 3).map(email => {
-                      const assignee = dbUsers?.find(u => u.email === email);
-                      return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses="border-2 border-white" />;
-                    })}
-                    {(msg.taskData.assignees || []).length > 3 && (
-                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-text-secondary border-2 border-white">+{msg.taskData.assignees.length - 3}</div>
-                    )}
-                  </div>
-                  <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${msg.taskData.status === 'Completed' ? 'bg-teal-500 w-full' : msg.taskData.status === 'In Progress' ? 'bg-indigo-500 w-1/2' : 'bg-amber-500 w-1/4'}`}></div>
+                  
+                  <p className="text-sm font-medium text-slate-800 mb-3 leading-snug">{msg.text}</p>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center -space-x-2 relative group/assignees">
+                      {(msg.taskData.assignees || []).slice(0, 3).map(email => {
+                        const assignee = dbUsers?.find(u => u.email === email);
+                        return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses="border-2 border-white relative z-10" />;
+                      })}
+                      {(msg.taskData.assignees || []).length > 3 && (
+                        <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-500 border-2 border-white relative z-10">
+                          +{msg.taskData.assignees.length - 3}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* 2. Expand Toggle Button */}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); }}
+                  className="w-full bg-slate-50 border-t border-slate-200 py-2 text-xs font-semibold text-slate-500 hover:text-primary hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
+                >
+                  <i className={`fa-solid fa-chevron-${isTaskExpanded ? 'up' : 'down'} text-[10px]`}></i>
+                  {isTaskExpanded ? 'Hide Details' : `View Updates & Trail (${msg.taskData.trail?.length || 0})`}
+                </button>
+
+                {/* 3. The Accordion Body (Trail & Action Bar) */}
+                {isTaskExpanded && (
+                  <div className="bg-slate-50 border-t border-slate-200 p-3 animate-in slide-in-from-top-2">
+                    
+                    {/* The Trail */}
+                    <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-2 custom-sidebar-scroll">
+                      {(msg.taskData.trail || []).map((t, idx) => (
+                        <div key={idx} className="flex gap-3 text-sm">
+                          <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
+                            <i className={`text-[10px] ${
+                              t.action.includes('Created') ? 'fa-solid fa-bolt text-amber-500' :
+                              t.action.includes('Completed') ? 'fa-solid fa-check text-teal-500' :
+                              t.action.includes('Delegated') ? 'fa-solid fa-share-nodes text-indigo-500' :
+                              t.fileUrl ? 'fa-solid fa-paperclip text-blue-500' : 'fa-solid fa-comment-dots text-primary'
+                            }`}></i>
+                          </div>
+                          <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-bold text-[11px] text-slate-700">{(t.by||'').split('@')[0]}</span>
+                              <span className="text-[10px] font-semibold text-slate-400">{t.time?.split(',')[0]}</span>
+                            </div>
+                            <div className="text-[13px] text-slate-600 leading-snug">
+                              <span className="font-semibold">{t.action}</span>
+                              {t.to && <span> to <span className="font-semibold text-indigo-600">@{t.to}</span></span>}
+                              {t.comment && <div className="mt-1 pl-2 border-l-[3px] border-slate-200 text-slate-500 italic">"{t.comment}"</div>}
+                              {t.fileUrl && (
+                                <a href={t.fileUrl} target="_blank" rel="noreferrer" className="mt-1.5 inline-flex items-center gap-1.5 bg-blue-50 text-blue-600 px-2.5 py-1 rounded text-xs font-semibold hover:bg-blue-100 transition-colors">
+                                  <i className="fa-solid fa-download"></i> View Attachment
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Action Bar (Replaces the Modal features) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200">
+                      <button 
+                        onClick={handleInlineUpdateClick}
+                        className="bg-white border border-slate-200 hover:border-primary hover:text-primary text-slate-600 font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <i className="fa-regular fa-comment"></i> Update
+                      </button>
+                      
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setSelectedMessage(msg); setActiveModal('task_trail'); /* We can keep a mini-modal just for delegation UI if needed, or expand inline */ }}
+                        className="bg-white border border-slate-200 hover:border-indigo-500 hover:text-indigo-600 text-slate-600 font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <i className="fa-solid fa-users-rays"></i> Delegate
+                      </button>
+
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setSelectedMessage(msg); setActiveModal('task_trail'); }}
+                        className="bg-white border border-slate-200 hover:border-blue-500 hover:text-blue-600 text-slate-600 font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <i className="fa-solid fa-paperclip"></i> Attach
+                      </button>
+
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setSelectedMessage(msg); setActiveModal('task_trail'); }} // You can trigger the original complete logic here
+                        disabled={msg.taskData.status === 'Completed'}
+                        className={`font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
+                          msg.taskData.status === 'Completed' 
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                          : 'bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-500 hover:text-white'
+                        }`}
+                      >
+                        <i className="fa-solid fa-check"></i> Complete
+                      </button>
+                    </div>
+
+                  </div>
+                )}
               </div>
             )}
 
+            {/* Standard DMs / Forwards below... */}
             {!msg.isTask && msg.isPrivateMention && !msg.isPrivateForward && (
               <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700">
                 <i className="fa-solid fa-lock"></i> PRIVATE
               </div>
             )}
             
-            {/* 👇 FIX 2: Beautiful UI Card for Forwarded Mentions in DMs */}
             {!msg.isTask && msg.isPrivateForward ? (
               <div 
                 onClick={(e) => { e.stopPropagation(); jumpToPrivateSource(msg.originalMsgId, msg.originalGroupId); }}
