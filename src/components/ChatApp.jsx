@@ -575,8 +575,7 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [activeGroup, user.uid, currentUserData?.name, user.email]);
 
-    const handleSendMessage = async () => 
-        {
+   const handleSendMessage = async () => {
         if (!inputText.trim() || !activeGroup) return;
         const messageText = inputText.trim();
         setInputText(""); setEmojiPickerOpen(false);
@@ -595,53 +594,71 @@ export default function ChatApp({ user, onLogout }) {
         let replyData = null;
         if (replyingTo) {
             replyData = { replyToId: replyingTo.id, originalText: replyingTo.text || replyingTo.fileName || 'Attachment', originalSender: (replyingTo.sender||"").split('@')[0] };
-            if (replyingTo.senderUid !== user.uid) {
-                try { await addDoc(collection(db, "notifications"), { userId: replyingTo.senderUid, type: "reply", text: `${(user.email||"").split('@')[0]} replied to your message.`, messageId: replyingTo.id, groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
-            }
         }
 
         try {
-            const groupMsgRef = await addDoc(collection(db, "messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, hasReminder: false, isPrivateMention: isPrivate, allowedUsers: allowedUsers, seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: activeGroup.id, reactions: {}, ...(replyData || {}) });
-            logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, isPrivate ? `Private: ${uniqueMentions.join(', ')}` : "Public");
-            setReplyingTo(null);
-            if (chatContainerRef.current) 
-                {
-                  chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-                  setIsAtBottom(true);
-                }
-
-// Inside handleSendMessage, after the groupMsgRef is created:
-if (isPrivate && uniqueMentions.length > 0) {
-    uniqueMentions.forEach(async (mentionEmail) => {
-        if (mentionEmail === user.email) return; // Don't notify yourself
-
-        const recipient = dbUsers.find(u => u.email === mentionEmail);
-        if (recipient) {
-            await addDoc(collection(db, "notifications"), {
-                userId: recipient.uid,
-                type: "mention",
-                text: `You were privately mentioned in ${activeGroup.name} 🔒`,
-                messageId: groupMsgRef.id,   // Original Message ID
-                groupId: activeGroup.id,      // Original Group ID (Source)
-                timestamp: serverTimestamp(),
-                isRead: false
+            // 1. Create the original message in the Group
+            const groupMsgRef = await addDoc(collection(db, "messages"), { 
+                text: messageText, 
+                senderUid: user.uid, 
+                senderEmail: user.email, 
+                timestamp: serverTimestamp(), 
+                isTask: false, 
+                isPrivateMention: isPrivate, 
+                allowedUsers: allowedUsers, 
+                seenBy: [user.email], 
+                groupId: activeGroup.id, 
+                reactions: {}, 
+                ...(replyData || {}) 
             });
-        }
-    });
-}
 
+            logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, isPrivate ? `Private: ${uniqueMentions.join(', ')}` : "Public");
 
+            // 2. 👇 NEW: Create the Copy in the Mentioned User's DM
+            if (isPrivate && uniqueMentions.length > 0) {
+                uniqueMentions.forEach(async (mentionEmail) => {
+                    if (mentionEmail === user.email) return; 
 
-            
-            
+                    const recipient = dbUsers.find(u => u.email === mentionEmail);
+                    if (recipient) {
+                        // Calculate DM ID (e.g., "uid1_uid2")
+                        const dmId = [user.uid, recipient.uid].sort().join('_');
+                        
+                        await addDoc(collection(db, "messages"), {
+                            text: `[Forwarded Private Mention] ${messageText}`,
+                            senderUid: user.uid,
+                            senderEmail: user.email,
+                            timestamp: serverTimestamp(),
+                            groupId: dmId, // 👈 Saves it to the DM folder
+                            isPrivateForward: true,
+                            originalMsgId: groupMsgRef.id, // 👈 Used for "Go to Source"
+                            originalGroupId: activeGroup.id,
+                            forwardedFromGroupName: activeGroup.name,
+                            seenBy: [user.email],
+                            reactions: {}
+                        });
+
+                        // Also push the actual notification bell item
+                        await addDoc(collection(db, "notifications"), {
+                            userId: recipient.uid,
+                            type: "mention",
+                            text: `New private mention in ${activeGroup.name} 🔒`,
+                            messageId: groupMsgRef.id,
+                            groupId: activeGroup.id,
+                            timestamp: serverTimestamp(),
+                            isRead: false
+                        });
+                    }
+                });
+            }
+
+            setReplyingTo(null);
+            if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                setIsAtBottom(true);
+            }
         } catch (error) { alert("Failed to send message."); }
-    };
-
-
-
-
-
-    
+    }; 
 
     const handleReaction = async (msgId, emoji) => {
         const msg = messages.find(m => m.id === msgId);
