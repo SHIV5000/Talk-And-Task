@@ -105,6 +105,7 @@ export default function ChatApp({ user, onLogout }) {
     const inactivityTimerRef = useRef(null);
     const inactivityCountdownRef = useRef(null);
     const lastActivityRef = useRef(Date.now());
+    
 
     // ==================== OTHER STATES ====================
     const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
@@ -1219,7 +1220,9 @@ export default function ChatApp({ user, onLogout }) {
                                 messagesToRender={messagesToRender} messages={messages} activeGroup={activeGroup} user={user} currentUserData={currentUserData}
                                 isVipAdmin={isVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo}
                                 setReplyingTo={setReplyingTo} toolPreferences={toolPreferences} dbUsers={dbUsers} groups={groups} setActiveGroup={setActiveGroup}
-                                setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} setPendingScrollTarget={setPendingScrollTarget}
+                                setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} 
+                                pendingScrollTarget={pendingScrollTarget} // 👈 FIX 1: ADD THIS LINE HERE
+                                setPendingScrollTarget={setPendingScrollTarget}
                                 setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReaction}
                                 handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin} handleDeleteMessage={handleDeleteMessage}
                                 chatInputRef={chatInputRef} editingMessageId={editingMessageId} editMessageText={editMessageText}
@@ -1228,7 +1231,6 @@ export default function ChatApp({ user, onLogout }) {
                                 chatContainerRef={chatContainerRef} isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId}
                                 unreadHighlightIds={unreadHighlightIds}
                             />
-
                             {/* --- INPUT AREA COMPONENT --- */}
                             <InputArea
                                 inputText={inputText} setInputText={setInputText} isOnline={isOnline} isUploading={isUploading} activeGroup={activeGroup}
