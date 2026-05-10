@@ -58,7 +58,7 @@ const deliveredCount = (msg.deliveredTo || []).filter(e => e !== userEmail).leng
         <div className={`flex-1 bg-white rounded-xl shadow-sm border border-gray-100 ${getBorderColor()} border-l-4 px-4 py-3 relative`}>
           <div className="flex justify-between items-center mb-1">
             <span className="text-xs font-semibold text-primary">{senderName}</span>
-            <span className="text-[11px] text-text-secondary">{msg.time}</span>
+            <span className="text-[11px] text-text-secondary">{msg.time}</span> 
           </div>
           <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-text-secondary hover:text-primary p-1 rounded-full hover:bg-primary/5"><i className="fa-solid fa-ellipsis-vertical text-xs"></i></button>
           {menuOpen && (
