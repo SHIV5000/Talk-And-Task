@@ -66,6 +66,7 @@ export default function ChatView({
               isVipAdmin={isVipAdmin}
               hasReplies={messages.some(m => m.replyToId === msg.id)}
               isHighlighted={highlightedMsgId === msg.id}
+              isUnreadHighlight={unreadHighlightIds.includes(msg.id)}
               editingMessageId={editingMessageId}
               editMessageText={editMessageText}
               setEditingMessageId={setEditingMessageId}
@@ -81,10 +82,9 @@ export default function ChatView({
               setReplyingTo={setReplyingTo}
               setSelectedMessage={setSelectedMessage}
               setIsEditingTaskTitle={setIsEditingTaskTitle}
-              
               setActiveModal={setActiveModal}
               dbUsers={dbUsers}
-              isUnreadHighlight={unreadHighlightIds.includes(msg.id)}
+              
             />
           ))}
         </div>
