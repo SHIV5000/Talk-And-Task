@@ -813,8 +813,9 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) { alert("Failed to save reminder."); }
     };
 
-    const convertToTask = async () => {
+const convertToTask = async () => {
     if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
+    
     try {
       const now = new Date();
       await setDoc(doc(db, "messages", selectedMessage.id), {
@@ -843,7 +844,6 @@ export default function ChatApp({ user, onLogout }) {
             addDoc(collection(db, "notifications"), {
               userId: assigneeUser.uid,
               type: "task",
-              // 👇 NEW FORMAT: "Task Title" - Assigned to You 🕒
               text: `"${selectedMessage.text}" - Assigned to You 🕒`,
               messageId: selectedMessage.id,
               groupId: selectedMessage.groupId,
@@ -854,6 +854,17 @@ export default function ChatApp({ user, onLogout }) {
         }
       });
 
+      logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
+      setActiveModal(null); setTaskAssignees([]);
+      playTaskSound();
+    } catch (error) { 
+      alert("Failed to create task."); 
+    }
+  };
+
+
+
+    
       logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
       setActiveModal(null); setTaskAssignees([]);
       playTaskSound();
