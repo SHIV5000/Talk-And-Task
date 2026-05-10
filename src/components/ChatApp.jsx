@@ -427,6 +427,20 @@ export default function ChatApp({ user, onLogout }) {
         });
     };
 
+
+const handleUpdateGroupMembers = async (e) => {
+        e.preventDefault();
+        try {
+            const finalMembers = [...new Set([...groupForm.members, ...(activeGroup?.admins || [])])];
+            await updateDoc(doc(db, "groups", activeGroup.id), { members: finalMembers });
+            setActiveModal(null); 
+            setActiveGroup(prev => ({...prev, members: finalMembers}));
+        } catch (error) { 
+            alert("Failed to update members."); 
+        }
+    };
+    
+
     const handleGroupSubmit = async (e) => {
         e.preventDefault();
         if(!groupForm.name.trim()) return;
