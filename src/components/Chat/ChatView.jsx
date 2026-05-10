@@ -6,12 +6,13 @@ export default function ChatView({
   messagesToRender, messages, activeGroup, user, currentUserData, isVipAdmin,
   pinnedMessages, typingStatus, replyingTo, setReplyingTo, toolPreferences,
   dbUsers, groups, setActiveGroup, setShowRightSidebar, setMobileSidebarOpen,
-  setPendingScrollTarget, setActiveModal, scrollToMessageDirect, handleReaction,
+  pendingScrollTarget, setPendingScrollTarget, // 👈 Added prop
+  setActiveModal, scrollToMessageDirect, handleReaction,
   handleToggleBookmark, handleTogglePin, handleDeleteMessage, chatInputRef,
   editingMessageId, editMessageText, setEditingMessageId, setEditMessageText,
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
-  unreadHighlightIds // 👈 ADDED THIS PROP HERE TO FIX THE REFERENCE ERROR
+  unreadHighlightIds
 }) {
   const handleChatScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -26,6 +27,20 @@ export default function ChatView({
       });
     }
   };
+
+  // 👈 FIX 2: Added logic to auto-scroll when a notification is clicked
+  React.useEffect(() => {
+    if (pendingScrollTarget && messagesToRender.length > 0) {
+      const targetExists = messagesToRender.some(m => m.id === pendingScrollTarget);
+      if (targetExists) {
+        const timer = setTimeout(() => {
+          scrollToMessageDirect(pendingScrollTarget);
+          setPendingScrollTarget(null); // Clear the target after scrolling
+        }, 400); // Wait 400ms to ensure the group UI has fully painted
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [pendingScrollTarget, messagesToRender, scrollToMessageDirect, setPendingScrollTarget]);
 
   return (
     <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] wa-bg relative">
