@@ -3,34 +3,38 @@ import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 export default function RightSidebar({
   showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
-  groups, dbUsers, user, setActiveGroup, jumpToPrivateSource
+  archivedTasks, groups, dbUsers, user, setActiveGroup, navigateToMessageFromNotification
 }) {
-  const [filter, setFilter] = useState('All'); // 'All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me'
+  const [filter, setFilter] = useState('All'); // 'All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'
 
   // Combine and deduplicate tasks
   const allTasks = useMemo(() => {
     const map = new Map();
     tasksAssignedToMe.forEach(t => map.set(t.id, t));
     tasksAssignedByMe.forEach(t => map.set(t.id, t));
+    archivedTasks.forEach(t => map.set(t.id, t));
     return Array.from(map.values()).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
-  }, [tasksAssignedToMe, tasksAssignedByMe]);
+  }, [tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
 
   // Calculate Summary Stats
   const stats = {
-    total: allTasks.length,
-    completed: allTasks.filter(t => t.taskData.status === 'Completed').length,
-    pending: allTasks.filter(t => t.taskData.status !== 'Completed').length,
+    total: tasksAssignedToMe.length + tasksAssignedByMe.length, // Total Active
+    completed: allTasks.filter(t => t.taskData.status === 'Completed' && !t.taskData.isArchived).length,
+    pending: allTasks.filter(t => t.taskData.status !== 'Completed' && !t.taskData.isArchived).length,
+    archived: archivedTasks.length
   };
 
   // Apply Selected Filter
   const filteredTasks = useMemo(() => {
-    let res = allTasks;
+    if (filter === 'Archived') return archivedTasks;
+    if (filter === 'Assigned To Me') return tasksAssignedToMe;
+    if (filter === 'Created By Me') return tasksAssignedByMe;
+
+    let res = allTasks.filter(t => !t.taskData.isArchived); // Default to active for All/Pending/Completed
     if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
     if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
-    if (filter === 'Assigned To Me') res = tasksAssignedToMe;
-    if (filter === 'Created By Me') res = tasksAssignedByMe;
     return res;
-  }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe]);
+  }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
 
   return (
     <div className="w-full md:w-[350px] lg:w-[400px] shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2">
@@ -49,27 +53,31 @@ export default function RightSidebar({
       {/* Summary Dashboard */}
       <div className="p-4 bg-white border-b border-slate-200 shrink-0">
          <div className="flex gap-2 mb-4">
-            <div className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-center shadow-sm">
-                <div className="text-xl font-black text-slate-700">{stats.total}</div>
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Total</div>
+            <div className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-2 text-center shadow-sm">
+                <div className="text-lg font-black text-slate-700">{stats.total}</div>
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-1">Active</div>
             </div>
-            <div className="flex-1 bg-amber-50 border border-amber-100 rounded-xl p-2.5 text-center shadow-sm">
-                <div className="text-xl font-black text-amber-700">{stats.pending}</div>
-                <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-1">Pending</div>
+            <div className="flex-1 bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
+                <div className="text-lg font-black text-amber-700">{stats.pending}</div>
+                <div className="text-[9px] font-bold text-amber-500 uppercase tracking-wider mt-1">Pending</div>
             </div>
-            <div className="flex-1 bg-teal-50 border border-teal-100 rounded-xl p-2.5 text-center shadow-sm">
-                <div className="text-xl font-black text-teal-700">{stats.completed}</div>
-                <div className="text-[10px] font-bold text-teal-500 uppercase tracking-wider mt-1">Done</div>
+            <div className="flex-1 bg-teal-50 border border-teal-100 rounded-xl p-2 text-center shadow-sm">
+                <div className="text-lg font-black text-teal-700">{stats.completed}</div>
+                <div className="text-[9px] font-bold text-teal-500 uppercase tracking-wider mt-1">Done</div>
+            </div>
+            <div className="flex-1 bg-slate-100 border border-slate-200 rounded-xl p-2 text-center shadow-sm opacity-70">
+                <div className="text-lg font-black text-slate-500">{stats.archived}</div>
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-1">Archived</div>
             </div>
          </div>
          
-         {/* Filter Chips */}
-         <div className="flex overflow-x-auto gap-2 custom-sidebar-scroll pb-2">
-            {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me'].map(f => (
+         {/* 👇 FIX: Auto-wrapping Filter Chips */}
+         <div className="flex flex-wrap gap-2">
+            {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
                 <button 
                   key={f} 
                   onClick={()=>setFilter(f)} 
-                  className={`shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}
                 >
                   {f}
                 </button>
@@ -85,25 +93,38 @@ export default function RightSidebar({
              filteredTasks.map(task => {
                  const group = groups.find(g => g.id === task.groupId);
                  const isDone = task.taskData.status === 'Completed';
+                 const isArchived = task.taskData.isArchived;
+
                  return (
                      <div 
                         key={task.id}
+                        // 👇 FIX: Guaranteed Deep-Link Scroll Jump
                         onClick={() => {
-                            if (jumpToPrivateSource) jumpToPrivateSource(task.id, task.groupId);
+                            if (navigateToMessageFromNotification) {
+                                navigateToMessageFromNotification(task.id, task.groupId);
+                            }
                         }}
-                        className={`bg-white border rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task ${isDone ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-indigo-300'}`}
+                        className={`bg-white border rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-indigo-300'}`}
                      >
                         <div className="flex justify-between items-start mb-2.5">
                             <div className="flex gap-1.5 items-center">
-                                <div className={`w-2 h-2 rounded-full ${task.taskData.priority==='High'?'bg-red-500':task.taskData.priority==='Medium'?'bg-amber-500':'bg-green-500'}`}></div>
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{task.taskData.status}</span>
+                                {isArchived ? (
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                      <i className="fa-solid fa-box-archive"></i> Archived
+                                    </span>
+                                ) : (
+                                    <>
+                                        <div className={`w-2 h-2 rounded-full ${task.taskData.priority==='High'?'bg-red-500':task.taskData.priority==='Medium'?'bg-amber-500':'bg-green-500'}`}></div>
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{task.taskData.status}</span>
+                                    </>
+                                )}
                             </div>
                             <span className={`text-[10px] font-bold flex items-center gap-1 ${isDone ? 'text-teal-600' : 'text-slate-400'}`}>
                                 <i className="fa-regular fa-clock"></i> {new Date(task.taskData.deadline).toLocaleDateString()}
                             </span>
                         </div>
                         
-                        <div className={`text-[13px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone ? 'text-slate-500 line-through' : 'text-slate-800 group-hover/task:text-indigo-600 transition-colors'}`}>
+                        <div className={`text-[13px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone || isArchived ? 'text-slate-500 line-through' : 'text-slate-800 group-hover/task:text-indigo-600 transition-colors'}`}>
                             {task.text}
                         </div>
                         
