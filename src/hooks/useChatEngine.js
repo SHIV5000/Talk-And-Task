@@ -174,10 +174,20 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
 
     const uploadAndSendFileDB = async (pendingFileObj, onProgress) => {
         const { file, customName, caption } = pendingFileObj;
+        
+        // 1. Guard against undefined captions causing silent crashes
+        const safeCaption = caption || ""; 
+
         if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) throw new Error(`File exceeds ${MAX_FILE_SIZE_MB} MB limit.`);
 
         let processedFile = file;
-        try { if (file.type.startsWith('image/')) { const compressedBlob = await compressImage(file); const ext = customName.split('.').pop().toLowerCase(); processedFile = new File([compressedBlob], customName, { type: `image/${ext === 'png' ? 'png' : 'jpeg'}` }); } } catch (e) {}
+        try { 
+            if (file.type.startsWith('image/')) { 
+                const compressedBlob = await compressImage(file); 
+                const ext = customName.split('.').pop().toLowerCase(); 
+                processedFile = new File([compressedBlob], customName, { type: `image/${ext === 'png' ? 'png' : 'jpeg'}` }); 
+            } 
+        } catch (e) {}
 
         const storageRef = ref(storage, `chat_uploads/${Date.now()}_${customName}`);
         const uploadTask = uploadBytesResumable(storageRef, processedFile);
@@ -187,11 +197,30 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
                 (snapshot) => onProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
                 reject,
                 async () => {
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    const messageText = caption.trim() ? `${caption}\n\n📎 ${customName}` : `Shared a file: ${customName}`;
-                    await addDoc(collection(db, "messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, groupId: activeGroup.id, fileUrl: downloadURL, fileName: customName, fileType: processedFile.type, reactions: {} });
-                    logImmutableAction("FILE_UPLOAD", `Uploaded file: ${customName}`, "Public");
-                    resolve();
+                    try {
+                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        
+                        // 2. Save the exact caption as the text field
+                        await addDoc(collection(db, "messages"), { 
+                            text: safeCaption.trim(), 
+                            senderUid: user.uid, 
+                            senderEmail: user.email, 
+                            timestamp: serverTimestamp(), 
+                            isTask: false, 
+                            groupId: activeGroup.id, 
+                            fileUrl: downloadURL, 
+                            fileName: customName, 
+                            fileType: processedFile.type, 
+                            reactions: {},
+                            seenBy: [user.email],
+                            deliveredTo: [user.email]
+                        });
+                        
+                        logImmutableAction("FILE_UPLOAD", `Uploaded file: ${customName}`, "Public");
+                        resolve();
+                    } catch (err) {
+                        reject(err);
+                    }
                 }
             );
         });
