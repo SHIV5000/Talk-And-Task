@@ -391,7 +391,88 @@ export default function ChatApp({ user, onLogout }) {
             setActiveModal(null); setTaskAssignees([]);
         } catch (error) { alert("Failed to create task."); }
     };
+// --- RESTORED MODAL HANDLERS ---
+    const handleSaveTaskTitle = async () => {
+        if (!newTaskTitle.trim() || !selectedMessage) return;
+        try {
+            await updateDoc(doc(db, "messages", selectedMessage.id), { text: newTaskTitle });
+            setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
+            setIsEditingTaskTitle(false);
+        } catch (e) { alert("Failed to update task title."); }
+    };
 
+    const handleDelegateTask = async () => {
+        if (!selectedMessage || delegateAssignees.length === 0) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
+            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
+            setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
+        } catch (error) {}
+    };
+
+    const handleCompleteTask = async () => {
+        if (!selectedMessage) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
+            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
+            setActiveModal(null);
+        } catch (error) {}
+    };
+
+    const handleArchiveTask = async () => {
+        if (!selectedMessage) return;
+        try {
+            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.isArchived": true });
+            setActiveModal(null);
+        } catch (error) {}
+    };
+
+    const handleAddComment = async (closeModal = false) => {
+        if (!selectedMessage || !trailComment.trim()) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: trailComment }];
+            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
+            setTrailComment("");
+            setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
+            if (closeModal) setActiveModal(null);
+        } catch (error) {}
+    };
+
+    const handleTrailFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !selectedMessage) return;
+        setTrailFileUploading(true);
+        const uniqueFileName = `${Date.now()}_${file.name}`;
+        const uploadTask = uploadBytesResumable(ref(storage, `task_updates/${uniqueFileName}`), file);
+        uploadTask.on('state_changed', null, () => { setTrailFileUploading(false); alert("Upload failed."); }, async () => {
+            try {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                const now = new Date();
+                const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
+                await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
+                setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
+            } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
+        });
+    };
+
+    const setReminder = async () => {
+        if (!selectedMessage || !reminderDateTime) return;
+        try {
+            await addDoc(collection(db, "reminders"), { userId: user.uid, userEmail: user.email, messageId: selectedMessage.id, messageText: selectedMessage.text || selectedMessage.fileName || "File Attachment", remindAt: reminderDateTime, isTriggered: false });
+            await updateDoc(doc(db, "messages", selectedMessage.id), { hasReminder: true });
+            setActiveModal(null); setReminderDateTime("");
+        } catch (error) { alert("Failed to save reminder."); }
+    };
+
+    const handleEditUserSubmit = async (e) => {
+        e.preventDefault();
+        await updateDoc(doc(db, "users", adminForm.uid), { name: adminForm.name, isAdmin: adminForm.isAdmin, canCreateGroups: adminForm.canCreateGroups });
+        setActiveModal(null);
+    };
+    // --- END RESTORED MODAL HANDLERS ---
     const handleAddInlineComment = async (targetMsg, commentText) => {
         if (!targetMsg || !commentText.trim()) return;
         try {
