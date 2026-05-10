@@ -945,6 +945,18 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) {}
     };
 
+    // 👇 NEW: Inline Comment Handler for the Accordion UI
+    const handleAddInlineComment = async (targetMsg, commentText) => {
+        if (!targetMsg || !commentText.trim()) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
+            await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail });
+            await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
+            playTaskSound();
+        } catch (error) {}
+    };
+
     const handleToggleApprove = async (u) => { await updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved }); };
     const handleEditUserSubmit = async (e) => {
         e.preventDefault();
@@ -1232,7 +1244,7 @@ export default function ChatApp({ user, onLogout }) {
                                 setEditingMessageId={setEditingMessageId} setEditMessageText={setEditMessageText} handleSaveEdit={handleSaveEdit}
                                 setSelectedMessage={setSelectedMessage} setIsEditingTaskTitle={setIsEditingTaskTitle} messagesEndRef={messagesEndRef}
                                 chatContainerRef={chatContainerRef} isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId}
-                                unreadHighlightIds={unreadHighlightIds}
+                                unreadHighlightIds={unreadHighlightIds} handleAddInlineComment={handleAddInlineComment}
                             />
 
                             <InputArea
