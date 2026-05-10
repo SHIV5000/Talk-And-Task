@@ -136,7 +136,15 @@ const MessageBubble = React.memo(({
             )}
 
             {!msg.isTask && msg.isPrivateMention && <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> {msg.text?.startsWith('[Forwarded') ? 'FORWARDED DM' : 'PRIVATE'}</div>}
-            {!msg.isTask && msg.isPrivateForward && <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> Private from {msg.forwardedFromGroup}</div>}
+            {!msg.isTask && msg.isPrivateForward && (
+    <div 
+        onClick={() => navigateToMessageFromNotification(msg.originalMsgId, msg.originalGroupId)}
+        className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700 cursor-pointer hover:underline bg-purple-50 p-2 rounded-lg border border-purple-100"
+    >
+        <i className="fa-solid fa-share-from-square"></i> 
+        Private Mention from {msg.forwardedFromGroupName} - Click to view source
+    </div>
+)}
             
             {!msg.isTask && msg.fileUrl ? (
               <div className="flex flex-col gap-1 my-1">
