@@ -25,7 +25,6 @@ import { compressImage } from '../utils/imageUtils.js';
 import { formatMessageText, lockExtension } from '../utils/helpers.js';
 import { auth, db, storage, signOut } from '../firebase.js';
 
-// 👇 FIX: Moved the getDocs, query, and deleteDoc imports up here where they belong!
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, setDoc, getDocs, where, deleteDoc, ref, uploadBytesResumable, getDownloadURL } from '../firebase.js';
 
 const MAX_FILE_SIZE_MB = 10;
@@ -34,7 +33,7 @@ export default function ChatApp({ user, onLogout }) {
     // ==================== STATE ====================
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [activeModal, setActiveModal] = useState(null);
-   const [showRightSidebar, setShowRightSidebar] = useState(true);
+    const [showRightSidebar, setShowRightSidebar] = useState(true); // 👈 NOW OPEN BY DEFAULT
     const [viewMode, setViewMode] = useState("chat");
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -198,7 +197,7 @@ export default function ChatApp({ user, onLogout }) {
         };
     }, [showInactivityWarning]);
 
-    // 👇 CHRON JOB FOR DEADLINE ALERTS
+    // CHRON JOB FOR DEADLINE ALERTS
     useEffect(() => {
         const deadlineChecker = setInterval(() => {
             const now = new Date();
@@ -368,7 +367,6 @@ export default function ChatApp({ user, onLogout }) {
         return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
     }, []);
 
-    // Save the last active group whenever the user switches
     useEffect(() => {
         if (!activeGroup?.id || !user.uid) return;
         updateDoc(doc(db, "users", user.uid), {
@@ -376,7 +374,6 @@ export default function ChatApp({ user, onLogout }) {
         }).catch(() => {});
     }, [activeGroup?.id, user.uid]);
 
-    // Restore the last active group once the app has loaded
     useEffect(() => {
         if (isWorkspaceLoading || !groups.length || activeGroup) return;
         const savedGroupId = currentUserData?.lastActiveGroupId;
@@ -386,7 +383,6 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [isWorkspaceLoading, groups, currentUserData?.lastActiveGroupId, user.email, activeGroup]);
 
-    // Force scroll to the very bottom when the group changes
     useEffect(() => {
         if (!activeGroup || isWorkspaceLoading) return;
         setTimeout(() => {
@@ -397,7 +393,6 @@ export default function ChatApp({ user, onLogout }) {
         }, 300);
     }, [activeGroup?.id, isWorkspaceLoading]);
 
-    // Calculate unread highlight IDs
     useEffect(() => {
         if (!activeGroup?.id || !user.email) return;
         const unread = messages
@@ -457,6 +452,9 @@ export default function ChatApp({ user, onLogout }) {
 
     const tasksAssignedToMe = useMemo(() => messages.filter(m => m.isTask && m.taskData?.assignees?.includes(user.email) && !m.taskData?.isArchived).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
     const tasksAssignedByMe = useMemo(() => messages.filter(m => m.isTask && m.senderEmail === user.email && !m.taskData?.isArchived).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
+    
+    // 👇 ADDED: Archived Tasks Logic
+    const archivedTasks = useMemo(() => messages.filter(m => m.isTask && m.taskData?.isArchived && (m.senderEmail === user.email || m.taskData?.assignees?.includes(user.email))).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)), [messages, user.email]);
 
     const filteredAuditLogs = useMemo(() => {
         let logs = immutableAuditLogs;
@@ -483,7 +481,6 @@ export default function ChatApp({ user, onLogout }) {
 
     // ==================== HANDLERS ====================
     
-    // 👇 FIX: Developer Nuke Tool
     const handleWipeAllTasks = async () => {
         if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
         try {
@@ -1149,7 +1146,7 @@ export default function ChatApp({ user, onLogout }) {
                             )}                            
                         </div>
                     ) : (
-                       <div className="flex-1 flex flex-col relative h-full bg-[#efeae2] overflow-hidden wa-bg min-w-0">
+                        <div className="flex-1 flex flex-col relative h-full bg-[#efeae2] overflow-hidden wa-bg min-w-0">
                             <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200/60 safe-top">
                                 <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-primary/10 flex items-center justify-center text-primary mr-1 shrink-0">
                                   <i className="fa-solid fa-bars text-xl"></i>
@@ -1271,7 +1268,6 @@ export default function ChatApp({ user, onLogout }) {
                                     <i className="fa-solid fa-clipboard-list"></i>
                                   </button>
                                   
-                                  {/* 👇 FIX: Hidden button to trigger task wipe via admin or testing */}
                                   {(currentUserData?.isAdmin || isVipAdmin) && (
                                     <button onClick={handleWipeAllTasks} className="ml-2 bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200">Wipe Tasks</button>
                                   )}
@@ -1309,8 +1305,8 @@ export default function ChatApp({ user, onLogout }) {
                     {showRightSidebar && (
                       <RightSidebar
                         showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
-                        tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                        setSelectedMessage={setSelectedMessage} setIsEditingTaskTitle={setIsEditingTaskTitle} setActiveModal={setActiveModal}
+                        tasksAssignedByMe={tasksAssignedByMe} archivedTasks={archivedTasks} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
+                        navigateToMessageFromNotification={navigateToMessageFromNotification} 
                       />
                     )}
 
