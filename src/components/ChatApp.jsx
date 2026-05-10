@@ -31,8 +31,7 @@ export default function ChatApp({ user, onLogout }) {
     const [showNotifications, setShowNotifications] = useState(false);
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
-    
-    // Form & Input States
+    const MAX_FILE_SIZE_MB = 10;
     const [inputText, setInputText] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
     const [sidebarSearch, setSidebarSearch] = useState("");
