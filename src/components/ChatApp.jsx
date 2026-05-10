@@ -607,16 +607,9 @@ export default function ChatApp({ user, onLogout }) {
         taskDeadline, setTaskDeadline, taskPriority, setTaskPriority,
         reminderDateTime, setReminderDateTime, scheduleDateTime, setScheduleDateTime,
         pendingScheduledText, handleScheduleMessage, adminForm, setAdminForm,
-        analyticsData, isUploading, uploadProgress,handleUpdateFileCaption
+        analyticsData, isUploading, uploadProgress
     };
-const handleUpdateFileCaption = (id, newCaption) => {
-    setPendingFiles(prev => prev.map(f => 
-        f.id === id ? { ...f, caption: newCaption } : f
-    ));
-};
 
-
-    
     // ==================== RENDER ====================
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
         return (
