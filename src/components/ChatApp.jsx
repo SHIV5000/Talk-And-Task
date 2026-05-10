@@ -1,30 +1,23 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import RightSidebar from './Sidebar/RightSidebar.jsx';
 
-import AdminPanel from './Admin/AdminPanel.jsx';
+// UI Components
 import LeftSidebar from './Sidebar/LeftSidebar.jsx';
-
-import ContextMenuModal from './Modals/ContextMenuModal.jsx';
-import ProfileSettingsModal from './Modals/ProfileSettingsModal.jsx';
-import GroupFormModal from './Modals/GroupFormModal.jsx';
-import GroupSettingsModal from './Modals/GroupSettingsModal.jsx';
-import TaskTrailModal from './Modals/TaskTrailModal.jsx';
-import TaskConvertModal from './Modals/TaskConvertModal.jsx';
-import ReminderModal from './Modals/ReminderModal.jsx';
-import ScheduleSendModal from './Modals/ScheduleSendModal.jsx';
-import AdminEditUserModal from './Modals/AdminEditUserModal.jsx';
-import TaskAnalyticsModal from './Modals/TaskAnalyticsModal.jsx';
-import UploadOverlay from './Common/UploadOverlay.jsx';
-import Toast from './Common/Toast.jsx';
-import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
+import RightSidebar from './Sidebar/RightSidebar.jsx';
+import AdminPanel from './Admin/AdminPanel.jsx';
 import ChatView from './Chat/ChatView.jsx';
 import InputArea from './Chat/InputArea.jsx';
+import Toast from './Common/Toast.jsx';
+import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
+
+// 👇 NEW: Import the centralized Modal Manager
+import ModalManager from './Modals/ModalManager.jsx';
+
+// Utils & Firebase
 import { compressImage } from '../utils/imageUtils.js';
 import { formatMessageText, lockExtension } from '../utils/helpers.js';
 import { auth, db, storage, signOut } from '../firebase.js';
-
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, setDoc, getDocs, where, deleteDoc, ref, uploadBytesResumable, getDownloadURL } from '../firebase.js';
 
 const MAX_FILE_SIZE_MB = 10;
@@ -33,7 +26,7 @@ export default function ChatApp({ user, onLogout }) {
     // ==================== STATE ====================
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [activeModal, setActiveModal] = useState(null);
-    const [showRightSidebar, setShowRightSidebar] = useState(true); // 👈 NOW OPEN BY DEFAULT
+    const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [viewMode, setViewMode] = useState("chat");
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -367,6 +360,7 @@ export default function ChatApp({ user, onLogout }) {
         return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
     }, []);
 
+    // Save the last active group whenever the user switches
     useEffect(() => {
         if (!activeGroup?.id || !user.uid) return;
         updateDoc(doc(db, "users", user.uid), {
@@ -374,6 +368,7 @@ export default function ChatApp({ user, onLogout }) {
         }).catch(() => {});
     }, [activeGroup?.id, user.uid]);
 
+    // Restore the last active group once the app has loaded
     useEffect(() => {
         if (isWorkspaceLoading || !groups.length || activeGroup) return;
         const savedGroupId = currentUserData?.lastActiveGroupId;
@@ -383,6 +378,7 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [isWorkspaceLoading, groups, currentUserData?.lastActiveGroupId, user.email, activeGroup]);
 
+    // Force scroll to the very bottom when the group changes
     useEffect(() => {
         if (!activeGroup || isWorkspaceLoading) return;
         setTimeout(() => {
@@ -393,6 +389,7 @@ export default function ChatApp({ user, onLogout }) {
         }, 300);
     }, [activeGroup?.id, isWorkspaceLoading]);
 
+    // Calculate unread highlight IDs
     useEffect(() => {
         if (!activeGroup?.id || !user.email) return;
         const unread = messages
@@ -452,8 +449,6 @@ export default function ChatApp({ user, onLogout }) {
 
     const tasksAssignedToMe = useMemo(() => messages.filter(m => m.isTask && m.taskData?.assignees?.includes(user.email) && !m.taskData?.isArchived).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
     const tasksAssignedByMe = useMemo(() => messages.filter(m => m.isTask && m.senderEmail === user.email && !m.taskData?.isArchived).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
-    
-    // 👇 ADDED: Archived Tasks Logic
     const archivedTasks = useMemo(() => messages.filter(m => m.isTask && m.taskData?.isArchived && (m.senderEmail === user.email || m.taskData?.assignees?.includes(user.email))).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)), [messages, user.email]);
 
     const filteredAuditLogs = useMemo(() => {
@@ -1070,6 +1065,28 @@ export default function ChatApp({ user, onLogout }) {
         } catch(e) { alert("Failed to schedule."); }
     };
 
+    // 👇 NEW: Package all modal props cleanly to pass to ModalManager
+    const modalProps = {
+        activeModal, setActiveModal, selectedMessage, setSelectedMessage,
+        setReplyingTo, chatInputRef, currentUserData, profileForm,
+        setProfileForm, profilePicInputRef, profileUploadProgress,
+        setProfileUploadProgress, handleProfileSubmit, toolPreferences,
+        setToolPreferences, user, groupForm, setGroupForm, editingGroup,
+        handleGroupSubmit, groupPicInputRef, handleGroupPicUpload,
+        groupPicUploadProgress, dbUsers, activeGroup, isVipAdmin,
+        handleUpdateGroupMembers, onGroupUpdate, isEditingTaskTitle,
+        setIsEditingTaskTitle, newTaskTitle, setNewTaskTitle, handleSaveTaskTitle,
+        delegateAssignees, setDelegateAssignees, showDelegateDropdown,
+        setShowDelegateDropdown, handleDelegateTask, trailComment,
+        setTrailComment, handleAddComment, handleCompleteTask, handleArchiveTask,
+        trailFileInputRef, handleTrailFileUpload, taskAssignees, setTaskAssignees,
+        taskDeadline, setTaskDeadline, convertToTask, taskPriority,
+        setTaskPriority, reminderDateTime, setReminderDateTime, setReminder,
+        scheduleDateTime, setScheduleDateTime, pendingScheduledText,
+        handleScheduleMessage, adminForm, setAdminForm, handleEditUserSubmit,
+        analyticsData, isUploading, uploadProgress
+    };
+
     // ==================== RENDER ====================
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
         return (
@@ -1310,18 +1327,8 @@ export default function ChatApp({ user, onLogout }) {
                       />
                     )}
 
-                    {/* --- MODALS --- */}
-                    {activeModal === 'context' && <ContextMenuModal selectedMessage={selectedMessage} setActiveModal={setActiveModal} setReplyingTo={setReplyingTo} chatInputRef={chatInputRef} />}
-                    {activeModal === 'edit_profile' && <ProfileSettingsModal setActiveModal={setActiveModal} currentUserData={currentUserData} profileForm={profileForm} setProfileForm={setProfileForm} profilePicInputRef={profilePicInputRef} profileUploadProgress={profileUploadProgress} setProfileUploadProgress={setProfileUploadProgress} handleProfileSubmit={handleProfileSubmit} toolPreferences={toolPreferences} setToolPreferences={setToolPreferences} user={user} />}
-                    {activeModal === 'group_form_modal' && <GroupFormModal setActiveModal={setActiveModal} groupForm={groupForm} setGroupForm={setGroupForm} editingGroup={editingGroup} handleGroupSubmit={handleGroupSubmit} groupPicInputRef={groupPicInputRef} handleGroupPicUpload={handleGroupPicUpload} groupPicUploadProgress={groupPicUploadProgress} dbUsers={dbUsers} user={user} />}
-                    {activeModal === 'group_settings' && <GroupSettingsModal setActiveModal={setActiveModal} activeGroup={activeGroup} groupForm={groupForm} setGroupForm={setGroupForm} dbUsers={dbUsers} user={user} currentUserData={currentUserData} isVipAdmin={isVipAdmin} handleUpdateGroupMembers={handleUpdateGroupMembers} onGroupUpdate={onGroupUpdate} />}
-                    {activeModal === 'task_trail' && selectedMessage?.taskData && <TaskTrailModal selectedMessage={selectedMessage} setSelectedMessage={setSelectedMessage} activeModal={activeModal} setActiveModal={setActiveModal} isEditingTaskTitle={isEditingTaskTitle} setIsEditingTaskTitle={setIsEditingTaskTitle} newTaskTitle={newTaskTitle} setNewTaskTitle={setNewTaskTitle} handleSaveTaskTitle={handleSaveTaskTitle} delegateAssignees={delegateAssignees} setDelegateAssignees={setDelegateAssignees} showDelegateDropdown={showDelegateDropdown} setShowDelegateDropdown={setShowDelegateDropdown} handleDelegateTask={handleDelegateTask} trailComment={trailComment} setTrailComment={setTrailComment} handleAddComment={handleAddComment} handleCompleteTask={handleCompleteTask} handleArchiveTask={handleArchiveTask} trailFileInputRef={trailFileInputRef} handleTrailFileUpload={handleTrailFileUpload} activeGroup={activeGroup} dbUsers={dbUsers} user={user} currentUserData={currentUserData} isVipAdmin={isVipAdmin} />}
-                    {activeModal === 'task_convert' && <TaskConvertModal setActiveModal={setActiveModal} taskAssignees={taskAssignees} setTaskAssignees={setTaskAssignees} taskDeadline={taskDeadline} setTaskDeadline={setTaskDeadline} convertToTask={convertToTask} activeGroup={activeGroup} taskPriority={taskPriority} setTaskPriority={setTaskPriority} dbUsers={dbUsers} />}
-                    {activeModal === 'reminder' && <ReminderModal setActiveModal={setActiveModal} reminderDateTime={reminderDateTime} setReminderDateTime={setReminderDateTime} setReminder={setReminder} />}
-                    {activeModal === 'schedule_send' && <ScheduleSendModal setActiveModal={setActiveModal} scheduleDateTime={scheduleDateTime} setScheduleDateTime={setScheduleDateTime} pendingScheduledText={pendingScheduledText} handleScheduleMessage={handleScheduleMessage} />}
-                    {activeModal === 'admin_edit_user' && <AdminEditUserModal setActiveModal={setActiveModal} adminForm={adminForm} setAdminForm={setAdminForm} handleEditUserSubmit={handleEditUserSubmit} />}
-                    {activeModal === 'task_analytics' && <TaskAnalyticsModal setActiveModal={setActiveModal} analyticsData={analyticsData} />}
-                    {isUploading && <UploadOverlay uploadProgress={uploadProgress} fileName="" />}
+                    {/* 👇 NEW: All Modals cleanly wrapped in the Manager via Spread props */}
+                    <ModalManager {...modalProps} />
                     
                     <Toast toasts={toasts} removeToast={removeToast} />
                 </div>
