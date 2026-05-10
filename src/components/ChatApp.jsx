@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { getDocs, query, where, deleteDoc, doc, collection } from '../firebase.js';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import RightSidebar from './Sidebar/RightSidebar.jsx';
@@ -25,6 +24,8 @@ import InputArea from './Chat/InputArea.jsx';
 import { compressImage } from '../utils/imageUtils.js';
 import { formatMessageText, lockExtension } from '../utils/helpers.js';
 import { auth, db, storage, signOut } from '../firebase.js';
+
+// 👇 FIX: Moved the getDocs, query, and deleteDoc imports up here where they belong!
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, setDoc, getDocs, where, deleteDoc, ref, uploadBytesResumable, getDownloadURL } from '../firebase.js';
 
 const MAX_FILE_SIZE_MB = 10;
@@ -139,53 +140,6 @@ export default function ChatApp({ user, onLogout }) {
     const [inactivityCountdown, setInactivityCountdown] = useState(60);
 
     // ==================== EFFECTS ====================
-// 👇 ADD THIS useEffect inside ChatApp.jsx to automate Task Deadline alerts
-useEffect(() => {
-    const deadlineChecker = setInterval(() => {
-        const now = new Date();
-        const dueTasks = messages.filter(m => 
-            m.isTask && 
-            m.taskData?.status !== "Completed" && 
-            !m.taskData?.deadlineAlerted && 
-            m.taskData?.deadline && 
-            new Date(m.taskData.deadline) <= now
-        );
-
-        dueTasks.forEach(async (task) => {
-            // Mark as alerted so it doesn't spam every minute
-            await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
-
-            const involved = new Set();
-            if (task.senderEmail) involved.add(task.senderEmail);
-            (task.taskData.assignees || []).forEach(a => involved.add(a));
-
-            involved.forEach(email => {
-                const u = dbUsers.find(user => user.email === email);
-                if (u) {
-                    addDoc(collection(db, "notifications"), {
-                        userId: u.uid,
-                        type: "task",
-                        text: `⏰ DUE NOW: "${task.text}"`,
-                        messageId: task.id,
-                        groupId: task.groupId,
-                        timestamp: serverTimestamp(),
-                        isRead: false
-                    }).catch(()=>{});
-                }
-            });
-        });
-    }, 60000); // Scans once per minute
-
-    return () => clearInterval(deadlineChecker);
-}, [messages, dbUsers]);
-
-
-
-
-
-
-
-    
     useEffect(() => {
         let tipIndex = 0;
         const tipInterval = setInterval(() => {
@@ -243,6 +197,45 @@ useEffect(() => {
             clearInterval(inactivityCountdownRef.current);
         };
     }, [showInactivityWarning]);
+
+    // 👇 CHRON JOB FOR DEADLINE ALERTS
+    useEffect(() => {
+        const deadlineChecker = setInterval(() => {
+            const now = new Date();
+            const dueTasks = messages.filter(m => 
+                m.isTask && 
+                m.taskData?.status !== "Completed" && 
+                !m.taskData?.deadlineAlerted && 
+                m.taskData?.deadline && 
+                new Date(m.taskData.deadline) <= now
+            );
+
+            dueTasks.forEach(async (task) => {
+                await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
+
+                const involved = new Set();
+                if (task.senderEmail) involved.add(task.senderEmail);
+                (task.taskData.assignees || []).forEach(a => involved.add(a));
+
+                involved.forEach(email => {
+                    const u = dbUsers.find(user => user.email === email);
+                    if (u) {
+                        addDoc(collection(db, "notifications"), {
+                            userId: u.uid,
+                            type: "task",
+                            text: `⏰ DUE NOW: "${task.text}"`,
+                            messageId: task.id,
+                            groupId: task.groupId,
+                            timestamp: serverTimestamp(),
+                            isRead: false
+                        }).catch(()=>{});
+                    }
+                });
+            });
+        }, 60000); 
+
+        return () => clearInterval(deadlineChecker);
+    }, [messages, dbUsers]);
 
     const verifyAdminStatus = useCallback(async () => {
         if (!auth.currentUser) return false;
@@ -489,41 +482,23 @@ useEffect(() => {
     }, [messages, groups]);
 
     // ==================== HANDLERS ====================
-
-
-
-// ⚠️ TEMPORARY DEV TOOL: Delete this before going to production!
-const handleWipeAllTasks = async () => {
-    if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
     
-    try {
-        // Find every message that is classified as a task
-        const q = query(collection(db, "messages"), where("isTask", "==", true));
-        const snapshot = await getDocs(q);
-        
-        if (snapshot.empty) {
-            return alert("No tasks found! You are already clean.");
+    // 👇 FIX: Developer Nuke Tool
+    const handleWipeAllTasks = async () => {
+        if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
+        try {
+            const q = query(collection(db, "messages"), where("isTask", "==", true));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) return alert("No tasks found! You are already clean.");
+            const deletePromises = snapshot.docs.map(document => deleteDoc(doc(db, "messages", document.id)));
+            await Promise.all(deletePromises);
+            alert(`🧹 Successfully wiped ${snapshot.docs.length} tasks! Clean slate ready.`);
+        } catch (error) {
+            console.error("Failed to wipe tasks:", error);
+            alert("Failed to clean database. Check console.");
         }
+    };
 
-        // Delete them all in parallel
-        const deletePromises = snapshot.docs.map(document => deleteDoc(doc(db, "messages", document.id)));
-        await Promise.all(deletePromises);
-        
-        alert(`🧹 Successfully wiped ${snapshot.docs.length} tasks! Clean slate ready.`);
-    } catch (error) {
-        console.error("Failed to wipe tasks:", error);
-        alert("Failed to clean database. Check console.");
-    }
-};
-
-
-
-
-
-
-
-
-    
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
@@ -1028,7 +1003,6 @@ const handleWipeAllTasks = async () => {
         } catch (error) {}
     };
 
-    // 👇 NEW: Inline Comment Handler for the Accordion UI
     const handleAddInlineComment = async (targetMsg, commentText) => {
         if (!targetMsg || !commentText.trim()) return;
         try {
@@ -1204,14 +1178,9 @@ const handleWipeAllTasks = async () => {
                                 </div>
                                 
                                 <div className="flex items-center gap-1 shrink-0 relative">
-                                  <button
-                                    onClick={() => setShowFilterMenu(!showFilterMenu)}
-                                    className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10"
-                                    title="Filter Messages"
-                                  >
+                                  <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10" title="Filter Messages">
                                     <i className="fa-solid fa-sliders"></i>
                                   </button>
-
                                   {showFilterMenu && (
                                     <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-lg z-50 overflow-hidden animate-in fade-in py-2 w-48 border">
                                       {['all','tasks-pending','tasks-completed','messages','today','bookmarked'].map(f => (
@@ -1222,25 +1191,14 @@ const handleWipeAllTasks = async () => {
                                     </div>
                                   )}
 
-                                  <button
-                                    onClick={() => setActiveModal('task_analytics')}
-                                    className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10"
-                                    title="Task Analytics"
-                                  >
+                                  <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10" title="Task Analytics">
                                     <i className="fa-solid fa-chart-pie"></i>
                                   </button>
 
                                   <div className="relative">
-                                    <button
-                                      onClick={() => setShowNotifications(!showNotifications)}
-                                      className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${
-                                        showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'
-                                      } text-[19px] relative`}
-                                    >
+                                    <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px] relative`}>
                                       <i className="fa-solid fa-bell"></i>
-                                      {totalNotifications > 0 && (
-                                        <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-success rounded-full border border-white"></span>
-                                      )}
+                                      {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-success rounded-full border border-white"></span>}
                                     </button>
 
                                     {showNotifications && (
@@ -1312,6 +1270,11 @@ const handleWipeAllTasks = async () => {
                                   <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub">
                                     <i className="fa-solid fa-clipboard-list"></i>
                                   </button>
+                                  
+                                  {/* 👇 FIX: Hidden button to trigger task wipe via admin or testing */}
+                                  {(currentUserData?.isAdmin || isVipAdmin) && (
+                                    <button onClick={handleWipeAllTasks} className="ml-2 bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200">Wipe Tasks</button>
+                                  )}
                                 </div>
                             </div>
                             
