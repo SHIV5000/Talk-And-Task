@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 
 // UI Components
 import RightSidebar from './Sidebar/RightSidebar.jsx';
@@ -342,13 +340,12 @@ export default function ChatApp({ user, onLogout }) {
 
     const handleScheduleMessage = async (isTask = false, taskData = null) => {
         const text = pendingScheduledText || inputText.trim();
-        const dt = scheduleDateTime || msgScheduleDateTime;
-        if (!text || !dt || !activeGroup) return alert("Enter message text and a future date/time.");
-        if (new Date(dt) <= new Date()) return alert("Scheduled time must be in the future.");
+        if (!text || !scheduleDateTime || !activeGroup) return alert("Enter message text and a future date/time.");
+        if (new Date(scheduleDateTime) <= new Date()) return alert("Scheduled time must be in the future.");
         try {
-            await scheduleMessageDB(text, dt, isTask, taskData);
-            setInputText(""); setPendingScheduledText(""); setScheduleDateTime(""); setMsgScheduleDateTime(""); setShowScheduleInput(false); setActiveModal(null);
-            alert(`✅ Scheduled for ${new Date(dt).toLocaleString()}`);
+            await scheduleMessageDB(text, scheduleDateTime, isTask, taskData);
+            setInputText(""); setPendingScheduledText(""); setScheduleDateTime(""); setActiveModal(null);
+            alert(`✅ Scheduled for ${new Date(scheduleDateTime).toLocaleString()}`);
         } catch(e) { alert("Failed to schedule."); }
     };
 
@@ -390,7 +387,8 @@ export default function ChatApp({ user, onLogout }) {
             setActiveModal(null); setTaskAssignees([]);
         } catch (error) { alert("Failed to create task."); }
     };
-// --- RESTORED MODAL HANDLERS ---
+
+    // --- RESTORED MODAL HANDLERS ---
     const handleSaveTaskTitle = async () => {
         if (!newTaskTitle.trim() || !selectedMessage) return;
         try {
@@ -472,6 +470,7 @@ export default function ChatApp({ user, onLogout }) {
         setActiveModal(null);
     };
     // --- END RESTORED MODAL HANDLERS ---
+
     const handleAddInlineComment = async (targetMsg, commentText) => {
         if (!targetMsg || !commentText.trim()) return;
         try {
@@ -507,8 +506,7 @@ export default function ChatApp({ user, onLogout }) {
         });
     };
 
-
-const handleUpdateGroupMembers = async (e) => {
+    const handleUpdateGroupMembers = async (e) => {
         e.preventDefault();
         try {
             const finalMembers = [...new Set([...groupForm.members, ...(activeGroup?.admins || [])])];
@@ -520,7 +518,6 @@ const handleUpdateGroupMembers = async (e) => {
         }
     };
     
-
     const handleGroupSubmit = async (e) => {
         e.preventDefault();
         if(!groupForm.name.trim()) return;
@@ -751,7 +748,7 @@ const handleUpdateGroupMembers = async (e) => {
                                                             <div className="text-[12px] text-[#00a884] font-semibold mt-1">Assigned to You 🕒</div>
                                                           </div>
                                                         );
-                                                      })}
+                                                    })}
                                                   </div>
                                                 </div>
                                               )}
