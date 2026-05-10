@@ -488,6 +488,41 @@ useEffect(() => {
     }, [messages, groups]);
 
     // ==================== HANDLERS ====================
+
+import { getDocs, query, where, deleteDoc, doc, collection } from '../firebase.js';
+
+// ⚠️ TEMPORARY DEV TOOL: Delete this before going to production!
+const handleWipeAllTasks = async () => {
+    if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
+    
+    try {
+        // Find every message that is classified as a task
+        const q = query(collection(db, "messages"), where("isTask", "==", true));
+        const snapshot = await getDocs(q);
+        
+        if (snapshot.empty) {
+            return alert("No tasks found! You are already clean.");
+        }
+
+        // Delete them all in parallel
+        const deletePromises = snapshot.docs.map(document => deleteDoc(doc(db, "messages", document.id)));
+        await Promise.all(deletePromises);
+        
+        alert(`🧹 Successfully wiped ${snapshot.docs.length} tasks! Clean slate ready.`);
+    } catch (error) {
+        console.error("Failed to wipe tasks:", error);
+        alert("Failed to clean database. Check console.");
+    }
+};
+
+
+
+
+
+
+
+
+    
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
