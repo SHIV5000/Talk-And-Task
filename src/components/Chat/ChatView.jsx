@@ -28,7 +28,17 @@ export default function ChatView({
     }
   };
 
-  // 👇 FIX 1: Lightning-fast 50ms scroll resolution prevents cancelled clicks
+  // 👇 FIX 1: Dedicated Jump Logic for Forwarded DMs
+  const jumpToPrivateSource = (msgId, groupId) => {
+    const targetGroup = groups.find(g => g.id === groupId);
+    if (targetGroup) {
+      setActiveGroup(targetGroup);
+      setShowRightSidebar(false);
+      setMobileSidebarOpen(false);
+      setPendingScrollTarget(msgId);
+    }
+  };
+
   React.useEffect(() => {
     if (pendingScrollTarget && messagesToRender.length > 0) {
       const targetExists = messagesToRender.some(m => m.id === pendingScrollTarget);
@@ -100,6 +110,7 @@ export default function ChatView({
               setIsEditingTaskTitle={setIsEditingTaskTitle}
               setActiveModal={setActiveModal}
               dbUsers={dbUsers}
+              jumpToPrivateSource={jumpToPrivateSource} // 👈 FIX 1: Passed down to Bubble
             />
           ))}
         </div>
