@@ -12,11 +12,16 @@ const MessageBubble = React.memo(({
   scrollToMessageDirect, handleReaction, handleToggleBookmark,
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
-  jumpToPrivateSource
+  jumpToPrivateSource, handleAddInlineComment // 👈 New Trigger
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [isTaskExpanded, setIsTaskExpanded] = useState(false); // 👈 New state for inline accordion
+  const [isTaskExpanded, setIsTaskExpanded] = useState(false);
+  
+  // 👇 New States for Inline Updating
+  const [isAddingUpdate, setIsAddingUpdate] = useState(false);
+  const [inlineUpdateText, setInlineUpdateText] = useState("");
+  
   const menuRef = useRef(null);
   const emojiRef = useRef(null);
 
@@ -50,18 +55,6 @@ const MessageBubble = React.memo(({
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [menuOpen, emojiPickerOpen]);
-
-  // Handle the "Update" action: locks focus to main chat input just like "Reply"
-  const handleInlineUpdateClick = (e) => {
-    e.stopPropagation();
-    setSelectedMessage(msg);
-    // Setting replyingTo creates the context bar above the main input
-    setReplyingTo({
-      ...msg,
-      text: `[Task Update] ${msg.text}` // Custom prefix so backend knows it's an update
-    });
-    setTimeout(() => chatInputRef.current?.focus(), 100);
-  };
 
   return (
     <div
@@ -151,7 +144,7 @@ const MessageBubble = React.memo(({
 
                 {/* 2. Expand Toggle Button */}
                 <button 
-                  onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); }}
+                  onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); }}
                   className="w-full bg-slate-50 border-t border-slate-200 py-2 text-xs font-semibold text-slate-500 hover:text-primary hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
                 >
                   <i className={`fa-solid fa-chevron-${isTaskExpanded ? 'up' : 'down'} text-[10px]`}></i>
@@ -194,17 +187,17 @@ const MessageBubble = React.memo(({
                       ))}
                     </div>
 
-                    {/* Action Bar (Replaces the Modal features) */}
+                    {/* Action Bar (Buttons) */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200">
                       <button 
-                        onClick={handleInlineUpdateClick}
-                        className="bg-white border border-slate-200 hover:border-primary hover:text-primary text-slate-600 font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                        onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(!isAddingUpdate); }}
+                        className={`bg-white border hover:border-primary hover:text-primary font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm ${isAddingUpdate ? 'border-primary text-primary' : 'border-slate-200 text-slate-600'}`}
                       >
                         <i className="fa-regular fa-comment"></i> Update
                       </button>
                       
                       <button 
-                        onClick={(e) => { e.stopPropagation(); setSelectedMessage(msg); setActiveModal('task_trail'); /* We can keep a mini-modal just for delegation UI if needed, or expand inline */ }}
+                        onClick={(e) => { e.stopPropagation(); setSelectedMessage(msg); setActiveModal('task_trail'); }}
                         className="bg-white border border-slate-200 hover:border-indigo-500 hover:text-indigo-600 text-slate-600 font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
                       >
                         <i className="fa-solid fa-users-rays"></i> Delegate
@@ -218,7 +211,7 @@ const MessageBubble = React.memo(({
                       </button>
 
                       <button 
-                        onClick={(e) => { e.stopPropagation(); setSelectedMessage(msg); setActiveModal('task_trail'); }} // You can trigger the original complete logic here
+                        onClick={(e) => { e.stopPropagation(); setSelectedMessage(msg); setActiveModal('task_trail'); }}
                         disabled={msg.taskData.status === 'Completed'}
                         className={`font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
                           msg.taskData.status === 'Completed' 
@@ -229,6 +222,43 @@ const MessageBubble = React.memo(({
                         <i className="fa-solid fa-check"></i> Complete
                       </button>
                     </div>
+
+                    {/* 👇 The Embedded Text Input Box */}
+                    {isAddingUpdate && (
+                      <div className="mt-3 bg-white border border-slate-200 rounded-lg p-2 shadow-sm animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
+                        <textarea
+                          value={inlineUpdateText}
+                          onChange={(e) => setInlineUpdateText(e.target.value)}
+                          placeholder="Type your update here..."
+                          className="w-full text-sm outline-none resize-none p-1.5 bg-transparent text-slate-700 placeholder-slate-400"
+                          rows="2"
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-slate-100">
+                          <button 
+                            onClick={() => { setIsAddingUpdate(false); setInlineUpdateText(""); }} 
+                            className="text-xs text-slate-500 font-semibold px-3 py-1.5 hover:bg-slate-100 rounded-md transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleAddInlineComment(msg, inlineUpdateText);
+                              setIsAddingUpdate(false);
+                              setInlineUpdateText("");
+                            }}
+                            disabled={!inlineUpdateText.trim()}
+                            className={`text-xs font-semibold px-4 py-1.5 rounded-md transition-all shadow-sm ${
+                              inlineUpdateText.trim() 
+                              ? 'bg-primary text-white hover:bg-primary-hover hover:-translate-y-0.5' 
+                              : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            }`}
+                          >
+                            Post Update
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                   </div>
                 )}
