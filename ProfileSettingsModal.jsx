@@ -19,8 +19,8 @@ export default function ProfileSettingsModal({
       soft: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3',
       subtle: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3',
     };
-    const a = new Audio(audioUrls[profile] || audioUrls.classic);
-    a.play().catch(() => {});
+    const audioElement = new Audio(audioUrls[profile] || audioUrls.classic);
+    audioElement.play().catch(() => {});
   };
 
   return (
@@ -58,7 +58,7 @@ export default function ProfileSettingsModal({
 
               <label className="flex flex-col gap-1 cursor-pointer p-2 mt-1 hover:bg-white rounded-lg transition-colors">
                 <span className="text-[12px] font-bold text-slate-600 uppercase tracking-wider"><i className="fa-solid fa-music mr-1 text-[#54656f]"></i> Alert Sound</span>
-                <select value={toolPreferences.soundProfile || 'classic'} onChange={(e) => { setToolPreferences(prev => ({...prev, soundProfile: e.target.value})); handleSoundPreview(e.target.value); }} className="w-full p-2 border border-slate-200 rounded text-[13px] bg-slate-50 outline-none focus:ring-2 focus:ring-[#008069]/20 text-slate-700">
+                <select value={toolPreferences.soundProfile || 'classic'} onChange={(e) => { setToolPreferences(prev => ({...prev, soundProfile: e.target.value})); handleSoundPreview(e.target.value); }} className="w-full p-2 border border-slate-200 rounded-lg text-[13px] bg-slate-50 outline-none focus:ring-2 focus:ring-[#008069]/20 transition-all">
                   <option value="classic">Classic Chime</option>
                   <option value="soft">Soft Pulse</option>
                   <option value="subtle">Subtle Pop</option>
@@ -82,7 +82,7 @@ export default function ProfileSettingsModal({
             </div>
           </div>
 
-          <button onClick={handleProfileSubmit} disabled={profileUploadProgress > 0} className="w-full bg-[#008069] text-white py-4 rounded-2xl shadow-[0_4px_15px_rgba(0,128,105,0.3)] hover:bg-[#006e5a] font-bold text-[15px] transition-all hover:scale-[1.02] active:scale-[0.98]">
+          <button onClick={handleProfileSubmit} disabled={profileUploadProgress > 0} className="w-full bg-[#008069] text-white py-4 rounded-2xl shadow-[0_4px_15px_rgba(0,128,105,0.3)] hover:bg-[#006b56] disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold">
             {profileUploadProgress > 0 ? `Uploading ${Math.round(profileUploadProgress)}%` : 'Save Changes'}
           </button>
         </div>
