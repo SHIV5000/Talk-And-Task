@@ -34,7 +34,7 @@ export default function ChatApp({ user, onLogout }) {
     // ==================== STATE ====================
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [activeModal, setActiveModal] = useState(null);
-    const [showRightSidebar, setShowRightSidebar] = useState(false);
+   const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [viewMode, setViewMode] = useState("chat");
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -1149,7 +1149,7 @@ export default function ChatApp({ user, onLogout }) {
                             )}                            
                         </div>
                     ) : (
-                        <div className="flex-1 flex flex-col relative h-full bg-[#efeae2] overflow-hidden wa-bg">
+                       <div className="flex-1 flex flex-col relative h-full bg-[#efeae2] overflow-hidden wa-bg min-w-0">
                             <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200/60 safe-top">
                                 <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-primary/10 flex items-center justify-center text-primary mr-1 shrink-0">
                                   <i className="fa-solid fa-bars text-xl"></i>
