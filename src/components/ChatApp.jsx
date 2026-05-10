@@ -656,6 +656,11 @@ export default function ChatApp({ user, onLogout }) {
                     setGroupForm={setGroupForm} setEditingGroup={setEditingGroup} 
                     handleAdminArchiveGroup={(id) => updateDoc(doc(db, "groups", id), { isArchived: true })}
                     handleAdminRecoverGroup={(id) => updateDoc(doc(db, "groups", id), { isArchived: false })}
+                    messages={messages}
+                    setSelectedMessage={setSelectedMessage}
+                    setIsEditingTaskTitle={setIsEditingTaskTitle}
+                    handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
+                    handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
                 />
             ) : (
                 <div className="flex h-full w-full relative">
