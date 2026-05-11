@@ -616,6 +616,9 @@ export default function ChatApp({ user, onLogout }) {
         handleAddComment,                       // new
         messages,                               // new (for report modal)
         groups,                                 // new (for report modal)
+        trailComment, setTrailComment,
+        
+        
     };
 
     // ==================== RENDER ====================
