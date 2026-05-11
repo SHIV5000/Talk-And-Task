@@ -13,14 +13,40 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const prevMessagesCountRef = useRef(0);
 
-    // ================== AUDIO ENGINE ==================
+    // ================== AUDIO ENGINE (Web Audio – no external files) ==================
     const playAlertSound = useCallback(() => {
-        const audioUrls = { classic: "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3", soft: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_793bdf2292.mp3", subtle: "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3" };
-        const audioEl = document.getElementById('app-sound');
-        if (audioEl && window.audioPrimed) {
-            audioEl.src = audioUrls[toolPreferences.soundProfile || 'classic'] || audioUrls.classic;
-            audioEl.currentTime = 0; audioEl.volume = 1.0;
-            audioEl.play().catch(() => {});
+        try {
+            // Ensure global AudioContext exists
+            if (!window.audioCtx) {
+                window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            // Resume if suspended (browser autoplay policy)
+            if (window.audioCtx.state === 'suspended') {
+                window.audioCtx.resume();
+            }
+
+            const oscillator = window.audioCtx.createOscillator();
+            const gainNode = window.audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(window.audioCtx.destination);
+
+            const frequencies = {
+                classic: 880,   // A5
+                soft: 660,      // E5
+                subtle: 523.25  // C5
+            };
+            const freq = frequencies[toolPreferences.soundProfile] || frequencies.classic;
+
+            oscillator.frequency.setValueAtTime(freq, window.audioCtx.currentTime);
+            oscillator.type = 'sine';
+
+            gainNode.gain.setValueAtTime(0.3, window.audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, window.audioCtx.currentTime + 0.2);
+
+            oscillator.start(window.audioCtx.currentTime);
+            oscillator.stop(window.audioCtx.currentTime + 0.2);
+        } catch (e) {
+            // Web Audio not supported – silently ignore
         }
     }, [toolPreferences.soundProfile]);
 
@@ -65,7 +91,10 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         if (unseenMsgs.length === 0) return;
         const batchUpdate = async () => {
             for (const msg of unseenMsgs) {
-                try { await updateDoc(doc(db, "messages", msg.id), { seenBy: [...(msg.seenBy || []), user.email], deliveredTo: [...new Set([...(msg.deliveredTo || []), user.email])] }); } catch (e) {}
+                try {
+                    const updatedSeenBy = [...(msg.seenBy || []), user.email];
+                    await updateDoc(doc(db, "messages", msg.id), { seenBy: updatedSeenBy, deliveredTo: [...new Set([...(msg.deliveredTo || []), user.email])] });
+                } catch (e) {}
             }
         };
         batchUpdate();
