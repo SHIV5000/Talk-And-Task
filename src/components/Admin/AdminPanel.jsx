@@ -1,15 +1,9 @@
-import React from 'react';
-import ContextMenuModal from './ContextMenuModal.jsx';
-import ProfileSettingsModal from './ProfileSettingsModal.jsx';
-import GroupFormModal from './GroupFormModal.jsx';
-import GroupSettingsModal from './GroupSettingsModal.jsx';
-import TaskTrailModal from './TaskTrailModal.jsx';
-import TaskConvertModal from './TaskConvertModal.jsx';
-import ReminderModal from './ReminderModal.jsx';
-import ScheduleSendModal from './ScheduleSendModal.jsx';
-import AdminEditUserModal from './AdminEditUserModal.jsx';
-import TaskAnalyticsModal from './TaskAnalyticsModal.jsx';
-import UploadOverlay from '../Common/UploadOverlay.jsx';
+import React, { useState, useMemo } from 'react';
+import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import { db } from '../../firebase.js';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 export default function ModalManager(props) {
   const { activeModal, isUploading, uploadProgress } = props;
