@@ -617,6 +617,7 @@ export default function ChatApp({ user, onLogout }) {
         messages,                               // new (for report modal)
         groups,                                 // new (for report modal)
         trailComment, setTrailComment,
+        readOnly: viewMode === "admin",
         
         
     };
@@ -658,7 +659,7 @@ export default function ChatApp({ user, onLogout }) {
             <audio id="app-sound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3" preload="auto" className="hidden"></audio>
 
             {viewMode === "admin" ? (
-                <AdminPanel
+           <AdminPanel
   setViewMode={setViewMode}
   setActiveModal={setActiveModal}
   dbUsers={dbUsers}
