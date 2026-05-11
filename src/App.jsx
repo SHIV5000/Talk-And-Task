@@ -14,7 +14,7 @@ function FallbackScreen({ error }) {
       <div className="max-w-md text-center">
         <i className="fa-solid fa-triangle-exclamation text-4xl text-amber-500 mb-4"></i>
         <h1 className="text-xl font-bold mb-2">Something went wrong</h1>
-        <p className="text-sm text-text-secondary mb-4">
+        <p className="text-sm text-text-secondary mb-4 break-all whitespace-normal max-h-40 overflow-auto">
           {error?.message || 'The application encountered an unexpected error.'}
         </p>
         <button
@@ -33,7 +33,7 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState('');
   const [crash, setCrash] = useState(null);
-  const [timeoutReached, setTimeoutReached] = useState(false);
+  const [chatAppReady, setChatAppReady] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -42,13 +42,6 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
-
-  useEffect(() => {
-    if (user && !timeoutReached) {
-      const timer = setTimeout(() => setTimeoutReached(true), 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [user, timeoutReached]);
 
   const handleGoogleLogin = async (e) => {
     e.preventDefault();
@@ -133,19 +126,21 @@ export default function App() {
     );
   }
 
-  if (timeoutReached && !crash) {
-    return <FallbackScreen error={new Error('The app is taking too long to load. Please reload.')} />;
-  }
-
-  if (crash) {
-    return <FallbackScreen error={crash} />;
-  }
-
   return (
     <ErrorBoundary>
-      <React.Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-surface text-primary font-bold">Loading…</div>}>
-        <ChatApp user={user} onLogout={handleLogout} />
-      </React.Suspense>
+      <SafeChatApp user={user} onLogout={handleLogout} onCrash={setCrash} />
     </ErrorBoundary>
   );
+}
+
+// Thin wrapper that catches synchronous errors and passes them to the fallback
+function SafeChatApp({ user, onLogout, onCrash }) {
+  try {
+    // ChatApp renders everything, but if it throws, we catch it here
+    return <ChatApp user={user} onLogout={onLogout} />;
+  } catch (error) {
+    // Immediately show the error
+    onCrash(error);
+    return null;
+  }
 }
