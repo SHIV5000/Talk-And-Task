@@ -27,7 +27,7 @@ export default function TaskTrailModal({
   user,
   currentUserData,
   isVipAdmin,
-  readOnly,          // new prop
+  readOnly,
 }) {
   const modalRef = useRef(null);
   if (!selectedMessage?.taskData) return null;
