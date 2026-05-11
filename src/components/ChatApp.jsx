@@ -117,6 +117,69 @@ export default function ChatApp({ user, onLogout }) {
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
 
+    // ==================== AUDIO ENGINE ====================
+    const playAlertSound = useCallback(() => {
+        try {
+            if (!window.audioCtx) {
+                window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (window.audioCtx.state === 'suspended') {
+                window.audioCtx.resume();
+            }
+            const oscillator = window.audioCtx.createOscillator();
+            const gainNode = window.audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(window.audioCtx.destination);
+
+            const frequencies = {
+                classic: 880,
+                soft: 660,
+                subtle: 523.25
+            };
+            const freq = frequencies[toolPreferences.soundProfile] || frequencies.classic;
+            oscillator.frequency.setValueAtTime(freq, window.audioCtx.currentTime);
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.3, window.audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, window.audioCtx.currentTime + 0.2);
+            oscillator.start(window.audioCtx.currentTime);
+            oscillator.stop(window.audioCtx.currentTime + 0.2);
+        } catch (e) {}
+    }, [toolPreferences.soundProfile]);
+
+    const playTaskSound = useCallback(() => {
+        try {
+            if (!window.audioCtx) return;
+            const now = window.audioCtx.currentTime;
+            [523.25, 659.25].forEach((freq, i) => {
+                const osc = window.audioCtx.createOscillator();
+                const gain = window.audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(window.audioCtx.destination);
+                osc.frequency.setValueAtTime(freq, now + i * 0.12);
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.3, now + i * 0.12);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.15);
+                osc.start(now + i * 0.12);
+                osc.stop(now + i * 0.12 + 0.15);
+            });
+        } catch (e) {}
+    }, []);
+
+    // ==================== AUDIO UNLOCK ON USER GESTURE ====================
+    useEffect(() => {
+        window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const resumeAudio = () => {
+            if (window.audioCtx && window.audioCtx.state === 'suspended') {
+                window.audioCtx.resume();
+            }
+        };
+        window.addEventListener('click', resumeAudio, { once: true });
+        window.addEventListener('touchstart', resumeAudio, { once: true });
+        return () => {
+            window.removeEventListener('click', resumeAudio);
+            window.removeEventListener('touchstart', resumeAudio);
+        };
+    }, []);
 
     // ==================== UI LOGIC / STARTUP ====================
     useEffect(() => {
@@ -158,7 +221,7 @@ export default function ChatApp({ user, onLogout }) {
         setUnreadHighlightIds([]);
     }, [activeGroup?.id, user.email, messages]);
 
-    // Chron Job for Tasks (Still directly modifies DB based on global state)
+    // Chron Job for Tasks
     useEffect(() => {
         const deadlineChecker = setInterval(() => {
             const now = new Date();
@@ -176,7 +239,6 @@ export default function ChatApp({ user, onLogout }) {
         }, 60000); 
         return () => clearInterval(deadlineChecker);
     }, [messages, dbUsers]);
-
 
     // ==================== MEMOS ====================
     const myGroups = useMemo(() => {
@@ -239,10 +301,7 @@ export default function ChatApp({ user, onLogout }) {
         return { total: allTasks.length, completed: completed.length, pending: pending.length, inProgress: inProgress.length, overdue: overdue.length, overdueList: overdue.slice(0,10), completionRate: allTasks.length ? Math.round((completed.length / allTasks.length) * 100) : 0 };
     }, [messages, groups]);
 
-
     // ==================== ENGINE ACTION WRAPPERS ====================
-    // These functions connect the UI interactions to the Backend Engine
-
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
@@ -349,7 +408,7 @@ export default function ChatApp({ user, onLogout }) {
         } catch(e) { alert("Failed to schedule."); }
     };
 
-    // Tasks Management UI Wrappers (Slowly moving inline, kept for compatibility)
+    // Tasks Management UI Wrappers
     const notifyInvolvedInTask = async (taskMsg, actionText) => {
         const involved = new Set();
         if (taskMsg.senderEmail) involved.add(taskMsg.senderEmail);
@@ -469,7 +528,6 @@ export default function ChatApp({ user, onLogout }) {
         await updateDoc(doc(db, "users", adminForm.uid), { name: adminForm.name, isAdmin: adminForm.isAdmin, canCreateGroups: adminForm.canCreateGroups });
         setActiveModal(null);
     };
-    // --- END RESTORED MODAL HANDLERS ---
 
     const handleAddInlineComment = async (targetMsg, commentText) => {
         if (!targetMsg || !commentText.trim()) return;
@@ -481,7 +539,6 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) {}
     };
 
-    // Miscellaneous Management Handlers
     const handleWipeAllTasks = async () => {
         if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
         try {
@@ -573,7 +630,6 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) { alert("Profile update failed."); setProfileUploadProgress(0); }
     };
 
-    // Sidebar UI Helpers
     const getUnreadInfoForUser = useCallback((otherUserEmail, otherUserUid) => {
         const dmIdList = [user.uid, otherUserUid].sort();
         const dmIdStr = dmIdList.join('_');
@@ -607,19 +663,17 @@ export default function ChatApp({ user, onLogout }) {
         taskDeadline, setTaskDeadline, taskPriority, setTaskPriority,
         reminderDateTime, setReminderDateTime, scheduleDateTime, setScheduleDateTime,
         pendingScheduledText, handleScheduleMessage, adminForm, setAdminForm,
-        analyticsData, isUploading, uploadProgress,         
-        handleDelegateTask,                     // new
-        handleCompleteTask,                     // new
-        handleArchiveTask,                      // new
-        trailFileInputRef,                      // new
-        handleTrailFileUpload,                  // new
-        handleAddComment,                       // new
-        messages,                               // new (for report modal)
-        groups,                                 // new (for report modal)
+        analyticsData, isUploading, uploadProgress,
+        handleDelegateTask,
+        handleCompleteTask,
+        handleArchiveTask,
+        trailFileInputRef,
+        handleTrailFileUpload,
+        handleAddComment,
+        messages,
+        groups,
         trailComment, setTrailComment,
         readOnly: viewMode === "admin",
-        
-        
     };
 
     // ==================== RENDER ====================
@@ -809,9 +863,20 @@ export default function ChatApp({ user, onLogout }) {
                                       </div>
                                     )}
                                   </div>
-
-                                  <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                    <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                    <button
+                                      onClick={() => {
+                                        if (!window.audioCtx) {
+                                          window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                                        }
+                                        window.audioCtx.resume().then(() => playAlertSound());
+                                      }}
+                                      className="bg-primary text-white px-3 py-1 rounded-lg text-xs font-bold"
+                                    >
+                                      Test Sound
+                                    </button>
                                   {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200">Wipe Tasks</button>}
+                                    
                                 </div>
                             </div>
                             
