@@ -1,49 +1,66 @@
-const CACHE_NAME = 'talk-task-v5';
-const urlsToCache = [
+const CACHE_NAME = 'talk-task-cache-v6';
+const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/icon-192.png',
   '/icon-512.png'
 ];
 
-// Install event – cache static assets
+// Install – cache only your own static assets
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
   );
 });
 
-// Activate event – clean old caches
+// Activate – clean old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(name => {
-          if (name !== CACHE_NAME) return caches.delete(name);
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
+    ).then(() => self.clients.claim())
   );
 });
 
-// Fetch – network first, fallback to cache
+// Fetch – network first for everything except static assets
 self.addEventListener('fetch', event => {
+  const { request } = event;
+
+  // NEVER cache Firestore / Firebase API calls – always go to network
+  if (
+    request.url.includes('firestore.googleapis.com') ||
+    request.url.includes('firebasestorage.googleapis.com') ||
+    request.url.includes('identitytoolkit.googleapis.com') ||
+    request.url.includes('securetoken.googleapis.com') ||
+    request.url.includes('googleapis.com')
+  ) {
+    // Let the network request pass through untouched – service worker stays silent
+    return;
+  }
+
+  // For your own static assets, try cache first, then network
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        // Cache successful GET requests
-        if (event.request.method === 'GET') {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+    caches.match(request).then(cached => {
+      const fetchPromise = fetch(request).then(response => {
+        // Cache successful GET requests for your own origin
+        if (response && response.status === 200 && request.method === 'GET') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
         }
         return response;
-      })
-      .catch(() => caches.match(event.request))
+      });
+      return cached || fetchPromise;
+    }).catch(() => {
+      // If both cache and network fail (offline), return a simple fallback for navigation
+      if (request.mode === 'navigate') {
+        return caches.match('/index.html');
+      }
+    })
   );
 });
 
-// Push notification (triggered from the app when page is hidden)
+// Push notifications
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
     const { title, body } = event.data;
