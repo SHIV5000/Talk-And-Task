@@ -8,14 +8,13 @@ import {
 import ChatApp from './components/ChatApp.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 
-// Simple fallback component if ChatApp crashes
 function FallbackScreen({ error }) {
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-surface text-text-primary p-8">
       <div className="max-w-md text-center">
         <i className="fa-solid fa-triangle-exclamation text-4xl text-amber-500 mb-4"></i>
         <h1 className="text-xl font-bold mb-2">Something went wrong</h1>
-        <p className="text-sm text-text-secondary mb-4">
+        <p className="text-sm text-text-secondary mb-4 break-all whitespace-normal max-h-40 overflow-auto">
           {error?.message || 'The application encountered an unexpected error.'}
         </p>
         <button
@@ -33,8 +32,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [crash, setCrash] = useState(null);   // catches ChatApp crash
-  const [timeoutReached, setTimeoutReached] = useState(false);
+  const [crash, setCrash] = useState(null);
+  const [chatAppReady, setChatAppReady] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -43,14 +42,6 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
-
-  // Fallback timeout: if we have a user but the app is blank for 10 seconds, show a reload button
-  useEffect(() => {
-    if (user && !timeoutReached) {
-      const timer = setTimeout(() => setTimeoutReached(true), 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [user, timeoutReached]);
 
   const handleGoogleLogin = async (e) => {
     e.preventDefault();
@@ -88,8 +79,8 @@ export default function App() {
         }, { merge: true });
       }
 
-      // Record login timestamp
       await updateDoc(doc(db, "users", loggedInUser.uid), { lastLogin: serverTimestamp() }).catch(() => {});
+
     } catch (err) {
       setAuthError("Google Sign-In Cancelled or Failed.");
     }
@@ -104,7 +95,6 @@ export default function App() {
     await signOut(auth);
   };
 
-  // ----- RENDER LOGIC -----
   if (!authChecked) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-surface text-primary">
@@ -136,30 +126,20 @@ export default function App() {
     );
   }
 
-  // Safety timeout – show a reload option if the app stays blank
-  if (timeoutReached && !crash) {
-    return <FallbackScreen error={new Error('The app is taking too long to load. Please reload.')} />;
-  }
-
-  // ChatApp crashed – show fallback with the error message
-  if (crash) {
-    return <FallbackScreen error={crash} />;
-  }
-
   return (
     <ErrorBoundary>
-      <React.Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-surface text-primary font-bold">Loading…</div>}>
-        <ChatAppWrapper user={user} onLogout={handleLogout} onCrash={setCrash} />
-      </React.Suspense>
+      <SafeChatApp user={user} onLogout={handleLogout} onCrash={setCrash} />
     </ErrorBoundary>
   );
 }
 
-// Thin wrapper to catch any synchronous rendering errors
-function ChatAppWrapper({ user, onLogout, onCrash }) {
+// Thin wrapper that catches synchronous errors and passes them to the fallback
+function SafeChatApp({ user, onLogout, onCrash }) {
   try {
+    // ChatApp renders everything, but if it throws, we catch it here
     return <ChatApp user={user} onLogout={onLogout} />;
   } catch (error) {
+    // Immediately show the error
     onCrash(error);
     return null;
   }
