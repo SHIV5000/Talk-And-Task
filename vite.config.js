@@ -7,23 +7,27 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      manifest: {
-        name: 'Talk & Task Board Edition',
-        short_name: 'Talk&Task',
-        description: 'Team communication with built‑in task management',
-        theme_color: '#4F46E5',
-        background_color: '#F8F7F4',
-        display: 'standalone',
-        icons: [
-        { src: 'https://cdn-icons-png.flaticon.com/512/825/825590.png', sizes: '192x192', type: 'image/png' },
-        { src: 'https://cdn-icons-png.flaticon.com/512/825/825590.png', sizes: '512x512', type: 'image/png' }
-    ]
-      },
+      injectManifest: false,
       workbox: {
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
+      },
+      manifest: {
+        name: 'Talk & Task Enterprise',
+        short_name: 'Talk&Task',
+        description: 'Corporate Coordination Portal',
+        theme_color: '#4F46E5',
+        background_color: '#F8F7F4',
+        display: 'standalone',
+        icons: [
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' }
+        ]
       }
     })
-  ]
+  ],
+  optimizeDeps: {
+    include: ['jspdf', 'jspdf-autotable'],
+  },
 });
