@@ -7,8 +7,6 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // This workbox config tells the auto‑generated service worker
-      // to NEVER cache any googleapis.com URLs (Firestore, Auth, Storage)
       workbox: {
         cleanupOutdatedCaches: true,
         skipWaiting: true,
@@ -16,7 +14,7 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.googleapis\.com\/.*/,
-            handler: 'NetworkOnly',   // always let Firebase requests through
+            handler: 'NetworkOnly',
           },
         ],
       },
@@ -34,7 +32,6 @@ export default defineConfig({
       }
     })
   ],
-  // This line ensures jsPDF and its autotable plugin are pre‑bundled correctly
   optimizeDeps: {
     include: ['jspdf', 'jspdf-autotable'],
   },
