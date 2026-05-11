@@ -1,10 +1,9 @@
-import { serverTimestamp, doc, updateDoc } from 'firebase/firestore';
-import { db } from './firebase.js';
 import React, { useState, useEffect } from 'react';
+import { serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import {
   auth, onAuthStateChanged, signOut,
   GoogleAuthProvider, signInWithPopup, setPersistence, inMemoryPersistence,
-  db, collection, query, where, getDocs, setDoc, doc, serverTimestamp
+  db, collection, query, where, getDocs, setDoc
 } from './firebase.js';
 import ChatApp from './components/ChatApp.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -35,6 +34,7 @@ export default function App() {
       const loggedInUser = result.user;
       const usersSnap = await getDocs(query(collection(db, "users"), where("uid", "==", loggedInUser.uid)));
       const isMaster = (loggedInUser.email || '').toLowerCase() === 'shivsuri1@gmail.com';
+
       if (usersSnap.empty) {
         const allUsersSnap = await getDocs(collection(db, "users"));
         const isFirstUser = allUsersSnap.empty;
@@ -54,9 +54,22 @@ export default function App() {
           isApproved: true, isAdmin: true, canCreateGroups: true
         }, { merge: true });
       }
+
+      // Record login timestamp
+      await updateDoc(doc(db, "users", loggedInUser.uid), { lastLogin: serverTimestamp() }).catch(() => {});
+
     } catch (err) {
       setAuthError("Google Sign-In Cancelled or Failed.");
     }
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (user) {
+        await updateDoc(doc(db, "users", user.uid), { lastLogout: serverTimestamp() }).catch(() => {});
+      }
+    } catch (e) {}
+    await signOut(auth);
   };
 
   if (!authChecked) {
@@ -92,7 +105,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <ChatApp user={user} onLogout={() => signOut(auth)} />
+      <ChatApp user={user} onLogout={handleLogout} />
     </ErrorBoundary>
   );
 }
