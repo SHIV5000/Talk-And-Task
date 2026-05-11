@@ -607,7 +607,7 @@ export default function ChatApp({ user, onLogout }) {
         taskDeadline, setTaskDeadline, taskPriority, setTaskPriority,
         reminderDateTime, setReminderDateTime, scheduleDateTime, setScheduleDateTime,
         pendingScheduledText, handleScheduleMessage, adminForm, setAdminForm,
-        analyticsData, isUploading, uploadProgress,trailComment, setTrailComment,         
+        analyticsData, isUploading, uploadProgress,         
         handleDelegateTask,                     // new
         handleCompleteTask,                     // new
         handleArchiveTask,                      // new
