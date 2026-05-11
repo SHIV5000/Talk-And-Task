@@ -669,6 +669,13 @@ export default function ChatApp({ user, onLogout }) {
                     setIsEditingTaskTitle={setIsEditingTaskTitle}
                     handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
                     handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
+                    setGroupForm={setGroupForm}
+                      setEditingGroup={setEditingGroup}
+                      groupForm={groupForm}
+                      setActiveModal={setActiveModal}
+                      groupPicUploadProgress={groupPicUploadProgress}
+                      handleGroupPicUpload={handleGroupPicUpload}
+                    
                 />
             ) : (
                 <div className="flex h-full w-full relative">
