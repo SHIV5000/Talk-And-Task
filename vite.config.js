@@ -7,12 +7,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectManifest: false,
-      workbox: {
-        cleanupOutdatedCaches: true,
-        skipWaiting: true,
-        clientsClaim: true,
-      },
+      injectManifest: false,          // we use our own service worker
+      strategies: 'injectManifest',
+      srcDir: 'public',
+      filename: 'service-worker.js',
       manifest: {
         name: 'Talk & Task Enterprise',
         short_name: 'Talk&Task',
