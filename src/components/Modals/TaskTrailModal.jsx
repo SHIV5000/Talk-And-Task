@@ -27,6 +27,7 @@ export default function TaskTrailModal({
   user,
   currentUserData,
   isVipAdmin,
+  readOnly,          // new prop
 }) {
   const modalRef = useRef(null);
   if (!selectedMessage?.taskData) return null;
@@ -53,7 +54,6 @@ export default function TaskTrailModal({
             </button>
             <h2 className="text-lg font-bold text-text-primary">Task Details</h2>
           </div>
-          {/* Priority + Status badges */}
           <div className="flex items-center gap-2">
             <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
               taskData.priority === 'High'   ? 'bg-red-100 text-red-700' :
@@ -70,19 +70,14 @@ export default function TaskTrailModal({
           </div>
         </div>
 
-        {/* Body – scrollable */}
+        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {/* Task title (editable by involved people) */}
+          {/* Task title */}
           <div>
             {isEditingTaskTitle ? (
               <div className="flex gap-2">
-                <textarea
-                  autoFocus
-                  value={newTaskTitle}
-                  onChange={e => setNewTaskTitle(e.target.value)}
-                  className="w-full text-base font-medium p-3 rounded-xl border border-primary outline-none resize-none focus:ring-2 focus:ring-primary/20"
-                  rows={2}
-                />
+                <textarea autoFocus value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
+                  className="w-full text-base font-medium p-3 rounded-xl border border-primary outline-none resize-none focus:ring-2 focus:ring-primary/20" rows={2} />
                 <div className="flex flex-col gap-2">
                   <button onClick={handleSaveTaskTitle} className="w-9 h-9 bg-primary text-white rounded-lg flex items-center justify-center hover:bg-primary-hover">
                     <i className="fa-solid fa-check"></i>
@@ -95,11 +90,9 @@ export default function TaskTrailModal({
             ) : (
               <div className="flex items-start justify-between">
                 <h3 className="text-base font-semibold text-text-primary">{task.text}</h3>
-                {(taskData.assignees?.includes(user.email) || task.senderEmail === user.email || isAdmin) && (
-                  <button
-                    onClick={() => { setIsEditingTaskTitle(true); setNewTaskTitle(task.text); }}
-                    className="text-xs font-medium text-text-secondary hover:text-primary ml-2 whitespace-nowrap"
-                  >
+                {!readOnly && (taskData.assignees?.includes(user.email) || task.senderEmail === user.email || isAdmin) && (
+                  <button onClick={() => { setIsEditingTaskTitle(true); setNewTaskTitle(task.text); }}
+                    className="text-xs font-medium text-text-secondary hover:text-primary ml-2 whitespace-nowrap">
                     <i className="fa-solid fa-pen mr-1"></i>Edit
                   </button>
                 )}
@@ -107,51 +100,35 @@ export default function TaskTrailModal({
             )}
           </div>
 
-          {/* Info grid: assignees + deadline */}
+          {/* Info grid */}
           <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
             <div>
               <div className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Assignees</div>
               <div className="flex items-center -space-x-2">
                 {(taskData.assignees || []).slice(0, 5).map(email => {
                   const assignee = dbUsers?.find(u => u.email === email);
-                  return (
-                    <MemoizedAvatar
-                      key={email}
-                      uid={assignee?.uid || email}
-                      url={assignee?.profilePicUrl}
-                      name={assignee?.name || email.split('@')[0]}
-                      sizeClass="w-8 h-8"
-                      extraClasses="border-2 border-white"
-                    />
-                  );
+                  return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-8 h-8" extraClasses="border-2 border-white" />;
                 })}
                 {(taskData.assignees || []).length > 5 && (
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-text-secondary border-2 border-white">
-                    +{taskData.assignees.length - 5}
-                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-text-secondary border-2 border-white">+{taskData.assignees.length - 5}</div>
                 )}
               </div>
             </div>
             <div className="text-right">
               <div className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Deadline</div>
-              <span className="text-sm font-semibold text-warning">
-                {new Date(taskData.deadline).toLocaleDateString()}
-              </span>
+              <span className="text-sm font-semibold text-warning">{new Date(taskData.deadline).toLocaleDateString()}</span>
             </div>
           </div>
 
           {/* Progress bar */}
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className={`h-2 rounded-full transition-all ${
-                taskData.status === 'Completed' ? 'bg-teal-500 w-full' :
-                taskData.status === 'In Progress' ? 'bg-indigo-500 w-1/2' :
-                'bg-amber-500 w-1/4'
-              }`}
-            ></div>
+            <div className={`h-2 rounded-full transition-all ${
+              taskData.status === 'Completed' ? 'bg-teal-500 w-full' :
+              taskData.status === 'In Progress' ? 'bg-indigo-500 w-1/2' :
+              'bg-amber-500 w-1/4'}`}></div>
           </div>
 
-          {/* Trail timeline */}
+          {/* Timeline */}
           <div className="relative pl-6 space-y-5 before:absolute before:inset-y-0 before:left-[11px] before:w-px before:bg-gray-200">
             {taskData.trail.map((item, idx) => (
               <div key={idx} className="flex gap-4 relative z-10">
@@ -171,17 +148,10 @@ export default function TaskTrailModal({
                     )}
                   </div>
                   {item.comment && (
-                    <p className="mt-2 text-sm text-text-primary bg-white p-3 rounded-lg border border-gray-100">
-                      {item.comment}
-                    </p>
+                    <p className="mt-2 text-sm text-text-primary bg-white p-3 rounded-lg border border-gray-100">{item.comment}</p>
                   )}
                   {item.fileUrl && (
-                    <a
-                      href={item.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 mt-2 text-xs font-bold text-primary hover:underline"
-                    >
+                    <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 mt-2 text-xs font-bold text-primary hover:underline">
                       <i className="fa-solid fa-download"></i> Download Attached Resource
                     </a>
                   )}
@@ -191,37 +161,25 @@ export default function TaskTrailModal({
           </div>
         </div>
 
-        {/* Footer actions (only if task not completed and user is involved) */}
-        {taskData.status !== 'Completed' && (taskData.assignees?.includes(user.email) || isAdmin) && (
+        {/* Footer actions – hidden when readOnly (admin preview) */}
+        {!readOnly && taskData.status !== 'Completed' && (taskData.assignees?.includes(user.email) || isAdmin) && (
           <div className="border-t border-gray-100 px-6 py-4 space-y-4">
             {/* Reassign / Update row */}
             <div className="flex flex-col md:flex-row gap-3">
               {/* Reassign */}
               <div className="flex-1 relative">
-                <button
-                  onClick={() => setShowDelegateDropdown(!showDelegateDropdown)}
-                  className="w-full bg-gray-50 border border-gray-200 text-left px-4 py-2.5 rounded-xl flex justify-between items-center text-sm font-semibold text-text-primary hover:bg-gray-100 transition-colors"
-                >
-                  <span className="truncate">
-                    {delegateAssignees.length === 0
-                      ? 'Transfer Task...'
-                      : delegateAssignees.map(a => (a || '').split('@')[0]).join(', ')}
-                  </span>
+                <button onClick={() => setShowDelegateDropdown(!showDelegateDropdown)}
+                  className="w-full bg-gray-50 border border-gray-200 text-left px-4 py-2.5 rounded-xl flex justify-between items-center text-sm font-semibold text-text-primary hover:bg-gray-100 transition-colors">
+                  <span className="truncate">{delegateAssignees.length === 0 ? 'Transfer Task...' : delegateAssignees.map(a => (a || '').split('@')[0]).join(', ')}</span>
                   <i className={`fa-solid fa-chevron-${showDelegateDropdown ? 'up' : 'down'} text-text-secondary`}></i>
                 </button>
                 {showDelegateDropdown && (
                   <div className="absolute bottom-[105%] left-0 w-full bg-white border border-gray-200 shadow-xl max-h-48 overflow-y-auto z-50 rounded-xl py-1">
                     {(activeGroup?.id === 'demo' ? dbUsers : dbUsers.filter(u => activeGroup?.members?.includes(u.email))).map(u => (
                       <label key={u.uid} className="flex items-center gap-3 cursor-pointer px-4 py-2.5 hover:bg-gray-50 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={delegateAssignees.includes(u.email)}
-                          onChange={(e) => {
-                            if (e.target.checked) setDelegateAssignees([...delegateAssignees, u.email]);
-                            else setDelegateAssignees(delegateAssignees.filter(em => em !== u.email));
-                          }}
-                          className="w-4 h-4 accent-primary rounded"
-                        />
+                        <input type="checkbox" checked={delegateAssignees.includes(u.email)}
+                          onChange={(e) => { if (e.target.checked) setDelegateAssignees([...delegateAssignees, u.email]); else setDelegateAssignees(delegateAssignees.filter(em => em !== u.email)); }}
+                          className="w-4 h-4 accent-primary rounded" />
                         <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-6 h-6" />
                         <span className="text-sm font-semibold text-text-primary">{u.name}</span>
                       </label>
@@ -229,32 +187,18 @@ export default function TaskTrailModal({
                   </div>
                 )}
                 {delegateAssignees.length > 0 && (
-                  <button
-                    onClick={handleDelegateTask}
-                    className="mt-2 w-full bg-text-primary text-white py-2 rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors"
-                  >
-                    Confirm Transfer
-                  </button>
+                  <button onClick={handleDelegateTask} className="mt-2 w-full bg-text-primary text-white py-2 rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors">Confirm Transfer</button>
                 )}
               </div>
 
               {/* Comment & file upload */}
               <div className="flex-[2] flex items-center bg-gray-50 rounded-xl px-3 py-1 border border-gray-200 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-                <input
-                  type="text"
-                  value={trailComment}
-                  onChange={e => setTrailComment(e.target.value)}
+                <input type="text" value={trailComment} onChange={e => setTrailComment(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddComment(true); } }}
-                  placeholder="Add an update..."
-                  className="flex-1 bg-transparent outline-none text-sm font-medium text-text-primary py-2.5"
-                />
+                  placeholder="Add an update..." className="flex-1 bg-transparent outline-none text-sm font-medium text-text-primary py-2.5" />
                 <input type="file" ref={trailFileInputRef} className="hidden" onChange={handleTrailFileUpload} />
-                <button onClick={() => trailFileInputRef.current.click()} className="text-text-secondary hover:text-primary p-2">
-                  <i className="fa-solid fa-paperclip"></i>
-                </button>
-                <button onClick={() => handleAddComment(true)} disabled={!trailComment.trim()} className="ml-1 text-primary disabled:text-text-secondary p-2 hover:bg-primary/5 rounded-lg transition-colors">
-                  <i className="fa-solid fa-paper-plane"></i>
-                </button>
+                <button onClick={() => trailFileInputRef.current.click()} className="text-text-secondary hover:text-primary p-2"><i className="fa-solid fa-paperclip"></i></button>
+                <button onClick={() => handleAddComment(true)} disabled={!trailComment.trim()} className="ml-1 text-primary disabled:text-text-secondary p-2 hover:bg-primary/5 rounded-lg transition-colors"><i className="fa-solid fa-paper-plane"></i></button>
               </div>
             </div>
 
