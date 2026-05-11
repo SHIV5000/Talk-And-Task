@@ -673,7 +673,7 @@ export default function ChatApp({ user, onLogout }) {
   setAdminFilterType={setAdminFilterType}
   adminFilterGroup={adminFilterGroup}
   setAdminFilterGroup={setAdminFilterGroup}
-  handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })}
+  handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
   handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
   handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
   setSelectedMessage={setSelectedMessage}
