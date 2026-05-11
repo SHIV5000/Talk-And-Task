@@ -8,10 +8,32 @@ import {
 import ChatApp from './components/ChatApp.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 
+function FallbackScreen({ error }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-screen bg-surface text-text-primary p-8">
+      <div className="max-w-md text-center">
+        <i className="fa-solid fa-triangle-exclamation text-4xl text-amber-500 mb-4"></i>
+        <h1 className="text-xl font-bold mb-2">Something went wrong</h1>
+        <p className="text-sm text-text-secondary mb-4">
+          {error?.message || 'The application encountered an unexpected error.'}
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="bg-primary text-white px-6 py-2.5 rounded-xl font-bold hover:bg-primary-hover transition-colors"
+        >
+          Reload App
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [crash, setCrash] = useState(null);
+  const [timeoutReached, setTimeoutReached] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -21,17 +43,26 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    if (user && !timeoutReached) {
+      const timer = setTimeout(() => setTimeoutReached(true), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [user, timeoutReached]);
+
   const handleGoogleLogin = async (e) => {
     e.preventDefault();
     setAuthError('');
     if ("Notification" in window && Notification.permission !== "granted")
       Notification.requestPermission();
+
     try {
       await setPersistence(auth, inMemoryPersistence);
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
       const loggedInUser = result.user;
+
       const usersSnap = await getDocs(query(collection(db, "users"), where("uid", "==", loggedInUser.uid)));
       const isMaster = (loggedInUser.email || '').toLowerCase() === 'shivsuri1@gmail.com';
 
@@ -55,7 +86,6 @@ export default function App() {
         }, { merge: true });
       }
 
-      // Record login timestamp
       await updateDoc(doc(db, "users", loggedInUser.uid), { lastLogin: serverTimestamp() }).catch(() => {});
 
     } catch (err) {
@@ -103,9 +133,19 @@ export default function App() {
     );
   }
 
+  if (timeoutReached && !crash) {
+    return <FallbackScreen error={new Error('The app is taking too long to load. Please reload.')} />;
+  }
+
+  if (crash) {
+    return <FallbackScreen error={crash} />;
+  }
+
   return (
     <ErrorBoundary>
-      <ChatApp user={user} onLogout={handleLogout} />
+      <React.Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-surface text-primary font-bold">Loading…</div>}>
+        <ChatApp user={user} onLogout={handleLogout} />
+      </React.Suspense>
     </ErrorBoundary>
   );
 }
