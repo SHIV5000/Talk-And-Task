@@ -656,27 +656,33 @@ export default function ChatApp({ user, onLogout }) {
 
             {viewMode === "admin" ? (
                 <AdminPanel
-                    setViewMode={setViewMode} setActiveModal={setActiveModal} dbUsers={dbUsers} groups={groups}
-                    filteredAuditLogs={filteredAuditLogs} adminFilterUser={adminFilterUser} setAdminFilterUser={setAdminFilterUser}
-                    adminFilterDate={adminFilterDate} setAdminFilterDate={setAdminFilterDate} adminFilterType={adminFilterType}
-                    setAdminFilterType={setAdminFilterType} adminFilterGroup={adminFilterGroup} setAdminFilterGroup={setAdminFilterGroup}
-                    handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} setAdminForm={setAdminForm}
-                    setGroupForm={setGroupForm} setEditingGroup={setEditingGroup} 
-                    handleAdminArchiveGroup={(id) => updateDoc(doc(db, "groups", id), { isArchived: true })}
-                    handleAdminRecoverGroup={(id) => updateDoc(doc(db, "groups", id), { isArchived: false })}
-                    messages={messages}
-                    setSelectedMessage={setSelectedMessage}
-                    setIsEditingTaskTitle={setIsEditingTaskTitle}
-                    handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
-                    handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
-                    setGroupForm={setGroupForm}
-                      setEditingGroup={setEditingGroup}
-                      groupForm={groupForm}
-                      setActiveModal={setActiveModal}
-                      groupPicUploadProgress={groupPicUploadProgress}
-                      handleGroupPicUpload={handleGroupPicUpload}
-                    
-                />
+  setViewMode={setViewMode}
+  setActiveModal={setActiveModal}
+  dbUsers={dbUsers}
+  groups={groups}
+  filteredAuditLogs={filteredAuditLogs}
+  adminFilterUser={adminFilterUser}
+  setAdminFilterUser={setAdminFilterUser}
+  adminFilterDate={adminFilterDate}
+  setAdminFilterDate={setAdminFilterDate}
+  adminFilterType={adminFilterType}
+  setAdminFilterType={setAdminFilterType}
+  adminFilterGroup={adminFilterGroup}
+  setAdminFilterGroup={setAdminFilterGroup}
+  handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })}
+  handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
+  handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
+  setSelectedMessage={setSelectedMessage}
+  setIsEditingTaskTitle={setIsEditingTaskTitle}
+  messages={messages}
+  setGroupForm={setGroupForm}
+  setEditingGroup={setEditingGroup}
+  groupForm={groupForm}
+  handleAdminArchiveGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: true })}
+  handleAdminRecoverGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: false })}
+  handleGroupPicUpload={handleGroupPicUpload}
+  groupPicUploadProgress={groupPicUploadProgress}
+/>
             ) : (
                 <div className="flex h-full w-full relative">
                     <LeftSidebar 
