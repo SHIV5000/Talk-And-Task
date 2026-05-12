@@ -155,9 +155,12 @@ export default function ChatApp({ user, onLogout }) {
         setUnreadHighlightIds([]);
     }, [activeGroup?.id, user.email, messages]);
 
+    // 👇 FIX: Tasks AND Reminders Cron Job Tracker
     useEffect(() => {
-        const deadlineChecker = setInterval(() => {
+        const checkerInterval = setInterval(() => {
             const now = new Date();
+            
+            // 1. Check Deadlines
             const dueTasks = messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && !m.taskData?.deadlineAlerted && m.taskData?.deadline && new Date(m.taskData.deadline) <= now);
             dueTasks.forEach(async (task) => {
                 await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
@@ -169,9 +172,19 @@ export default function ChatApp({ user, onLogout }) {
                     if (u) addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `⏰ DUE NOW: "${task.text}"`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
                 });
             });
-        }, 60000); 
-        return () => clearInterval(deadlineChecker);
-    }, [messages, dbUsers]);
+
+            // 2. Check Reminders
+            const dueReminders = (activeReminders || []).filter(r => !r.isTriggered && r.remindAt && new Date(r.remindAt) <= now);
+            dueReminders.forEach(async (rem) => {
+                try {
+                    await updateDoc(doc(db, "reminders", rem.id), { isTriggered: true });
+                    await addDoc(collection(db, "notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
+                } catch(e) {}
+            });
+
+        }, 30000); // Check every 30 seconds
+        return () => clearInterval(checkerInterval);
+    }, [messages, dbUsers, activeReminders, user.uid]);
 
     // ==================== MEMOS ====================
     const myGroups = useMemo(() => {
@@ -225,21 +238,11 @@ export default function ChatApp({ user, onLogout }) {
         return logs;
     }, [immutableAuditLogs, adminFilterUser, adminFilterDate, adminFilterType, adminFilterGroup]);
 
-    const analyticsData = useMemo(() => {
-        const allTasks = messages.filter(m => m.isTask);
-        const completed = allTasks.filter(m => m.taskData?.status === 'Completed');
-        const pending = allTasks.filter(m => m.taskData?.status === 'Pending');
-        const inProgress = allTasks.filter(m => m.taskData?.status === 'In Progress');
-        const overdue = allTasks.filter(m => m.taskData?.status !== 'Completed' && m.taskData?.deadline && new Date(m.taskData.deadline) < new Date() && !m.taskData?.isArchived);
-        return { total: allTasks.length, completed: completed.length, pending: pending.length, inProgress: inProgress.length, overdue: overdue.length, overdueList: overdue.slice(0,10), completionRate: allTasks.length ? Math.round((completed.length / allTasks.length) * 100) : 0 };
-    }, [messages, groups]);
-
     // ==================== ENGINE ACTION WRAPPERS ====================
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-        // Highlight active for exactly 4 seconds
-        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 4000);
+        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 4000); // Excatly 4 seconds
     }, []);
 
     const scrollToMessageDirect = useCallback((msgId) => {
@@ -292,19 +295,19 @@ export default function ChatApp({ user, onLogout }) {
         setEditingMessageId(null);
     };
 
+    // 👇 FIX: File Upload text grabber
     const handleSendPendingFiles = async () => {
         if (pendingFiles.length === 0) return;
         
-        // Grab the latest inputText in case the user typed in the main bar instead of the tiny caption box
+        // Force grab the current text from the input bar before processing
         const latestInput = inputText.trim();
-        
         const filesToUpload = pendingFiles.map((pf, i) => ({
             ...pf,
             caption: (i === 0 && latestInput && !pf.caption) ? latestInput : pf.caption
         }));
 
         setPendingFiles([]); setShowFileRename(false); setIsUploading(true); setUploadProgress(0);
-        setInputText(""); // Clear the main input box so the text doesn't linger!
+        setInputText(""); // Clear immediately so it doesn't linger
 
         for (const pf of filesToUpload) {
             try { await uploadAndSendFileDB(pf, setUploadProgress); } 
@@ -607,7 +610,7 @@ export default function ChatApp({ user, onLogout }) {
         taskDeadline, setTaskDeadline, taskPriority, setTaskPriority,
         reminderDateTime, setReminderDateTime, scheduleDateTime, setScheduleDateTime,
         pendingScheduledText, handleScheduleMessage, adminForm, setAdminForm,
-        analyticsData, isUploading, uploadProgress, setReminder,
+        isUploading, uploadProgress, setReminder,
         handleDelegateTask,
         handleCompleteTask,
         handleArchiveTask,
@@ -617,6 +620,7 @@ export default function ChatApp({ user, onLogout }) {
         messages,
         groups,
         trailComment, setTrailComment,
+        activeReminders, // passed down to manage schedules
         readOnly: viewMode === "admin",
     };
 
@@ -745,6 +749,11 @@ export default function ChatApp({ user, onLogout }) {
                                       ))}
                                     </div>
                                   )}
+
+                                  {/* 👇 FIX: New Scheduled & Reminders Nav Button */}
+                                  <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10`} title="Scheduled & Reminders">
+                                    <i className="fa-solid fa-calendar-alt"></i>
+                                  </button>
 
                                   <div className="relative">
                                     <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px] relative`}>
