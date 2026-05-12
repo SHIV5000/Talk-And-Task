@@ -736,6 +736,7 @@ export default function ChatApp({ user, onLogout }) {
   setGroupForm={setGroupForm}
   setEditingGroup={setEditingGroup}
   groupForm={groupForm}
+  editingGroup={editingGroup}
   handleAdminArchiveGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: true })}
   handleAdminRecoverGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: false })}
   handleGroupPicUpload={handleGroupPicUpload}
