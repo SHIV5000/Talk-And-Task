@@ -911,10 +911,10 @@ export default function ChatApp({ user, onLogout }) {
                       <RightSidebar
                         showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                         tasksAssignedByMe={tasksAssignedByMe} archivedTasks={archivedTasks} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                        navigateToMessageFromNotification={navigateToMessageFromNotification} jumpToPrivateSource={(msgId, groupId) => navigateToMessageFromNotification(msgId, groupId)}
+                        navigateToMessageFromNotification={navigateToMessageFromNotification} 
+                        handleAddInlineComment={handleAddInlineComment} // Added explicitly here
                       />
                     )}
-
                     <ModalManager {...modalProps} />
                     <Toast toasts={toasts} removeToast={removeToast} />
                 </div>
