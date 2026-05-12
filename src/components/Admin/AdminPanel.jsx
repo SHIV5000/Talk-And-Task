@@ -393,58 +393,64 @@ export default function AdminPanel({
         {/* ==================== INLINE OVERLAYS ==================== */}
         
         {localOverlay === 'group_form' && (
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in zoom-in-[0.98] duration-200">
-             <div className="max-w-2xl w-full bg-white border border-slate-100 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
-                <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-200">
+             {/* Replaced <form> with a <div id="adminGroupForm"> to prevent implicit form submission crashes */}
+             <div className="max-w-2xl w-full bg-white border border-slate-100 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[90vh]">
+                {/* Header - Fixed */}
+                <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0 z-10">
                    <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">{editingGroup ? 'Edit Team Details' : 'Create New Team'}</h3>
                    <button onClick={() => setLocalOverlay(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors">
                      <i className="fa-solid fa-xmark"></i>
                    </button>
                 </div>
-                <div className="p-5 md:p-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 hover:scrollbar-thumb-slate-300 scrollbar-track-transparent custom-sidebar-scroll">
-                   <form onSubmit={(e) => { handleGroupSubmit(e); setLocalOverlay(null); }} className="space-y-6">
+                
+                {/* Body - Scrollable */}
+                <div className="flex-1 overflow-y-auto bg-slate-50/50 custom-sidebar-scroll">
+                   <div id="adminGroupForm" className="p-5 md:p-6 space-y-6">
                       <div>
                          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Name</label>
-                         <input value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all text-slate-800 font-medium" placeholder="e.g. Marketing Team" required />
+                         <input value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="w-full bg-white border border-slate-200 p-3.5 rounded-xl text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all text-slate-800 font-medium" placeholder="e.g. Marketing Team" />
                       </div>
                       <div>
                          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Avatar</label>
-                         <div className="flex items-center gap-4 bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
+                         <div className="flex items-center gap-4 bg-white border border-slate-200 p-3.5 rounded-xl">
                            <input type="file" onChange={handleGroupPicUpload} className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer" />
                            {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-primary animate-pulse">{Math.round(groupPicUploadProgress)}%</span>}
                          </div>
                       </div>
                       <div>
                          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Select Members</label>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-slate-200 p-4 rounded-xl max-h-56 overflow-y-auto bg-slate-50 scrollbar-thin scrollbar-thumb-slate-200 custom-sidebar-scroll">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-slate-200 p-4 rounded-xl max-h-56 overflow-y-auto bg-white custom-sidebar-scroll">
                             {dbUsers.map(u => (
-                               <label key={u.uid} className="flex items-center gap-3 text-sm bg-white p-3 border border-slate-100 rounded-xl shadow-sm cursor-pointer hover:border-primary/40 hover:shadow transition-all group">
-                                  <div className="relative flex items-center justify-center">
-                                    <input type="checkbox" checked={groupForm.members.includes(u.email)} onChange={(e) => {
-                                        const m = new Set(groupForm.members); e.target.checked ? m.add(u.email) : m.delete(u.email); setGroupForm({...groupForm, members: Array.from(m)});
-                                    }} className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:border-primary checked:bg-primary transition-all cursor-pointer" />
-                                    <i className="fa-solid fa-check absolute text-white text-[10px] opacity-0 peer-checked:opacity-100 pointer-events-none"></i>
-                                  </div>
-                                  <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" extraClasses="group-hover:scale-105 transition-transform" />
+                               <label key={u.uid} className="flex items-center gap-3 text-sm bg-slate-50 p-3 border border-slate-100 rounded-xl cursor-pointer hover:border-primary/40 transition-all group">
+                                  <input type="checkbox" checked={groupForm.members.includes(u.email)} onChange={(e) => {
+                                      const m = new Set(groupForm.members); e.target.checked ? m.add(u.email) : m.delete(u.email); setGroupForm({...groupForm, members: Array.from(m)});
+                                  }} className="accent-primary w-4 h-4" />
+                                  <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
                                   <span className="font-semibold text-slate-700 truncate">{u.name}</span>
                                </label>
                             ))}
                          </div>
                       </div>
-                      <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                         <button type="button" onClick={() => setLocalOverlay(null)} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors">Cancel</button>
-                         <button type="submit" className="px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary-hover shadow-lg shadow-primary/30 transition-all hover:-translate-y-0.5">Save Team</button>
-                      </div>
-                   </form>
+                   </div>
+                </div>
+
+                {/* Footer - Fixed */}
+                <div className="p-5 md:p-6 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0 z-10">
+                   <button type="button" onClick={() => setLocalOverlay(null)} className="px-6 py-3 bg-gray-100 text-slate-600 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
+                   {/* Attached explicit e.preventDefault() to manually intercept and fire logic */}
+                   <button type="button" onClick={(e) => { e.preventDefault(); handleGroupSubmit(e); setLocalOverlay(null); }} className="px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary-hover shadow-md transition-all">Save Team</button>
                 </div>
              </div>
           </div>
         )}
 
         {localOverlay === 'task_trail' && selectedTaskNode && (
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in zoom-in-[0.98] duration-200">
-             <div className="max-w-2xl w-full bg-white border border-slate-100 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
-                <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-200">
+             <div className="max-w-2xl w-full bg-white border border-slate-100 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[90vh]">
+                
+                {/* Header - Fixed */}
+                <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0 z-10">
                    <div className="flex items-center gap-3">
                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><i className="fa-solid fa-code-commit"></i></div>
                      <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">Task Audit Trail</h3>
@@ -454,7 +460,8 @@ export default function AdminPanel({
                    </button>
                 </div>
                 
-                <div className="p-5 md:p-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 hover:scrollbar-thumb-slate-300 scrollbar-track-transparent bg-slate-50/50 custom-sidebar-scroll">
+                {/* Body - Scrollable */}
+                <div className="p-5 md:p-6 flex-1 overflow-y-auto bg-slate-50/50 custom-sidebar-scroll">
                    <div className="mb-8 p-5 bg-white border border-slate-100 rounded-2xl shadow-sm relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1.5 h-full bg-primary"></div>
                       <h4 className="font-bold text-lg text-slate-800 mb-3 pl-2">{selectedTaskNode.text}</h4>
@@ -462,11 +469,6 @@ export default function AdminPanel({
                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${selectedTaskNode.taskData?.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-100' : selectedTaskNode.taskData?.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
                             {selectedTaskNode.taskData?.status}
                          </span>
-                         {selectedTaskNode.taskData?.priority && (
-                            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${selectedTaskNode.taskData.priority === 'High' ? 'bg-rose-50 text-rose-700 border-rose-100' : selectedTaskNode.taskData.priority === 'Medium' ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
-                               <i className="fa-solid fa-flag mr-1"></i>{selectedTaskNode.taskData.priority}
-                            </span>
-                         )}
                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200"><i className="fa-regular fa-calendar mr-1"></i>{new Date(selectedTaskNode.taskData?.deadline).toLocaleDateString()}</span>
                       </div>
                    </div>
@@ -478,10 +480,10 @@ export default function AdminPanel({
                    <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-[2px] before:bg-gradient-to-b before:from-slate-200 before:via-slate-200 before:to-transparent">
                       {(selectedTaskNode.taskData?.trail || []).map((t, i) => (
                          <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                             <div className="flex items-center justify-center w-10 h-10 rounded-full border-[3px] border-white bg-slate-50 text-primary shadow-sm md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                             <div className="flex items-center justify-center w-10 h-10 rounded-full border-[3px] border-white bg-white text-primary shadow-sm md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
                                <i className={`fa-solid text-[13px] ${t.action.includes('Created') ? 'fa-wand-magic-sparkles' : t.action.includes('Completed') ? 'fa-check text-emerald-500' : t.action.includes('Delegated') ? 'fa-users-arrow-right text-indigo-500' : t.action.includes('File') ? 'fa-paperclip text-amber-500' : 'fa-pen'}`}></i>
                              </div>
-                             <div className="w-[calc(100%-3.5rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-primary/20 transition-all">
+                             <div className="w-[calc(100%-3.5rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
                                  <div className="flex items-center justify-between mb-1.5">
                                    <span className="font-bold text-slate-800 text-[13px]">{t.action}</span>
                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md">{t.time.split(',')[0]}</span>
@@ -500,111 +502,3 @@ export default function AdminPanel({
     </div>
   );
 }
-{/* ==================== INLINE OVERLAYS ==================== */}
-
-{localOverlay === 'group_form' && (
-  <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-200">
-     <div className="max-w-2xl w-full bg-white border border-slate-100 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[90vh]">
-        {/* Header - Fixed */}
-        <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0 z-10">
-           <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">{editingGroup ? 'Edit Team Details' : 'Create New Team'}</h3>
-           <button onClick={() => setLocalOverlay(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors">
-             <i className="fa-solid fa-xmark"></i>
-           </button>
-        </div>
-        
-        {/* Body - Scrollable */}
-        <div className="flex-1 overflow-y-auto bg-slate-50/50 custom-sidebar-scroll">
-           <form id="adminGroupForm" onSubmit={(e) => { handleGroupSubmit(e); setLocalOverlay(null); }} className="p-5 md:p-6 space-y-6">
-              <div>
-                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Name</label>
-                 <input value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="w-full bg-white border border-slate-200 p-3.5 rounded-xl text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all text-slate-800 font-medium" placeholder="e.g. Marketing Team" required />
-              </div>
-              <div>
-                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Avatar</label>
-                 <div className="flex items-center gap-4 bg-white border border-slate-200 p-3.5 rounded-xl">
-                   <input type="file" onChange={handleGroupPicUpload} className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer" />
-                   {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-primary animate-pulse">{Math.round(groupPicUploadProgress)}%</span>}
-                 </div>
-              </div>
-              <div>
-                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Select Members</label>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-slate-200 p-4 rounded-xl max-h-56 overflow-y-auto bg-white custom-sidebar-scroll">
-                    {dbUsers.map(u => (
-                       <label key={u.uid} className="flex items-center gap-3 text-sm bg-slate-50 p-3 border border-slate-100 rounded-xl cursor-pointer hover:border-primary/40 transition-all group">
-                          <input type="checkbox" checked={groupForm.members.includes(u.email)} onChange={(e) => {
-                              const m = new Set(groupForm.members); e.target.checked ? m.add(u.email) : m.delete(u.email); setGroupForm({...groupForm, members: Array.from(m)});
-                          }} className="accent-primary w-4 h-4" />
-                          <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
-                          <span className="font-semibold text-slate-700 truncate">{u.name}</span>
-                       </label>
-                    ))}
-                 </div>
-              </div>
-           </form>
-        </div>
-
-        {/* Footer - Fixed */}
-        <div className="p-5 md:p-6 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0 z-10">
-           <button type="button" onClick={() => setLocalOverlay(null)} className="px-6 py-3 bg-gray-100 text-slate-600 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
-           <button type="submit" form="adminGroupForm" className="px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary-hover shadow-md transition-all">Save Team</button>
-        </div>
-     </div>
-  </div>
-)}
-
-{localOverlay === 'task_trail' && selectedTaskNode && (
-  <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-200">
-     <div className="max-w-2xl w-full bg-white border border-slate-100 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[90vh]">
-        
-        {/* Header - Fixed */}
-        <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0 z-10">
-           <div className="flex items-center gap-3">
-             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><i className="fa-solid fa-code-commit"></i></div>
-             <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">Task Audit Trail</h3>
-           </div>
-           <button onClick={() => setLocalOverlay(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors">
-             <i className="fa-solid fa-xmark"></i>
-           </button>
-        </div>
-        
-        {/* Body - Scrollable */}
-        <div className="p-5 md:p-6 flex-1 overflow-y-auto bg-slate-50/50 custom-sidebar-scroll">
-           <div className="mb-8 p-5 bg-white border border-slate-100 rounded-2xl shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1.5 h-full bg-primary"></div>
-              <h4 className="font-bold text-lg text-slate-800 mb-3 pl-2">{selectedTaskNode.text}</h4>
-              <div className="flex flex-wrap gap-2 pl-2">
-                 <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${selectedTaskNode.taskData?.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-100' : selectedTaskNode.taskData?.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
-                    {selectedTaskNode.taskData?.status}
-                 </span>
-                 <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200"><i className="fa-regular fa-calendar mr-1"></i>{new Date(selectedTaskNode.taskData?.deadline).toLocaleDateString()}</span>
-              </div>
-           </div>
-
-           <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-6 flex items-center gap-2">
-             <span className="w-8 h-px bg-slate-200"></span> Activity Timeline <span className="flex-1 h-px bg-slate-200"></span>
-           </h5>
-           
-           <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-[2px] before:bg-gradient-to-b before:from-slate-200 before:via-slate-200 before:to-transparent">
-              {(selectedTaskNode.taskData?.trail || []).map((t, i) => (
-                 <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-[3px] border-white bg-white text-primary shadow-sm md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                       <i className={`fa-solid text-[13px] ${t.action.includes('Created') ? 'fa-wand-magic-sparkles' : t.action.includes('Completed') ? 'fa-check text-emerald-500' : t.action.includes('Delegated') ? 'fa-users-arrow-right text-indigo-500' : t.action.includes('File') ? 'fa-paperclip text-amber-500' : 'fa-pen'}`}></i>
-                     </div>
-                     <div className="w-[calc(100%-3.5rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                         <div className="flex items-center justify-between mb-1.5">
-                           <span className="font-bold text-slate-800 text-[13px]">{t.action}</span>
-                           <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md">{t.time.split(',')[0]}</span>
-                         </div>
-                         <div className="text-slate-500 text-[11px] mb-2 font-medium">By <span className="text-slate-700">{t.by.split('@')[0]}</span></div>
-                         {t.comment && <div className="text-slate-600 text-[13px] bg-slate-50/80 p-3 rounded-xl border border-slate-100 mt-2 italic">"{t.comment}"</div>}
-                     </div>
-                 </div>
-              ))}
-           </div>
-        </div>
-     </div>
-  </div>
-)}
-
-
