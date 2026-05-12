@@ -20,23 +20,28 @@ export default function ChatView({
     setIsAtBottom(Math.abs(scrollHeight - clientHeight - scrollTop) < 50);
   };
 
-  // 👇 FIX: Intelligent DOM Poller for Cross-Group Scrolling
-  // Instead of guessing when the message renders, it actively waits for it.
+  // 👇 FIX: Aggressive Cross-Group Poller with forced Highlight
   useEffect(() => {
     if (pendingScrollTarget) {
       let attempts = 0;
       const scrollPoller = setInterval(() => {
-        const targetElement = document.getElementById(`msg-${pendingScrollTarget}`);
-        if (targetElement) {
+        const el = document.getElementById(`msg-${pendingScrollTarget}`);
+        if (el) {
           clearInterval(scrollPoller);
-          // Wait 100ms for smooth transition, then scroll
           setTimeout(() => {
-            scrollToMessageDirect(pendingScrollTarget);
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Forcefully inject visual highlight classes for 4 seconds
+            el.classList.add('ring-4', 'ring-primary', 'bg-primary/10', 'transition-all', 'duration-500');
+            setTimeout(() => {
+                el.classList.remove('ring-4', 'ring-primary', 'bg-primary/10');
+            }, 4000);
+            
             setPendingScrollTarget(null);
-          }, 100);
+          }, 150); // slight delay to let rendering settle
         } else {
           attempts++;
-          if (attempts > 20) { // Timeout after 10 seconds
+          if (attempts > 30) { // Timeout after 15 seconds
             clearInterval(scrollPoller);
             setPendingScrollTarget(null);
           }
@@ -45,7 +50,7 @@ export default function ChatView({
 
       return () => clearInterval(scrollPoller);
     }
-  }, [pendingScrollTarget, scrollToMessageDirect, setPendingScrollTarget]);
+  }, [pendingScrollTarget, setPendingScrollTarget]);
 
   return (
     <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] wa-bg relative">
@@ -66,14 +71,12 @@ export default function ChatView({
           </div>
         )}
 
-        {/* E2E Notice */}
         <div className="text-center mb-6 mt-4 relative z-[1]">
           <span className="text-[12.5px] text-text-secondary bg-primary-light px-4 py-1.5 rounded-lg shadow-sm font-medium">
             <i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.
           </span>
         </div>
 
-        {/* Pinned Messages */}
         {pinnedMessages.length > 0 && (
           <div className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
             <div className="flex justify-between items-center text-xs text-text-secondary font-medium mb-1">
@@ -83,7 +86,6 @@ export default function ChatView({
           </div>
         )}
 
-        {/* The Bubbles */}
         <div className="relative z-[1] flex flex-col justify-end">
           {messagesToRender.map(msg => (
             <MessageBubble
@@ -119,7 +121,6 @@ export default function ChatView({
           ))}
         </div>
 
-        {/* Typing Indicator */}
         {typingStatus.length > 0 && (
           <div className="flex items-start mt-2 relative z-[1]">
             <div className="bg-white px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 border border-primary/10">
@@ -138,7 +139,6 @@ export default function ChatView({
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
 
-      {/* Scroll to Bottom FAB */}
       <button
         onClick={() => {
           if (chatContainerRef.current) {
