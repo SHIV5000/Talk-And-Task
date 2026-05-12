@@ -124,9 +124,8 @@ export default function ChatApp({ user, onLogout }) {
             const incomingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FINCOMING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=413e00ca-6dc0-41e1-85d9-3d02e53ca526';
             const outgoingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FOUTGOING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=4f357d75-c496-4f53-8f6a-fd0e6e81b41d';
 
-            let soundUrl = outgoingSound; // Default to outgoing
+            let soundUrl = outgoingSound; 
             
-            // Map event types to specific URLs
             switch (type) {
                 case 'messageReceived':
                 case 'taskCreated':
@@ -142,7 +141,7 @@ export default function ChatApp({ user, onLogout }) {
             }
 
             const audio = new Audio(soundUrl);
-            audio.volume = 0.6; // Adjust volume as needed
+            audio.volume = 0.6;
             audio.play().catch(err => console.warn("Audio playback blocked by browser:", err));
         } catch(e) { console.error("Audio Engine Error:", e); }
     }, []);
@@ -324,7 +323,7 @@ export default function ChatApp({ user, onLogout }) {
     const handleSendMessage = async () => {
         if (!inputText.trim() || !activeGroup) return;
         await sendMessageToDB(inputText.trim(), replyingTo);
-        playMelody('messageSent'); // 🎵 Play outgoing sound
+        playMelody('messageSent'); 
         setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
         if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -346,7 +345,7 @@ export default function ChatApp({ user, onLogout }) {
             try { await uploadAndSendFileDB(pf, setUploadProgress); } 
             catch (error) { alert(`Upload failed for ${pf.customName}: ${error.message}`); }
         }
-        playMelody('fileUpload'); // 🎵 Play outgoing sound
+        playMelody('fileUpload'); 
         setIsUploading(false); setUploadProgress(0);
     };
 
@@ -424,7 +423,7 @@ export default function ChatApp({ user, onLogout }) {
             });
 
             logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
-            playMelody('taskCreated'); // 🎵 Play incoming sound
+            playMelody('taskCreated'); 
             setActiveModal(null); setTaskAssignees([]);
         } catch (error) { alert("Failed to create task."); }
     };
@@ -434,7 +433,7 @@ export default function ChatApp({ user, onLogout }) {
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { text: newTaskTitle });
             setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
-            playMelody('taskUpdated'); // 🎵 Play incoming sound
+            playMelody('taskUpdated');
             setIsEditingTaskTitle(false);
         } catch (e) { alert("Failed to update task title."); }
     };
@@ -445,7 +444,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
-            playMelody('taskUpdated'); // 🎵 Play incoming sound
+            playMelody('taskUpdated'); 
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
     };
@@ -456,7 +455,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
-            playMelody('taskUpdated'); // 🎵 Play incoming sound
+            playMelody('taskUpdated'); 
             setActiveModal(null);
         } catch (error) {}
     };
@@ -465,7 +464,7 @@ export default function ChatApp({ user, onLogout }) {
         if (!selectedMessage) return;
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.isArchived": true });
-            playMelody('taskUpdated'); // 🎵 Play incoming sound
+            playMelody('taskUpdated'); 
             setActiveModal(null);
         } catch (error) {}
     };
@@ -478,7 +477,7 @@ export default function ChatApp({ user, onLogout }) {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
-            playMelody('taskUpdated'); // 🎵 Play incoming sound
+            playMelody('taskUpdated'); 
             if (closeModal) setActiveModal(null);
         } catch (error) {}
     };
@@ -496,7 +495,7 @@ export default function ChatApp({ user, onLogout }) {
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
-                playMelody('taskFileUpload'); // 🎵 Play incoming sound
+                playMelody('taskFileUpload'); 
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
     };
@@ -523,7 +522,7 @@ export default function ChatApp({ user, onLogout }) {
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
-            playMelody('taskUpdated'); // 🎵 Play incoming sound
+            playMelody('taskUpdated'); 
         } catch (error) {}
     };
 
@@ -789,7 +788,7 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                   )}
 
-                                  <button onClick={() => setActiveModal('task_analytics')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10" title="Task Analytics"><i className="fa-solid fa-chart-pie"></i></button>
+                                  {/* Navigation header items (Task Analytics & Test Audio removed) */}
 
                                   <div className="relative">
                                     <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px] relative`}>
@@ -850,13 +849,9 @@ export default function ChatApp({ user, onLogout }) {
                                       </div>
                                     )}
                                   </div>
-                                    <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
-                                    <button
-                                      onClick={() => playMelody('messageSent')}
-                                      className="bg-primary text-white px-3 py-1 rounded-lg text-xs font-bold"
-                                    >
-                                      Test Audio
-                                    </button>
+                                    
+                                  <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                  
                                   {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200">Wipe Tasks</button>}
                                     
                                 </div>
