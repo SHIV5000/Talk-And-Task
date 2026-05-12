@@ -12,7 +12,7 @@ export default function ChatView({
   editingMessageId, editMessageText, setEditingMessageId, setEditMessageText,
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
-  unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource // 👈 Clean props mapping
+  unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource
 }) {
   
   const handleChatScroll = (e) => {
@@ -20,21 +20,32 @@ export default function ChatView({
     setIsAtBottom(Math.abs(scrollHeight - clientHeight - scrollTop) < 50);
   };
 
-  // 👇 FIX: The Magic Jump & Highlight Logic (Now beats the bottom-snap!)
+  // 👇 FIX: Intelligent DOM Poller for Cross-Group Scrolling
+  // Instead of guessing when the message renders, it actively waits for it.
   useEffect(() => {
-    if (pendingScrollTarget && messagesToRender.length > 0) {
-      const targetExists = messagesToRender.some(m => m.id === pendingScrollTarget);
-      if (targetExists) {
-        // We wait 400ms so the app's default "snap to bottom" finishes first.
-        // Then, we smoothly glide up to the target message and highlight it.
-        const timer = setTimeout(() => {
-          scrollToMessageDirect(pendingScrollTarget);
-          setPendingScrollTarget(null); 
-        }, 400); 
-        return () => clearTimeout(timer);
-      }
+    if (pendingScrollTarget) {
+      let attempts = 0;
+      const scrollPoller = setInterval(() => {
+        const targetElement = document.getElementById(`msg-${pendingScrollTarget}`);
+        if (targetElement) {
+          clearInterval(scrollPoller);
+          // Wait 100ms for smooth transition, then scroll
+          setTimeout(() => {
+            scrollToMessageDirect(pendingScrollTarget);
+            setPendingScrollTarget(null);
+          }, 100);
+        } else {
+          attempts++;
+          if (attempts > 20) { // Timeout after 10 seconds
+            clearInterval(scrollPoller);
+            setPendingScrollTarget(null);
+          }
+        }
+      }, 500);
+
+      return () => clearInterval(scrollPoller);
     }
-  }, [pendingScrollTarget, messagesToRender, scrollToMessageDirect, setPendingScrollTarget]);
+  }, [pendingScrollTarget, scrollToMessageDirect, setPendingScrollTarget]);
 
   return (
     <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] wa-bg relative">
