@@ -3,7 +3,7 @@ import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 export default function RightSidebar({
   showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
-  archivedTasks, groups, dbUsers, user, setActiveGroup, navigateToMessageFromNotification
+  archivedTasks, groups, dbUsers, navigateToMessageFromNotification
 }) {
   const [filter, setFilter] = useState('All'); 
 
@@ -125,7 +125,7 @@ export default function RightSidebar({
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] font-bold text-primary opacity-0 group-hover/task:opacity-100 transition-opacity mr-1 flex items-center gap-1">
-                                View Task <i className="fa-solid fa-arrow-right"></i>
+                                View Original <i className="fa-solid fa-arrow-right"></i>
                               </span>
                               <div className="flex -space-x-1.5">
                                   {(task.taskData.assignees || []).slice(0, 3).map(email => {
