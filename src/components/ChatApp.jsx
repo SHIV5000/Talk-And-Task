@@ -118,47 +118,6 @@ export default function ChatApp({ user, onLogout }) {
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
 
-    // ==================== AUDIO ENGINE (HTML5) ====================
-    const playMelody = useCallback((type) => {
-        try {
-            const incomingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FINCOMING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=413e00ca-6dc0-41e1-85d9-3d02e53ca526';
-            const outgoingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FOUTGOING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=4f357d75-c496-4f53-8f6a-fd0e6e81b41d';
-
-            let soundUrl = outgoingSound; 
-            
-            switch (type) {
-                case 'messageReceived':
-                case 'taskCreated':
-                case 'taskUpdated':
-                case 'taskFileUpload':
-                    soundUrl = incomingSound;
-                    break;
-                case 'messageSent':
-                case 'fileUpload':
-                default:
-                    soundUrl = outgoingSound;
-                    break;
-            }
-
-            const audio = new Audio(soundUrl);
-            audio.volume = 0.6;
-            audio.play().catch(err => console.warn("Audio playback blocked by browser:", err));
-        } catch(e) { console.error("Audio Engine Error:", e); }
-    }, []);
-
-    // ==================== INCOMING MESSAGE LISTENER ====================
-    useEffect(() => {
-        if (messages.length > 0) {
-            const latestMsg = messages[messages.length - 1];
-            if (lastMessageTrackerId.current !== null && latestMsg.id !== lastMessageTrackerId.current) {
-                if (latestMsg.senderUid !== user.uid && !latestMsg.isTask) {
-                    playMelody('messageReceived');
-                }
-            }
-            lastMessageTrackerId.current = latestMsg.id;
-        }
-    }, [messages, user.uid, playMelody]);
-
     // ==================== UI LOGIC / STARTUP ====================
     useEffect(() => {
         const timer = setTimeout(() => setIsWorkspaceLoading(false), 4000);
@@ -279,7 +238,8 @@ export default function ChatApp({ user, onLogout }) {
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 3100);
+        // Highlight active for exactly 4 seconds
+        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 4000);
     }, []);
 
     const scrollToMessageDirect = useCallback((msgId) => {
@@ -319,7 +279,6 @@ export default function ChatApp({ user, onLogout }) {
     const handleSendMessage = async () => {
         if (!inputText.trim() || !activeGroup) return;
         await sendMessageToDB(inputText.trim(), replyingTo);
-        playMelody('messageSent'); 
         setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
         if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -335,13 +294,22 @@ export default function ChatApp({ user, onLogout }) {
 
     const handleSendPendingFiles = async () => {
         if (pendingFiles.length === 0) return;
-        const filesToUpload = [...pendingFiles];
+        
+        // Grab the latest inputText in case the user typed in the main bar instead of the tiny caption box
+        const latestInput = inputText.trim();
+        
+        const filesToUpload = pendingFiles.map((pf, i) => ({
+            ...pf,
+            caption: (i === 0 && latestInput && !pf.caption) ? latestInput : pf.caption
+        }));
+
         setPendingFiles([]); setShowFileRename(false); setIsUploading(true); setUploadProgress(0);
+        setInputText(""); // Clear the main input box so the text doesn't linger!
+
         for (const pf of filesToUpload) {
             try { await uploadAndSendFileDB(pf, setUploadProgress); } 
             catch (error) { alert(`Upload failed for ${pf.customName}: ${error.message}`); }
         }
-        playMelody('fileUpload'); 
         setIsUploading(false); setUploadProgress(0);
     };
 
@@ -380,7 +348,7 @@ export default function ChatApp({ user, onLogout }) {
         try {
             await scheduleMessageDB(text, scheduleDateTime, isTask, taskData);
             setInputText(""); setPendingScheduledText(""); setScheduleDateTime(""); setActiveModal(null);
-            alert(`✅ Scheduled for ${new Date(scheduleDateTime).toLocaleString()}`);
+            addToast(`✅ Scheduled for ${new Date(scheduleDateTime).toLocaleString()}`, 'success');
         } catch(e) { alert("Failed to schedule."); }
     };
 
@@ -419,7 +387,6 @@ export default function ChatApp({ user, onLogout }) {
             });
 
             logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
-            playMelody('taskCreated'); 
             setActiveModal(null); setTaskAssignees([]);
         } catch (error) { alert("Failed to create task."); }
     };
@@ -429,7 +396,6 @@ export default function ChatApp({ user, onLogout }) {
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { text: newTaskTitle });
             setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
-            playMelody('taskUpdated');
             setIsEditingTaskTitle(false);
         } catch (e) { alert("Failed to update task title."); }
     };
@@ -440,7 +406,6 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
-            playMelody('taskUpdated'); 
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
     };
@@ -451,7 +416,6 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
-            playMelody('taskUpdated'); 
             setActiveModal(null);
         } catch (error) {}
     };
@@ -460,7 +424,6 @@ export default function ChatApp({ user, onLogout }) {
         if (!selectedMessage) return;
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.isArchived": true });
-            playMelody('taskUpdated'); 
             setActiveModal(null);
         } catch (error) {}
     };
@@ -473,7 +436,6 @@ export default function ChatApp({ user, onLogout }) {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
-            playMelody('taskUpdated'); 
             if (closeModal) setActiveModal(null);
         } catch (error) {}
     };
@@ -491,7 +453,6 @@ export default function ChatApp({ user, onLogout }) {
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
-                playMelody('taskFileUpload'); 
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
     };
@@ -502,6 +463,7 @@ export default function ChatApp({ user, onLogout }) {
             await addDoc(collection(db, "reminders"), { userId: user.uid, userEmail: user.email, messageId: selectedMessage.id, messageText: selectedMessage.text || selectedMessage.fileName || "File Attachment", remindAt: reminderDateTime, isTriggered: false });
             await updateDoc(doc(db, "messages", selectedMessage.id), { hasReminder: true });
             setActiveModal(null); setReminderDateTime("");
+            addToast("Reminder set successfully!", "success");
         } catch (error) { alert("Failed to save reminder."); }
     };
 
@@ -518,7 +480,6 @@ export default function ChatApp({ user, onLogout }) {
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
-            playMelody('taskUpdated'); 
         } catch (error) {}
     };
 
@@ -559,7 +520,7 @@ export default function ChatApp({ user, onLogout }) {
     };
     
     const handleGroupSubmit = async (e) => {
-        e.preventDefault();
+        if(e && e.preventDefault) e.preventDefault();
         if(!groupForm.name.trim()) return;
         try {
             const finalMembers = [...new Set([...groupForm.members, user.email])];
@@ -646,7 +607,7 @@ export default function ChatApp({ user, onLogout }) {
         taskDeadline, setTaskDeadline, taskPriority, setTaskPriority,
         reminderDateTime, setReminderDateTime, scheduleDateTime, setScheduleDateTime,
         pendingScheduledText, handleScheduleMessage, adminForm, setAdminForm,
-        analyticsData, isUploading, uploadProgress,
+        analyticsData, isUploading, uploadProgress, setReminder,
         handleDelegateTask,
         handleCompleteTask,
         handleArchiveTask,
@@ -693,8 +654,6 @@ export default function ChatApp({ user, onLogout }) {
     
     return (
         <div className="flex h-screen w-full bg-[#f3f4f6] text-[#111b21] overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100">
-            <audio id="app-sound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3" preload="auto" className="hidden"></audio>
-            
             {viewMode === "admin" ? (
            <AdminPanel
               setViewMode={setViewMode}
@@ -720,6 +679,7 @@ export default function ChatApp({ user, onLogout }) {
               setEditingGroup={setEditingGroup}
               groupForm={groupForm}
               editingGroup={editingGroup}
+              handleGroupSubmit={handleGroupSubmit}
               handleAdminArchiveGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: true })}
               handleAdminRecoverGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: false })}
               handleGroupPicUpload={handleGroupPicUpload}
@@ -885,7 +845,6 @@ export default function ChatApp({ user, onLogout }) {
                         showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                         tasksAssignedByMe={tasksAssignedByMe} archivedTasks={archivedTasks} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
                         navigateToMessageFromNotification={navigateToMessageFromNotification} 
-                        handleAddInlineComment={handleAddInlineComment}
                       />
                     )}
                     <ModalManager {...modalProps} />
