@@ -9,6 +9,7 @@ import ReminderModal from './ReminderModal.jsx';
 import ScheduleSendModal from './ScheduleSendModal.jsx';
 import AdminEditUserModal from './AdminEditUserModal.jsx';
 import TaskAnalyticsModal from './TaskAnalyticsModal.jsx';
+import ActiveSchedulesModal from './ActiveSchedulesModal.jsx'; // 👈 NEW IMPORT
 import UploadOverlay from '../Common/UploadOverlay.jsx';
 
 export default function ModalManager(props) {
@@ -30,6 +31,7 @@ export default function ModalManager(props) {
       {activeModal === 'schedule_send' && <ScheduleSendModal {...props} />}
       {activeModal === 'admin_edit_user' && <AdminEditUserModal {...props} />}
       {activeModal === 'task_analytics' && <TaskAnalyticsModal {...props} />}
+      {activeModal === 'active_schedules' && <ActiveSchedulesModal {...props} />} {/* 👈 NEW REGISTRATION */}
       
       {isUploading && <UploadOverlay uploadProgress={uploadProgress} fileName="" />}
     </>
