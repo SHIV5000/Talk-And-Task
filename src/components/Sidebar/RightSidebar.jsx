@@ -47,11 +47,11 @@ export default function RightSidebar({
   }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, archivedTasks, startDate, endDate]);
 
   return (
-    <div className="w-full md:w-[350px] lg:w-[400px] shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2">
+    <div className="w-full md:w-[350px] lg:w-[400px] shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2">
       
       <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0 shadow-sm">
         <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-primary/10 flex items-center justify-center text-primary"><i className="fa-solid fa-layer-group text-sm"></i></div>
+          <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-layer-group text-sm"></i></div>
           Workspace Hub
         </h2>
         <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 flex items-center justify-center transition-colors">
@@ -77,7 +77,7 @@ export default function RightSidebar({
          
          <div className="flex flex-wrap gap-2 mb-4">
             {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
-                <button key={f} onClick={()=>setFilter(f)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}>
+                <button key={f} onClick={()=>setFilter(f)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}>
                   {f}
                 </button>
             ))}
@@ -111,10 +111,10 @@ export default function RightSidebar({
                           e.stopPropagation();
                           if (navigateToMessageFromNotification) navigateToMessageFromNotification(task.id, task.groupId);
                         }}
-                        className={`bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-primary/40'}`}
+                        className={`bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-indigo-300'}`}
                      >
                         {!isArchived && !isDone && (
-                           <div className={`absolute top-0 left-0 w-1.5 h-full ${task.taskData.priority==='High'?'bg-red-500':task.taskData.priority==='Medium'?'bg-amber-500':'bg-emerald-500'}`}></div>
+                           <div className={`absolute top-0 left-0 w-1.5 h-full ${task.taskData.priority==='High'?'bg-rose-500':task.taskData.priority==='Medium'?'bg-amber-500':'bg-emerald-500'}`}></div>
                         )}
 
                         <div className="flex justify-between items-start mb-2.5 pl-1.5">
@@ -134,7 +134,7 @@ export default function RightSidebar({
                             </span>
                         </div>
                         
-                        <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 pl-1.5 ${isDone || isArchived ? 'text-slate-500 line-through' : 'text-slate-800 group-hover/task:text-primary transition-colors'}`}>
+                        <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 pl-1.5 ${isDone || isArchived ? 'text-slate-500 line-through' : 'text-slate-800 group-hover/task:text-indigo-600 transition-colors'}`}>
                             {task.text}
                         </div>
                         
@@ -143,7 +143,7 @@ export default function RightSidebar({
                                 {group?.name || 'Direct Task'}
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-primary opacity-0 group-hover/task:opacity-100 transition-opacity mr-1 flex items-center gap-1">
+                              <span className="text-[10px] font-bold text-indigo-500 opacity-0 group-hover/task:opacity-100 transition-opacity mr-1 flex items-center gap-1">
                                 View Original <i className="fa-solid fa-arrow-right"></i>
                               </span>
                               <div className="flex -space-x-1.5">
