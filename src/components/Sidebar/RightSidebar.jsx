@@ -3,12 +3,9 @@ import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 export default function RightSidebar({
   showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
-  archivedTasks, groups, dbUsers, user, setActiveGroup, navigateToMessageFromNotification,
-  handleAddInlineComment // Added Prop
+  archivedTasks, groups, dbUsers, user, setActiveGroup, navigateToMessageFromNotification
 }) {
   const [filter, setFilter] = useState('All'); 
-  const [expandedTaskId, setExpandedTaskId] = useState(null); // Added State
-  const [localComment, setLocalComment] = useState(""); // Added State
 
   const allTasks = useMemo(() => {
     const map = new Map();
@@ -94,8 +91,10 @@ export default function RightSidebar({
                  return (
                      <div 
                         key={task.id}
-                        // Click expands card instead of navigating immediately
-                        onClick={() => setExpandedTaskId(prev => prev === task.id ? null : task.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (navigateToMessageFromNotification) navigateToMessageFromNotification(task.id, task.groupId);
+                        }}
                         className={`bg-white border rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-indigo-300'}`}
                      >
                         <div className="flex justify-between items-start mb-2.5">
@@ -125,16 +124,9 @@ export default function RightSidebar({
                                 {group?.name || 'Group'}
                             </span>
                             <div className="flex items-center gap-2">
-                              {/* Jump logic moved to dedicated button to stop bubbling */}
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (navigateToMessageFromNotification) navigateToMessageFromNotification(task.id, task.groupId);
-                                }} 
-                                className="text-[10px] font-bold text-indigo-500 opacity-0 group-hover/task:opacity-100 transition-opacity flex items-center gap-1 mr-1 hover:text-indigo-700"
-                              >
-                                Jump <i className="fa-solid fa-arrow-right"></i>
-                              </button>
+                              <span className="text-[10px] font-bold text-indigo-500 opacity-0 group-hover/task:opacity-100 transition-opacity mr-1 flex items-center gap-1">
+                                View <i className="fa-solid fa-arrow-right"></i>
+                              </span>
                               <div className="flex -space-x-1.5">
                                   {(task.taskData.assignees || []).slice(0, 3).map(email => {
                                       const assignee = dbUsers.find(u => u.email === email);
@@ -143,40 +135,6 @@ export default function RightSidebar({
                               </div>
                             </div>
                         </div>
-
-                        {/* Inline Task Trail */}
-                        {expandedTaskId === task.id && (
-                           <div className="mt-3 pt-3 border-t border-slate-100 animate-in fade-in" onClick={e => e.stopPropagation()}>
-                               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Task Activity</h4>
-                               <div className="space-y-2 max-h-48 overflow-y-auto custom-sidebar-scroll pr-2 mb-3">
-                                   {(task.taskData.trail || []).map((t, i) => (
-                                       <div key={i} className="bg-slate-100/50 p-2.5 rounded-lg border border-slate-200">
-                                           <div className="text-[11px] font-bold text-indigo-600 mb-0.5">{t.action}</div>
-                                           <div className="text-[9px] text-slate-500 mb-1">{t.by} • {t.time}</div>
-                                           {t.comment && <div className="text-[11px] text-slate-700 italic">"{t.comment}"</div>}
-                                       </div>
-                                   ))}
-                               </div>
-                               <div className="flex gap-2">
-                                   <input 
-                                      type="text" value={localComment} onChange={e => setLocalComment(e.target.value)} 
-                                      placeholder="Add update..." 
-                                      className="flex-1 text-[11px] border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-400 bg-white" 
-                                   />
-                                   <button 
-                                      onClick={() => { 
-                                          if(localComment.trim()) { 
-                                              handleAddInlineComment(task, localComment); 
-                                              setLocalComment(''); 
-                                          } 
-                                      }} 
-                                      className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-indigo-700 shadow-sm"
-                                   >
-                                      <i className="fa-solid fa-paper-plane"></i>
-                                   </button>
-                               </div>
-                           </div>
-                        )}
                      </div>
                  )
              })
