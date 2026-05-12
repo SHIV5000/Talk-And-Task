@@ -38,7 +38,7 @@ export default function RightSidebar({
       
       <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0">
         <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-indigo-100 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-layer-group text-sm"></i></div>
+          <div className="w-7 h-7 rounded bg-primary/10 flex items-center justify-center text-primary"><i className="fa-solid fa-layer-group text-sm"></i></div>
           Workspace Hub
         </h2>
         <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-danger w-8 h-8 rounded-full hover:bg-red-50 flex items-center justify-center transition-colors">
@@ -60,10 +60,6 @@ export default function RightSidebar({
                 <div className="text-lg font-black text-teal-700">{stats.completed}</div>
                 <div className="text-[9px] font-bold text-teal-500 uppercase tracking-wider mt-1">Done</div>
             </div>
-            <div className="flex-1 bg-slate-100 border border-slate-200 rounded-xl p-2 text-center shadow-sm opacity-70">
-                <div className="text-lg font-black text-slate-500">{stats.archived}</div>
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-1">Archived</div>
-            </div>
          </div>
          
          <div className="flex flex-wrap gap-2">
@@ -71,7 +67,7 @@ export default function RightSidebar({
                 <button 
                   key={f} 
                   onClick={()=>setFilter(f)} 
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}
                 >
                   {f}
                 </button>
@@ -95,42 +91,46 @@ export default function RightSidebar({
                           e.stopPropagation();
                           if (navigateToMessageFromNotification) navigateToMessageFromNotification(task.id, task.groupId);
                         }}
-                        className={`bg-white border rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-indigo-300'}`}
+                        className={`bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-primary/40'}`}
                      >
-                        <div className="flex justify-between items-start mb-2.5">
+                        {/* Priority Color Bar */}
+                        {!isArchived && !isDone && (
+                           <div className={`absolute top-0 left-0 w-1.5 h-full ${task.taskData.priority==='High'?'bg-red-500':task.taskData.priority==='Medium'?'bg-amber-500':'bg-emerald-500'}`}></div>
+                        )}
+
+                        <div className="flex justify-between items-start mb-2.5 pl-1.5">
                             <div className="flex gap-1.5 items-center">
                                 {isArchived ? (
                                     <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
                                       <i className="fa-solid fa-box-archive"></i> Archived
                                     </span>
                                 ) : (
-                                    <>
-                                        <div className={`w-2 h-2 rounded-full ${task.taskData.priority==='High'?'bg-red-500':task.taskData.priority==='Medium'?'bg-amber-500':'bg-green-500'}`}></div>
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{task.taskData.status}</span>
-                                    </>
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDone ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
+                                      {task.taskData.status}
+                                    </span>
                                 )}
                             </div>
                             <span className={`text-[10px] font-bold flex items-center gap-1 ${isDone ? 'text-teal-600' : 'text-slate-400'}`}>
-                                <i className="fa-regular fa-clock"></i> {new Date(task.taskData.deadline).toLocaleDateString()}
+                                <i className="fa-regular fa-calendar"></i> {new Date(task.taskData.deadline).toLocaleDateString()}
                             </span>
                         </div>
                         
-                        <div className={`text-[13px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone || isArchived ? 'text-slate-500 line-through' : 'text-slate-800 group-hover/task:text-indigo-600 transition-colors'}`}>
+                        <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 pl-1.5 ${isDone || isArchived ? 'text-slate-500 line-through' : 'text-slate-800 group-hover/task:text-primary transition-colors'}`}>
                             {task.text}
                         </div>
                         
-                        <div className="flex justify-between items-center pt-2.5 border-t border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md truncate max-w-[120px]">
-                                {group?.name || 'Group'}
+                        <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-100 pl-1.5">
+                            <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-md truncate max-w-[120px] shadow-sm">
+                                {group?.name || 'Direct Task'}
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-indigo-500 opacity-0 group-hover/task:opacity-100 transition-opacity mr-1 flex items-center gap-1">
-                                View <i className="fa-solid fa-arrow-right"></i>
+                              <span className="text-[10px] font-bold text-primary opacity-0 group-hover/task:opacity-100 transition-opacity mr-1 flex items-center gap-1">
+                                View Task <i className="fa-solid fa-arrow-right"></i>
                               </span>
                               <div className="flex -space-x-1.5">
                                   {(task.taskData.assignees || []).slice(0, 3).map(email => {
                                       const assignee = dbUsers.find(u => u.email === email);
-                                      return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-5 h-5" extraClasses="border border-white" />;
+                                      return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses="border-2 border-white shadow-sm" />;
                                   })}
                               </div>
                             </div>
