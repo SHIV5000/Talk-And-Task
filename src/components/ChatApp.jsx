@@ -40,7 +40,7 @@ export default function ChatApp({ user, onLogout }) {
     const [editMessageText, setEditMessageText] = useState("");
     const [activeGroup, setActiveGroup] = useState(null);
     
-    // Task Modals specific states (slowly phasing out to inline)
+    // Task Modals specific states
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
     const [taskPriority, setTaskPriority] = useState("Medium");
@@ -118,76 +118,33 @@ export default function ChatApp({ user, onLogout }) {
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
 
-    // ==================== AUDIO SYNTHESIZER ENGINE ====================
+    // ==================== AUDIO ENGINE (HTML5) ====================
     const playMelody = useCallback((type) => {
         try {
-            if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (window.audioCtx.state === 'suspended') window.audioCtx.resume();
-            
-            const ctx = window.audioCtx;
-            const now = ctx.currentTime;
-            
-            const playOsc = (freq, oscType, startTime, duration, volStart = 0.3, volEnd = 0.001) => {
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = oscType;
-                osc.frequency.setValueAtTime(freq, startTime);
-                gain.gain.setValueAtTime(volStart, startTime);
-                gain.gain.exponentialRampToValueAtTime(volEnd, startTime + duration);
-                osc.start(startTime);
-                osc.stop(startTime + duration);
-            };
+            const incomingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FINCOMING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=413e00ca-6dc0-41e1-85d9-3d02e53ca526';
+            const outgoingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FOUTGOING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=4f357d75-c496-4f53-8f6a-fd0e6e81b41d';
 
+            let soundUrl = outgoingSound; // Default to outgoing
+            
+            // Map event types to specific URLs
             switch (type) {
-                case 'messageSent':
-                    playOsc(440, 'sine', now, 0.1, 0.1, 0.01);
-                    playOsc(554.37, 'sine', now + 0.1, 0.15, 0.1, 0.001); // Ascending major 3rd
-                    break;
                 case 'messageReceived':
-                    playOsc(554.37, 'sine', now, 0.1, 0.15, 0.01);
-                    playOsc(440, 'sine', now + 0.1, 0.2, 0.15, 0.001); // Descending minor 3rd
-                    break;
-                case 'fileUpload':
-                    playOsc(523.25, 'sine', now, 0.1, 0.2); // C5
-                    playOsc(659.25, 'sine', now + 0.1, 0.1, 0.2); // E5
-                    playOsc(783.99, 'sine', now + 0.2, 0.2, 0.2); // G5 (Bright arpeggio)
-                    break;
                 case 'taskCreated':
-                    playOsc(440, 'triangle', now, 0.3, 0.2); // A4
-                    playOsc(660, 'triangle', now, 0.3, 0.2); // E5 (Solid Perfect 5th)
-                    playOsc(880, 'sine', now + 0.1, 0.3, 0.1); // Octave highlight
-                    break;
                 case 'taskUpdated':
-                    playOsc(880, 'sine', now, 0.05, 0.1);
-                    playOsc(880, 'sine', now + 0.1, 0.05, 0.1);
-                    playOsc(1046.50, 'sine', now + 0.2, 0.15, 0.1); // Quick bright triplet
-                    break;
                 case 'taskFileUpload':
-                    playOsc(523.25, 'square', now, 0.2, 0.05);
-                    playOsc(659.25, 'sine', now + 0.05, 0.2, 0.1);
-                    playOsc(783.99, 'sine', now + 0.1, 0.2, 0.1);
-                    playOsc(1046.50, 'sine', now + 0.15, 0.3, 0.15); // Shimmering chord sweep
+                    soundUrl = incomingSound;
                     break;
+                case 'messageSent':
+                case 'fileUpload':
                 default:
-                    playOsc(440, 'sine', now, 0.1, 0.1);
+                    soundUrl = outgoingSound;
+                    break;
             }
-        } catch(e) { console.error("Audio Engine Error:", e); }
-    }, []);
 
-    // ==================== AUDIO UNLOCK ON USER GESTURE ====================
-    useEffect(() => {
-        window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const resumeAudio = () => {
-            if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
-        };
-        window.addEventListener('click', resumeAudio, { once: true });
-        window.addEventListener('touchstart', resumeAudio, { once: true });
-        return () => {
-            window.removeEventListener('click', resumeAudio);
-            window.removeEventListener('touchstart', resumeAudio);
-        };
+            const audio = new Audio(soundUrl);
+            audio.volume = 0.6; // Adjust volume as needed
+            audio.play().catch(err => console.warn("Audio playback blocked by browser:", err));
+        } catch(e) { console.error("Audio Engine Error:", e); }
     }, []);
 
     // ==================== INCOMING MESSAGE LISTENER ====================
@@ -367,7 +324,7 @@ export default function ChatApp({ user, onLogout }) {
     const handleSendMessage = async () => {
         if (!inputText.trim() || !activeGroup) return;
         await sendMessageToDB(inputText.trim(), replyingTo);
-        playMelody('messageSent'); // 🎵 Play sound on send
+        playMelody('messageSent'); // 🎵 Play outgoing sound
         setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
         if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -389,7 +346,7 @@ export default function ChatApp({ user, onLogout }) {
             try { await uploadAndSendFileDB(pf, setUploadProgress); } 
             catch (error) { alert(`Upload failed for ${pf.customName}: ${error.message}`); }
         }
-        playMelody('fileUpload'); // 🎵 Play sound on file upload completion
+        playMelody('fileUpload'); // 🎵 Play outgoing sound
         setIsUploading(false); setUploadProgress(0);
     };
 
@@ -467,7 +424,7 @@ export default function ChatApp({ user, onLogout }) {
             });
 
             logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
-            playMelody('taskCreated'); // 🎵 Play sound on task creation
+            playMelody('taskCreated'); // 🎵 Play incoming sound
             setActiveModal(null); setTaskAssignees([]);
         } catch (error) { alert("Failed to create task."); }
     };
@@ -477,7 +434,7 @@ export default function ChatApp({ user, onLogout }) {
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { text: newTaskTitle });
             setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
-            playMelody('taskUpdated'); // 🎵 Play sound
+            playMelody('taskUpdated'); // 🎵 Play incoming sound
             setIsEditingTaskTitle(false);
         } catch (e) { alert("Failed to update task title."); }
     };
@@ -488,7 +445,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
-            playMelody('taskUpdated'); // 🎵 Play sound
+            playMelody('taskUpdated'); // 🎵 Play incoming sound
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
     };
@@ -499,7 +456,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
-            playMelody('taskUpdated'); // 🎵 Play sound
+            playMelody('taskUpdated'); // 🎵 Play incoming sound
             setActiveModal(null);
         } catch (error) {}
     };
@@ -508,7 +465,7 @@ export default function ChatApp({ user, onLogout }) {
         if (!selectedMessage) return;
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.isArchived": true });
-            playMelody('taskUpdated'); // 🎵 Play sound
+            playMelody('taskUpdated'); // 🎵 Play incoming sound
             setActiveModal(null);
         } catch (error) {}
     };
@@ -521,7 +478,7 @@ export default function ChatApp({ user, onLogout }) {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
-            playMelody('taskUpdated'); // 🎵 Play sound
+            playMelody('taskUpdated'); // 🎵 Play incoming sound
             if (closeModal) setActiveModal(null);
         } catch (error) {}
     };
@@ -539,7 +496,7 @@ export default function ChatApp({ user, onLogout }) {
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
-                playMelody('taskFileUpload'); // 🎵 Play sound
+                playMelody('taskFileUpload'); // 🎵 Play incoming sound
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
     };
@@ -566,7 +523,7 @@ export default function ChatApp({ user, onLogout }) {
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
-            playMelody('taskUpdated'); // 🎵 Play sound
+            playMelody('taskUpdated'); // 🎵 Play incoming sound
         } catch (error) {}
     };
 
@@ -895,7 +852,7 @@ export default function ChatApp({ user, onLogout }) {
                                   </div>
                                     <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
                                     <button
-                                      onClick={() => playMelody('fileUpload')}
+                                      onClick={() => playMelody('messageSent')}
                                       className="bg-primary text-white px-3 py-1 rounded-lg text-xs font-bold"
                                     >
                                       Test Audio
