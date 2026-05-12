@@ -3,11 +3,13 @@ import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 export default function RightSidebar({
   showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
-  archivedTasks, groups, dbUsers, user, setActiveGroup, navigateToMessageFromNotification
+  archivedTasks, groups, dbUsers, user, setActiveGroup, navigateToMessageFromNotification,
+  handleAddInlineComment // Added Prop
 }) {
-  const [filter, setFilter] = useState('All'); // 'All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'
+  const [filter, setFilter] = useState('All'); 
+  const [expandedTaskId, setExpandedTaskId] = useState(null); // Added State
+  const [localComment, setLocalComment] = useState(""); // Added State
 
-  // Combine and deduplicate tasks
   const allTasks = useMemo(() => {
     const map = new Map();
     tasksAssignedToMe.forEach(t => map.set(t.id, t));
@@ -16,21 +18,19 @@ export default function RightSidebar({
     return Array.from(map.values()).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
   }, [tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
 
-  // Calculate Summary Stats
   const stats = {
-    total: tasksAssignedToMe.length + tasksAssignedByMe.length, // Total Active
+    total: tasksAssignedToMe.length + tasksAssignedByMe.length, 
     completed: allTasks.filter(t => t.taskData.status === 'Completed' && !t.taskData.isArchived).length,
     pending: allTasks.filter(t => t.taskData.status !== 'Completed' && !t.taskData.isArchived).length,
     archived: archivedTasks.length
   };
 
-  // Apply Selected Filter
   const filteredTasks = useMemo(() => {
     if (filter === 'Archived') return archivedTasks;
     if (filter === 'Assigned To Me') return tasksAssignedToMe;
     if (filter === 'Created By Me') return tasksAssignedByMe;
 
-    let res = allTasks.filter(t => !t.taskData.isArchived); // Default to active for All/Pending/Completed
+    let res = allTasks.filter(t => !t.taskData.isArchived); 
     if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
     if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
     return res;
@@ -39,7 +39,6 @@ export default function RightSidebar({
   return (
     <div className="w-full md:w-[350px] lg:w-[400px] shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2">
       
-      {/* Sidebar Header */}
       <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0">
         <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
           <div className="w-7 h-7 rounded bg-indigo-100 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-layer-group text-sm"></i></div>
@@ -50,7 +49,6 @@ export default function RightSidebar({
         </button>
       </div>
 
-      {/* Summary Dashboard */}
       <div className="p-4 bg-white border-b border-slate-200 shrink-0">
          <div className="flex gap-2 mb-4">
             <div className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-2 text-center shadow-sm">
@@ -71,7 +69,6 @@ export default function RightSidebar({
             </div>
          </div>
          
-         {/* 👇 FIX: Auto-wrapping Filter Chips */}
          <div className="flex flex-wrap gap-2">
             {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
                 <button 
@@ -85,7 +82,6 @@ export default function RightSidebar({
          </div>
       </div>
 
-      {/* Jira-Style Task List */}
       <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll space-y-3 bg-slate-50/50">
          {filteredTasks.length === 0 ? (
              <div className="text-sm text-slate-400 italic text-center py-8 bg-white border border-slate-100 rounded-xl">No tasks found for "{filter}"</div>
@@ -98,12 +94,8 @@ export default function RightSidebar({
                  return (
                      <div 
                         key={task.id}
-                        // 👇 FIX: Guaranteed Deep-Link Scroll Jump
-                        onClick={() => {
-                            if (navigateToMessageFromNotification) {
-                                navigateToMessageFromNotification(task.id, task.groupId);
-                            }
-                        }}
+                        // Click expands card instead of navigating immediately
+                        onClick={() => setExpandedTaskId(prev => prev === task.id ? null : task.id)}
                         className={`bg-white border rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-indigo-300'}`}
                      >
                         <div className="flex justify-between items-start mb-2.5">
@@ -133,9 +125,16 @@ export default function RightSidebar({
                                 {group?.name || 'Group'}
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-indigo-500 opacity-0 group-hover/task:opacity-100 transition-opacity flex items-center gap-1 mr-1">
+                              {/* Jump logic moved to dedicated button to stop bubbling */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (navigateToMessageFromNotification) navigateToMessageFromNotification(task.id, task.groupId);
+                                }} 
+                                className="text-[10px] font-bold text-indigo-500 opacity-0 group-hover/task:opacity-100 transition-opacity flex items-center gap-1 mr-1 hover:text-indigo-700"
+                              >
                                 Jump <i className="fa-solid fa-arrow-right"></i>
-                              </span>
+                              </button>
                               <div className="flex -space-x-1.5">
                                   {(task.taskData.assignees || []).slice(0, 3).map(email => {
                                       const assignee = dbUsers.find(u => u.email === email);
@@ -144,6 +143,40 @@ export default function RightSidebar({
                               </div>
                             </div>
                         </div>
+
+                        {/* Inline Task Trail */}
+                        {expandedTaskId === task.id && (
+                           <div className="mt-3 pt-3 border-t border-slate-100 animate-in fade-in" onClick={e => e.stopPropagation()}>
+                               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Task Activity</h4>
+                               <div className="space-y-2 max-h-48 overflow-y-auto custom-sidebar-scroll pr-2 mb-3">
+                                   {(task.taskData.trail || []).map((t, i) => (
+                                       <div key={i} className="bg-slate-100/50 p-2.5 rounded-lg border border-slate-200">
+                                           <div className="text-[11px] font-bold text-indigo-600 mb-0.5">{t.action}</div>
+                                           <div className="text-[9px] text-slate-500 mb-1">{t.by} • {t.time}</div>
+                                           {t.comment && <div className="text-[11px] text-slate-700 italic">"{t.comment}"</div>}
+                                       </div>
+                                   ))}
+                               </div>
+                               <div className="flex gap-2">
+                                   <input 
+                                      type="text" value={localComment} onChange={e => setLocalComment(e.target.value)} 
+                                      placeholder="Add update..." 
+                                      className="flex-1 text-[11px] border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-400 bg-white" 
+                                   />
+                                   <button 
+                                      onClick={() => { 
+                                          if(localComment.trim()) { 
+                                              handleAddInlineComment(task, localComment); 
+                                              setLocalComment(''); 
+                                          } 
+                                      }} 
+                                      className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-indigo-700 shadow-sm"
+                                   >
+                                      <i className="fa-solid fa-paper-plane"></i>
+                                   </button>
+                               </div>
+                           </div>
+                        )}
                      </div>
                  )
              })
