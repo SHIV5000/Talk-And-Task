@@ -86,9 +86,10 @@ export default function AdminPanel({
   adminFilterType, setAdminFilterType, adminFilterGroup, setAdminFilterGroup,
   handleToggleApprove, handleToggleAdmin, handleToggleCanCreateGroups,
   setSelectedMessage, setIsEditingTaskTitle, messages,
-  setGroupForm, setEditingGroup, groupForm, handleGroupSubmit, handleAdminArchiveGroup, handleAdminRecoverGroup,
+  setGroupForm, setEditingGroup, editingGroup, groupForm, // 👈 ADD editingGroup HERE
+  handleGroupSubmit, handleAdminArchiveGroup, handleAdminRecoverGroup,
   handleGroupPicUpload, groupPicUploadProgress
-}) {
+}) { 
   const [activeTab, setActiveTab] = useState('users');
   const [logSubTab, setLogSubTab] = useState('tasks');
   const [historyUserEmail, setHistoryUserEmail] = useState('');
@@ -444,16 +445,17 @@ export default function AdminPanel({
                 </div>
                 <div className="p-6 flex-1 overflow-y-auto bg-surface custom-sidebar-scroll">
                    <div className="mb-6 p-4 bg-white border rounded-xl shadow-sm">
-                      <h4 className="font-bold text-lg mb-2">{selectedTaskNode.task.text}</h4>
+                      {/* 👇 FIXED: Removed .task wrapper */}
+                      <h4 className="font-bold text-lg mb-2">{selectedTaskNode.text}</h4>
                       <div className="flex flex-wrap gap-2 text-xs font-bold text-gray-500">
-                         <span className="bg-gray-100 px-2 py-1 rounded">Status: {selectedTaskNode.task.taskData.status}</span>
-                         <span className="bg-gray-100 px-2 py-1 rounded">Priority: {selectedTaskNode.task.taskData.priority}</span>
-                         <span className="bg-gray-100 px-2 py-1 rounded">Due: {new Date(selectedTaskNode.task.taskData.deadline).toLocaleDateString()}</span>
+                         <span className="bg-gray-100 px-2 py-1 rounded">Status: {selectedTaskNode.taskData?.status}</span>
+                         <span className="bg-gray-100 px-2 py-1 rounded">Priority: {selectedTaskNode.taskData?.priority}</span>
+                         <span className="bg-gray-100 px-2 py-1 rounded">Due: {new Date(selectedTaskNode.taskData?.deadline).toLocaleDateString()}</span>
                       </div>
                    </div>
                    <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Activity History</h5>
                    <div className="space-y-3 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
-                      {(selectedTaskNode.task.taskData.trail || []).map((t, i) => (
+                      {(selectedTaskNode.taskData?.trail || []).map((t, i) => (
                          <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
                              <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-indigo-100 text-indigo-600 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10"><i className="fa-solid fa-bolt text-xs"></i></div>
                              <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
@@ -468,7 +470,6 @@ export default function AdminPanel({
              </div>
           </div>
         )}
-
       </div>
     </div>
   );
