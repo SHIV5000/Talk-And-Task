@@ -14,9 +14,11 @@ export default function GroupSettingsModal({
   const isAdmin = activeGroup?.admins?.includes(user.email) || currentUserData?.isAdmin || isVipAdmin;
 
   return (
-    <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
-      <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-5">
+    <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setActiveModal(null)}>
+      <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-in zoom-in-95 transform-gpu flex flex-col max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        
+        {/* Header - Fixed */}
+        <div className="flex items-center gap-4 p-6 border-b border-slate-100 shrink-0 bg-white z-10">
           {activeGroup.profilePicUrl ? <img src={activeGroup.profilePicUrl} className="w-14 h-14 rounded-full object-cover shadow-sm border border-slate-100" alt=""/> 
             : <div className="w-14 h-14 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-xl shadow-inner"><i className="fa-solid fa-people-group"></i></div>}
           <div className="overflow-hidden">
@@ -24,13 +26,15 @@ export default function GroupSettingsModal({
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Team Info</div>
           </div>
         </div>
-        <div className="space-y-4">
-          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Directory</div>
-          <div className="h-56 overflow-y-auto space-y-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl shadow-inner">
+
+        {/* Body - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 custom-sidebar-scroll">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Directory</div>
+          <div className="space-y-1.5 p-2 bg-white border border-slate-200 rounded-xl shadow-sm">
             {dbUsers.map(u => {
               const isMember = activeGroup.members?.includes(u.email);
               return (
-                <label key={u.uid} className={`flex items-center gap-3 p-2 rounded-lg transition-colors border border-transparent ${isAdmin ? 'hover:bg-white hover:border-slate-200 hover:shadow-sm cursor-pointer' : ''}`}>
+                <label key={u.uid} className={`flex items-center gap-3 p-2 rounded-lg transition-colors border border-transparent ${isAdmin ? 'hover:bg-slate-50 hover:border-slate-200 hover:shadow-sm cursor-pointer' : ''}`}>
                   <input type="checkbox" disabled={!isAdmin || activeGroup.admins?.includes(u.email)} checked={isMember || groupForm.members.includes(u.email)}
                     onChange={(e) => {
                       if(!isAdmin) return;
@@ -45,13 +49,16 @@ export default function GroupSettingsModal({
               );
             })}
           </div>
-          <div className="flex gap-3 mt-4 pt-2">
-            <button onClick={() => setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl transition-colors">Close</button>
-            {isAdmin && (
-              <button onClick={() => onGroupUpdate({ members: groupForm.members })} className="flex-1 bg-[#008069] text-white py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(0,128,105,0.3)] hover:bg-[#006e5a] transition-all">Save</button>
-            )}
-          </div>
         </div>
+
+        {/* Footer - Fixed */}
+        <div className="flex gap-3 p-5 border-t border-slate-100 shrink-0 bg-white z-10">
+          <button onClick={() => setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl transition-colors">Close</button>
+          {isAdmin && (
+            <button onClick={() => onGroupUpdate({ members: groupForm.members })} className="flex-1 bg-[#008069] text-white py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(0,128,105,0.3)] hover:bg-[#006e5a] transition-all">Save Changes</button>
+          )}
+        </div>
+
       </div>
     </div>
   );
