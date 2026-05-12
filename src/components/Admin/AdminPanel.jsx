@@ -86,8 +86,8 @@ export default function AdminPanel({
   adminFilterType, setAdminFilterType, adminFilterGroup, setAdminFilterGroup,
   handleToggleApprove, handleToggleAdmin, handleToggleCanCreateGroups,
   setSelectedMessage, setIsEditingTaskTitle, messages,
-  setGroupForm, setEditingGroup, handleAdminArchiveGroup, handleAdminRecoverGroup,
-  handleGroupPicUpload,
+  setGroupForm, setEditingGroup, groupForm, handleGroupSubmit, handleAdminArchiveGroup, handleAdminRecoverGroup,
+  handleGroupPicUpload, groupPicUploadProgress
 }) {
   const [activeTab, setActiveTab] = useState('users');
   const [logSubTab, setLogSubTab] = useState('tasks');
@@ -99,13 +99,17 @@ export default function AdminPanel({
   const [newUserName, setNewUserName] = useState('');
   const [newUserApprove, setNewUserApprove] = useState(true);
 
-  // Selection for print
+  // Print Selection
   const [selectedUsers, setSelectedUsers] = useState(new Set());
   const [selectedLogs, setSelectedLogs] = useState(new Set());
-  const [selectedTasks, setSelectedTasks] = useState(new Set());
+  const [selectedHistory, setSelectedHistory] = useState(new Set());
 
   // Archive filter
   const [showArchivedUsers, setShowArchivedUsers] = useState(false);
+  
+  // Inline Overlays
+  const [localOverlay, setLocalOverlay] = useState(null); // 'group_form' | 'task_trail'
+  const [selectedTaskNode, setSelectedTaskNode] = useState(null);
 
   // Log filtering
   const taskLogs = useMemo(() => filteredAuditLogs.filter(l => l.type.startsWith('TASK_')), [filteredAuditLogs]);
@@ -117,17 +121,15 @@ export default function AdminPanel({
     return filteredAuditLogs.filter(l => l.user === historyUserEmail).sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
   }, [filteredAuditLogs, historyUserEmail]);
 
-  // Users with archive filter
   const filteredUsers = useMemo(() => {
     return dbUsers.filter(u => showArchivedUsers ? u.isArchived : !u.isArchived);
   }, [dbUsers, showArchivedUsers]);
 
-  // ---------- TASK TREE (hierarchical) ----------
+  // ---------- TASK TREE ----------
   const taskMessages = useMemo(() => messages.filter(m => m.isTask), [messages]);
 
   const treeData = useMemo(() => {
     const root = { id: 'org', name: '🏢 Organisation', type: 'org', children: [] };
-
     const groupMap = {};
     taskMessages.forEach(task => {
       const gid = task.groupId || 'direct';
@@ -142,14 +144,9 @@ export default function AdminPanel({
 
       tasks.forEach(task => {
         teamNode.children.push({
-          id: task.id,
-          name: task.text || 'Untitled Task',
-          type: 'task',
-          task,
-          children: [],
+          id: task.id, name: task.text || 'Untitled Task', type: 'task', task, children: [],
         });
       });
-
       root.children.push(teamNode);
     });
 
@@ -157,9 +154,8 @@ export default function AdminPanel({
   }, [taskMessages, groups]);
 
   const openTaskTrail = (task) => {
-    setSelectedMessage(task);
-    setIsEditingTaskTitle(false);
-    setActiveModal('task_trail');
+    setSelectedTaskNode(task);
+    setLocalOverlay('task_trail');
   };
 
   // Selection handlers
@@ -177,15 +173,18 @@ export default function AdminPanel({
   const toggleSelectLog = (id) => {
     const s = new Set(selectedLogs); s.has(id) ? s.delete(id) : s.add(id); setSelectedLogs(s);
   };
+  const toggleSelectAllHistory = () => {
+    if (selectedHistory.size === userHistoryLogs.length) setSelectedHistory(new Set());
+    else setSelectedHistory(new Set(userHistoryLogs.map(l => l.id)));
+  };
+  const toggleSelectHistory = (id) => {
+    const s = new Set(selectedHistory); s.has(id) ? s.delete(id) : s.add(id); setSelectedHistory(s);
+  };
 
   // ---------- PRINT PDF ----------
   const printSelectedPDF = () => {
     const doc = new jsPDF('p', 'mm', 'a4');
-    doc.setFont('Inter');
-    doc.setFontSize(16);
-    doc.text('Talk & Task – Admin Report', 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
+    doc.setFont('Inter'); doc.setFontSize(16); doc.text('Talk & Task – Admin Report', 14, 20); doc.setFontSize(10); doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
     let y = 40;
 
     if (activeTab === 'users') {
@@ -196,45 +195,35 @@ export default function AdminPanel({
       const data = currentLogs.filter(l => selectedLogs.has(l.id));
       doc.text(`Logs – ${logSubTab === 'tasks' ? 'Task' : 'Message'}`, 14, y); y += 6;
       doc.autoTable({ startY: y, head: [['#', 'Time', 'Action', 'User', 'Details']], body: data.map((l, i) => [i + 1, l.dateString + ' ' + l.time, l.type, (l.user || '').split('@')[0], l.content]), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
+    } else if (activeTab === 'history') {
+      const data = userHistoryLogs.filter(l => selectedHistory.has(l.id));
+      doc.text(`User Activity History – ${historyUserEmail || 'All'}`, 14, y); y += 6;
+      doc.autoTable({ startY: y, head: [['#', 'Time', 'Action', 'Details']], body: data.map((l, i) => [i + 1, l.dateString + ' ' + l.time, l.type, l.content]), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
     }
     doc.save(`admin_report_${activeTab}_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  // Add user
   const handleAddUser = async () => {
     if (!newUserEmail || !newUserName) return alert('Please enter email and name.');
     try {
-      await addDoc(collection(db, "users"), {
-        uid: `manual_${Date.now()}`, email: newUserEmail, name: newUserName,
-        isApproved: newUserApprove, isAdmin: false, canCreateGroups: false,
-        isArchived: false, lastActive: serverTimestamp(),
-        toolPreferences: { reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic' },
-      });
-      setNewUserEmail(''); setNewUserName(''); setShowAddUser(false);
-      alert('User added successfully!');
+      await addDoc(collection(db, "users"), { uid: `manual_${Date.now()}`, email: newUserEmail, name: newUserName, isApproved: newUserApprove, isAdmin: false, canCreateGroups: false, isArchived: false, lastActive: serverTimestamp(), toolPreferences: { reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic' } });
+      setNewUserEmail(''); setNewUserName(''); setShowAddUser(false); alert('User added successfully!');
     } catch (e) { alert('Failed to add user.'); }
   };
 
-  // Archive / Retrieve user
   const handleToggleArchiveUser = async (u) => {
-    try {
-      const { updateDoc, doc } = await import('firebase/firestore');
-      await updateDoc(doc(db, "users", u.uid), { isArchived: !u.isArchived });
-    } catch (e) { alert('Failed to update user.'); }
+    try { const { updateDoc, doc } = await import('firebase/firestore'); await updateDoc(doc(db, "users", u.uid), { isArchived: !u.isArchived }); } catch (e) { alert('Failed to update user.'); }
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-surface overflow-hidden animate-in fade-in z-40">
-      {/* HEADER */}
+    <div className="flex flex-col h-full w-full bg-surface overflow-hidden animate-in fade-in z-40 relative">
       <div className="bg-primary px-4 py-3 flex items-center justify-between shadow-md shrink-0 safe-top">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur shadow-inner">
-            <i className="fa-solid fa-shield-halved text-xl text-white"></i>
-          </div>
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur shadow-inner"><i className="fa-solid fa-shield-halved text-xl text-white"></i></div>
           <h1 className="font-bold text-lg text-white tracking-wide">Admin Workspace</h1>
         </div>
         <div className="flex items-center gap-2">
-          {(activeTab === 'users' || activeTab === 'logs') && (
+          {['users', 'logs', 'history'].includes(activeTab) && (
             <button onClick={printSelectedPDF} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30">
               <i className="fa-solid fa-file-pdf"></i> Print Selected
             </button>
@@ -245,24 +234,16 @@ export default function AdminPanel({
         </div>
       </div>
 
-      {/* TABS */}
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-gray-200 flex-wrap">
         {['users', 'groups', 'logs', 'tasks', 'history'].map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2.5 rounded-t-lg text-sm font-bold transition-colors ${activeTab === tab ? 'bg-surface text-primary border-b-2 border-primary' : 'text-text-secondary hover:text-primary hover:bg-gray-50'}`}>
-            {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}
-            {tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}
-            {tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}
-            {tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}
-            {tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-t-lg text-sm font-bold transition-colors ${activeTab === tab ? 'bg-surface text-primary border-b-2 border-primary' : 'text-text-secondary hover:text-primary hover:bg-gray-50'}`}>
+            {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}{tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}{tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}{tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}{tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
 
-      {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-surface">
-        {/* ===== USERS ===== */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-surface relative">
         {activeTab === 'users' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center flex-wrap gap-3">
@@ -286,18 +267,7 @@ export default function AdminPanel({
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50 text-text-secondary text-xs uppercase">
-                  <tr>
-                    <th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllUsers} checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0} className="w-4 h-4 accent-primary" /></th>
-                    <th className="px-3 py-3">#</th>
-                    <th className="px-3 py-3">User</th>
-                    <th className="px-3 py-3">Email</th>
-                    <th className="px-3 py-3">Status</th>
-                    <th className="px-2 py-3 text-center">Admin</th>
-                    <th className="px-2 py-3 text-center">Groups</th>
-                    <th className="px-3 py-3 text-center">Login</th>
-                    <th className="px-3 py-3 text-center">Archive</th>
-                    <th className="px-3 py-3 text-center">History</th>
-                  </tr>
+                  <tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllUsers} checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0} className="w-4 h-4 accent-primary" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">User</th><th className="px-3 py-3">Email</th><th className="px-3 py-3">Status</th><th className="px-2 py-3 text-center">Admin</th><th className="px-2 py-3 text-center">Groups</th><th className="px-3 py-3 text-center">Login</th><th className="px-3 py-3 text-center">Archive</th><th className="px-3 py-3 text-center">History</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredUsers.map((u, idx) => (
@@ -310,14 +280,8 @@ export default function AdminPanel({
                       <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.isAdmin || false} onChange={() => handleToggleAdmin(u)} className="w-4 h-4 accent-primary" /></td>
                       <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-4 h-4 accent-primary" /></td>
                       <td className="px-3 py-3 text-center text-[11px] text-text-secondary">{u.lastLogin?.toDate ? new Date(u.lastLogin.toDate()).toLocaleString() : '—'}</td>
-                      <td className="px-3 py-3 text-center">
-                        <button onClick={() => handleToggleArchiveUser(u)} className={`text-xs font-bold ${u.isArchived ? 'text-teal-600 hover:text-teal-800' : 'text-amber-600 hover:text-amber-800'}`}>
-                          <i className={`fa-solid ${u.isArchived ? 'fa-rotate-left' : 'fa-box-archive'}`}></i>
-                        </button>
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <button onClick={() => { setHistoryUserEmail(u.email); setActiveTab('history'); }} className="text-primary hover:underline text-xs font-bold"><i className="fa-solid fa-clock-rotate-left mr-1"></i>History</button>
-                      </td>
+                      <td className="px-3 py-3 text-center"><button onClick={() => handleToggleArchiveUser(u)} className={`text-xs font-bold ${u.isArchived ? 'text-teal-600 hover:text-teal-800' : 'text-amber-600 hover:text-amber-800'}`}><i className={`fa-solid ${u.isArchived ? 'fa-rotate-left' : 'fa-box-archive'}`}></i></button></td>
+                      <td className="px-3 py-3 text-center"><button onClick={() => { setHistoryUserEmail(u.email); setActiveTab('history'); }} className="text-primary hover:underline text-xs font-bold"><i className="fa-solid fa-clock-rotate-left mr-1"></i>History</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -326,12 +290,11 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ===== GROUPS ===== */}
         {activeTab === 'groups' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center">
               <h2 className="font-bold text-text-primary text-lg"><i className="fa-solid fa-people-group text-primary mr-2"></i>Team Management</h2>
-              <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-primary-hover"><i className="fa-solid fa-plus mr-2"></i>Create Team</button>
+              <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setLocalOverlay('group_form'); }} className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-primary-hover"><i className="fa-solid fa-plus mr-2"></i>Create Team</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
               {groups.map(g => (
@@ -341,8 +304,7 @@ export default function AdminPanel({
                     <div className="flex-1 min-w-0"><h3 className="font-bold text-text-primary truncate">{g.name}</h3><p className="text-xs text-text-secondary">{g.members?.length || 0} Members {g.isArchived && '· Archived'}</p></div>
                   </div>
                   <div className="flex gap-2 mt-3">
-                    <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); setActiveModal('group_form_modal'); }} className="flex-1 bg-gray-100 text-text-secondary py-2 rounded-lg text-xs font-bold hover:bg-gray-200"><i className="fa-solid fa-pen mr-1"></i>Edit</button>
-                    <button onClick={() => { setActiveModal('group_settings'); }} className="flex-1 bg-gray-100 text-text-secondary py-2 rounded-lg text-xs font-bold hover:bg-gray-200"><i className="fa-solid fa-users mr-1"></i>Members</button>
+                    <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); setLocalOverlay('group_form'); }} className="flex-1 bg-gray-100 text-text-secondary py-2 rounded-lg text-xs font-bold hover:bg-gray-200"><i className="fa-solid fa-pen mr-1"></i>Edit</button>
                     {g.isArchived ? (
                       <button onClick={() => { if (window.confirm('Recover?')) handleAdminRecoverGroup(g.id, g.name); }} className="flex-1 bg-teal-50 text-teal-700 py-2 rounded-lg text-xs font-bold hover:bg-teal-100"><i className="fa-solid fa-rotate-left mr-1"></i>Recover</button>
                     ) : (
@@ -355,14 +317,11 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ===== LOGS ===== */}
         {activeTab === 'logs' && (
           <div className="flex flex-col gap-6">
             <div className="flex gap-2">
               {['tasks', 'messages'].map(sub => (
-                <button key={sub} onClick={() => setLogSubTab(sub)} className={`px-4 py-2 rounded-lg text-sm font-bold ${logSubTab === sub ? 'bg-primary text-white shadow-sm' : 'bg-white text-text-secondary border border-gray-200 hover:bg-gray-50'}`}>
-                  <i className={`fa-solid ${sub === 'tasks' ? 'fa-check-square' : 'fa-comment'} mr-2`}></i>{sub === 'tasks' ? 'Task Logs' : 'Message Logs'}
-                </button>
+                <button key={sub} onClick={() => setLogSubTab(sub)} className={`px-4 py-2 rounded-lg text-sm font-bold ${logSubTab === sub ? 'bg-primary text-white shadow-sm' : 'bg-white text-text-secondary border border-gray-200 hover:bg-gray-50'}`}><i className={`fa-solid ${sub === 'tasks' ? 'fa-check-square' : 'fa-comment'} mr-2`}></i>{sub === 'tasks' ? 'Task Logs' : 'Message Logs'}</button>
               ))}
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
@@ -377,9 +336,7 @@ export default function AdminPanel({
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50 text-text-secondary text-xs uppercase">
-                    <tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllLogs} checked={selectedLogs.size === currentLogs.length && currentLogs.length > 0} className="w-4 h-4 accent-primary" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">Time</th><th className="px-3 py-3">Action</th><th className="px-3 py-3">Initiated By</th><th className="px-3 py-3">Details</th></tr>
-                  </thead>
+                  <thead className="bg-gray-50 text-text-secondary text-xs uppercase"><tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllLogs} checked={selectedLogs.size === currentLogs.length && currentLogs.length > 0} className="w-4 h-4 accent-primary" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">Time</th><th className="px-3 py-3">Action</th><th className="px-3 py-3">Initiated By</th><th className="px-3 py-3">Details</th></tr></thead>
                   <tbody className="divide-y divide-gray-100">
                     {currentLogs.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-text-secondary italic">No records found.</td></tr>}
                     {currentLogs.map((log, idx) => (
@@ -399,24 +356,16 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ===== TASKS TREE ===== */}
         {activeTab === 'tasks' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="font-bold text-text-primary text-lg flex items-center gap-2">
-                <i className="fa-solid fa-diagram-project text-primary"></i> Organisation Task Tree
-              </h2>
+              <h2 className="font-bold text-text-primary text-lg flex items-center gap-2"><i className="fa-solid fa-diagram-project text-primary"></i> Organisation Task Tree</h2>
               <span className="text-sm text-text-secondary">{taskMessages.length} tasks across {treeData.children.length} teams</span>
             </div>
-            {treeData.children.length === 0 ? (
-              <p className="text-sm text-text-secondary text-center py-12">No tasks assigned yet.</p>
-            ) : (
-              <TreeNode node={treeData} depth={0} dbUsers={dbUsers} openTaskTrail={openTaskTrail} allExpanded={true} />
-            )}
+            {treeData.children.length === 0 ? <p className="text-sm text-text-secondary text-center py-12">No tasks assigned yet.</p> : <TreeNode node={treeData} depth={0} dbUsers={dbUsers} openTaskTrail={openTaskTrail} allExpanded={true} />}
           </div>
         )}
 
-        {/* ===== HISTORY ===== */}
         {activeTab === 'history' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-5 border-b border-gray-100"><h2 className="font-bold text-text-primary text-lg"><i className="fa-solid fa-clock-rotate-left text-primary mr-2"></i>User Activity History</h2></div>
@@ -428,17 +377,98 @@ export default function AdminPanel({
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-text-secondary text-xs uppercase"><tr><th className="px-5 py-3">#</th><th className="px-5 py-3">Time</th><th className="px-5 py-3">Action</th><th className="px-5 py-3">Details</th></tr></thead>
+                <thead className="bg-gray-50 text-text-secondary text-xs uppercase"><tr><th className="px-5 py-3"><input type="checkbox" onChange={toggleSelectAllHistory} checked={selectedHistory.size === userHistoryLogs.length && userHistoryLogs.length > 0} className="w-4 h-4 accent-primary" /></th><th className="px-5 py-3">#</th><th className="px-5 py-3">Time</th><th className="px-5 py-3">Action</th><th className="px-5 py-3">Details</th></tr></thead>
                 <tbody className="divide-y divide-gray-100">
-                  {userHistoryLogs.length === 0 && <tr><td colSpan={4} className="px-5 py-8 text-center text-text-secondary italic">{historyUserEmail ? 'No activity found.' : 'Select a user above.'}</td></tr>}
+                  {userHistoryLogs.length === 0 && <tr><td colSpan={5} className="px-5 py-8 text-center text-text-secondary italic">{historyUserEmail ? 'No activity found.' : 'Select a user above.'}</td></tr>}
                   {userHistoryLogs.map((log, idx) => (
-                    <tr key={log.id} className="hover:bg-gray-50"><td className="px-5 py-3 text-text-secondary">{idx + 1}</td><td className="px-5 py-3"><div className="text-xs text-text-secondary">{log.dateString}</div><div className="text-[11px] text-text-secondary">{log.time}</div></td><td className="px-5 py-3"><span className="text-[11px] font-bold bg-white text-text-primary px-2.5 py-1 rounded-full border border-gray-200 shadow-sm">{log.type}</span></td><td className="px-5 py-3 text-text-primary">{log.content}</td></tr>
+                    <tr key={log.id} className="hover:bg-gray-50"><td className="px-5 py-3"><input type="checkbox" checked={selectedHistory.has(log.id)} onChange={() => toggleSelectHistory(log.id)} className="w-4 h-4 accent-primary" /></td><td className="px-5 py-3 text-text-secondary">{idx + 1}</td><td className="px-5 py-3"><div className="text-xs text-text-secondary">{log.dateString}</div><div className="text-[11px] text-text-secondary">{log.time}</div></td><td className="px-5 py-3"><span className="text-[11px] font-bold bg-white text-text-primary px-2.5 py-1 rounded-full border border-gray-200 shadow-sm">{log.type}</span></td><td className="px-5 py-3 text-text-primary">{log.content}</td></tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
         )}
+
+        {/* ==================== INLINE OVERLAYS ==================== */}
+        
+        {localOverlay === 'group_form' && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col p-6 animate-in fade-in">
+             <div className="max-w-2xl w-full mx-auto bg-white border border-gray-200 shadow-xl rounded-2xl flex flex-col overflow-hidden">
+                <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                   <h3 className="font-bold text-lg">{editingGroup ? 'Edit Team Details' : 'Create New Team'}</h3>
+                   <button onClick={() => setLocalOverlay(null)} className="text-gray-500 hover:text-red-500"><i className="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+                <div className="p-6 flex-1 overflow-y-auto custom-sidebar-scroll">
+                   <form onSubmit={(e) => { handleGroupSubmit(e); setLocalOverlay(null); }}>
+                      <div className="mb-4">
+                         <label className="text-xs font-bold text-gray-500 block mb-1">Team Name</label>
+                         <input value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="w-full border p-2.5 rounded-lg text-sm outline-none focus:border-primary" required />
+                      </div>
+                      <div className="mb-6">
+                         <label className="text-xs font-bold text-gray-500 block mb-1">Team Avatar</label>
+                         <input type="file" onChange={handleGroupPicUpload} className="text-sm" />
+                         {groupPicUploadProgress > 0 && <div className="text-xs text-primary mt-1">Uploading: {Math.round(groupPicUploadProgress)}%</div>}
+                      </div>
+                      <div className="mb-4">
+                         <label className="text-xs font-bold text-gray-500 block mb-2">Select Members</label>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 border p-3 rounded-lg max-h-48 overflow-y-auto bg-gray-50">
+                            {dbUsers.map(u => (
+                               <label key={u.uid} className="flex items-center gap-3 text-sm bg-white p-2 border border-gray-200 rounded shadow-sm cursor-pointer hover:border-primary">
+                                  <input type="checkbox" checked={groupForm.members.includes(u.email)} onChange={(e) => {
+                                      const m = new Set(groupForm.members);
+                                      e.target.checked ? m.add(u.email) : m.delete(u.email);
+                                      setGroupForm({...groupForm, members: Array.from(m)});
+                                  }} className="accent-primary w-4 h-4" />
+                                  <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-6 h-6" />
+                                  <span className="truncate">{u.name}</span>
+                               </label>
+                            ))}
+                         </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                         <button type="button" onClick={() => setLocalOverlay(null)} className="px-5 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200">Cancel</button>
+                         <button type="submit" className="px-5 py-2.5 bg-primary text-white font-bold rounded-lg hover:bg-primary-hover shadow-md">Save Team</button>
+                      </div>
+                   </form>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {localOverlay === 'task_trail' && selectedTaskNode && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in">
+             <div className="max-w-2xl w-full bg-white border border-gray-200 shadow-xl rounded-2xl flex flex-col overflow-hidden max-h-[90vh]">
+                <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                   <h3 className="font-bold text-lg text-primary"><i className="fa-solid fa-list-check mr-2"></i>Task Trail</h3>
+                   <button onClick={() => setLocalOverlay(null)} className="text-gray-500 hover:text-red-500"><i className="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+                <div className="p-6 flex-1 overflow-y-auto bg-surface custom-sidebar-scroll">
+                   <div className="mb-6 p-4 bg-white border rounded-xl shadow-sm">
+                      <h4 className="font-bold text-lg mb-2">{selectedTaskNode.task.text}</h4>
+                      <div className="flex flex-wrap gap-2 text-xs font-bold text-gray-500">
+                         <span className="bg-gray-100 px-2 py-1 rounded">Status: {selectedTaskNode.task.taskData.status}</span>
+                         <span className="bg-gray-100 px-2 py-1 rounded">Priority: {selectedTaskNode.task.taskData.priority}</span>
+                         <span className="bg-gray-100 px-2 py-1 rounded">Due: {new Date(selectedTaskNode.task.taskData.deadline).toLocaleDateString()}</span>
+                      </div>
+                   </div>
+                   <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Activity History</h5>
+                   <div className="space-y-3 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                      {(selectedTaskNode.task.taskData.trail || []).map((t, i) => (
+                         <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                             <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-indigo-100 text-indigo-600 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10"><i className="fa-solid fa-bolt text-xs"></i></div>
+                             <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                 <div className="flex items-center justify-between mb-1"><span className="font-bold text-slate-800 text-sm">{t.action}</span></div>
+                                 <div className="text-slate-500 text-xs mb-2">{t.by} • {t.time}</div>
+                                 {t.comment && <div className="text-slate-600 text-sm bg-slate-50 p-2 rounded border border-slate-100">"{t.comment}"</div>}
+                             </div>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+             </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
