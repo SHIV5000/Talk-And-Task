@@ -30,9 +30,9 @@ export default function ChatView({
           setTimeout(() => {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
-            el.classList.add('ring-4', 'ring-primary', 'bg-primary/10', 'transition-all', 'duration-500');
+            el.classList.add('ring-4', 'ring-indigo-400', 'bg-indigo-50', 'transition-all', 'duration-500');
             setTimeout(() => {
-                el.classList.remove('ring-4', 'ring-primary', 'bg-primary/10');
+                el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50');
             }, 4000);
             
             setPendingScrollTarget(null);
@@ -51,7 +51,6 @@ export default function ChatView({
   }, [pendingScrollTarget, setPendingScrollTarget]);
 
   return (
-    // Changed main background to softer slate-50 to reduce eye strain
     <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] bg-slate-50 relative">
       <div className="flex flex-col min-h-full justify-end py-4 pb-10">
         
@@ -78,7 +77,7 @@ export default function ChatView({
         {pinnedMessages.length > 0 && (
           <div className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
             <div className="flex justify-between items-center text-xs text-slate-500 font-medium mb-1">
-              <span><i className="fa-solid fa-thumbtack mr-1 text-primary"></i> Pinned Message</span>
+              <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
             </div>
             <div className="text-sm text-slate-800 line-clamp-1 truncate font-medium">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
           </div>
@@ -121,7 +120,7 @@ export default function ChatView({
 
         {typingStatus.length > 0 && (
           <div className="flex items-start mt-2 relative z-[1]">
-            <div className="bg-white px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 border border-primary/10">
+            <div className="bg-white px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 border border-indigo-500/10">
               <div className="flex -space-x-2">
                 {typingStatus.map(t => {
                   const uidPart = t.id.split('_')[1] || t.id;
@@ -148,7 +147,7 @@ export default function ChatView({
         </button>
         <button
           onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })}
-          className="bg-primary/90 backdrop-blur text-white shadow-md border border-primary/50 rounded-full w-10 h-10 flex items-center justify-center transition-transform hover:scale-105"
+          className="bg-indigo-600/90 backdrop-blur text-white shadow-md border border-indigo-500/50 rounded-full w-10 h-10 flex items-center justify-center transition-transform hover:scale-105"
           title="Scroll to latest"
         >
           <i className="fa-solid fa-arrow-down text-lg"></i>
