@@ -12,7 +12,7 @@ export default function ChatView({
   editingMessageId, editMessageText, setEditingMessageId, setEditMessageText,
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
-  unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource
+  unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource 
 }) {
   
   const handleChatScroll = (e) => {
@@ -20,7 +20,6 @@ export default function ChatView({
     setIsAtBottom(Math.abs(scrollHeight - clientHeight - scrollTop) < 50);
   };
 
-  // 👇 FIX: Aggressive Cross-Group Poller with forced Highlight
   useEffect(() => {
     if (pendingScrollTarget) {
       let attempts = 0;
@@ -31,17 +30,16 @@ export default function ChatView({
           setTimeout(() => {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
-            // Forcefully inject visual highlight classes for 4 seconds
             el.classList.add('ring-4', 'ring-primary', 'bg-primary/10', 'transition-all', 'duration-500');
             setTimeout(() => {
                 el.classList.remove('ring-4', 'ring-primary', 'bg-primary/10');
             }, 4000);
             
             setPendingScrollTarget(null);
-          }, 150); // slight delay to let rendering settle
+          }, 150); 
         } else {
           attempts++;
-          if (attempts > 30) { // Timeout after 15 seconds
+          if (attempts > 30) { 
             clearInterval(scrollPoller);
             setPendingScrollTarget(null);
           }
@@ -53,10 +51,10 @@ export default function ChatView({
   }, [pendingScrollTarget, setPendingScrollTarget]);
 
   return (
-    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] wa-bg relative">
+    // Changed main background to softer slate-50 to reduce eye strain
+    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] bg-slate-50 relative">
       <div className="flex flex-col min-h-full justify-end py-4 pb-10">
         
-        {/* Watermark */}
         {toolPreferences.showWatermark !== false && (
           <div className="doodle-watermark">
             {Array.from({ length: 15 }).map((_, rowIdx) => (
@@ -72,17 +70,17 @@ export default function ChatView({
         )}
 
         <div className="text-center mb-6 mt-4 relative z-[1]">
-          <span className="text-[12.5px] text-text-secondary bg-primary-light px-4 py-1.5 rounded-lg shadow-sm font-medium">
+          <span className="text-[12.5px] text-slate-500 bg-slate-200/50 px-4 py-1.5 rounded-lg shadow-sm font-medium border border-slate-200">
             <i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.
           </span>
         </div>
 
         {pinnedMessages.length > 0 && (
-          <div className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
-            <div className="flex justify-between items-center text-xs text-text-secondary font-medium mb-1">
-              <span><i className="fa-solid fa-thumbtack mr-1"></i> Pinned Message</span>
+          <div className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
+            <div className="flex justify-between items-center text-xs text-slate-500 font-medium mb-1">
+              <span><i className="fa-solid fa-thumbtack mr-1 text-primary"></i> Pinned Message</span>
             </div>
-            <div className="text-sm text-text-primary line-clamp-1 truncate">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
+            <div className="text-sm text-slate-800 line-clamp-1 truncate font-medium">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
           </div>
         )}
 
@@ -139,20 +137,23 @@ export default function ChatView({
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
 
-      <button
-        onClick={() => {
-          if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTo({
-              top: isAtBottom ? 0 : chatContainerRef.current.scrollHeight,
-              behavior: 'smooth'
-            });
-          }
-        }}
-        className="absolute bottom-[80px] right-4 bg-primary text-white shadow-lg rounded-full w-10 h-10 flex items-center justify-center z-30 transition-transform hover:scale-110"
-        title={isAtBottom ? 'Scroll to top' : 'Scroll to latest'}
-      >
-        <i className={`fa-solid ${isAtBottom ? 'fa-arrow-up' : 'fa-arrow-down'} text-lg`}></i>
-      </button>
+      {/* Always-On Scroll Arrows (Unobtrusive) */}
+      <div className="absolute bottom-[80px] right-4 flex flex-col gap-2 z-30">
+        <button
+          onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="bg-white/80 backdrop-blur text-slate-500 shadow-md border border-slate-200 rounded-full w-10 h-10 flex items-center justify-center transition-transform hover:scale-105"
+          title="Scroll to top"
+        >
+          <i className="fa-solid fa-arrow-up text-lg"></i>
+        </button>
+        <button
+          onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })}
+          className="bg-primary/90 backdrop-blur text-white shadow-md border border-primary/50 rounded-full w-10 h-10 flex items-center justify-center transition-transform hover:scale-105"
+          title="Scroll to latest"
+        >
+          <i className="fa-solid fa-arrow-down text-lg"></i>
+        </button>
+      </div>
     </div>
   );
 }
