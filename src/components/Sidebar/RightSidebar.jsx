@@ -6,42 +6,55 @@ export default function RightSidebar({
   archivedTasks, groups, dbUsers, navigateToMessageFromNotification
 }) {
   const [filter, setFilter] = useState('All'); 
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const allTasks = useMemo(() => {
     const map = new Map();
     tasksAssignedToMe.forEach(t => map.set(t.id, t));
     tasksAssignedByMe.forEach(t => map.set(t.id, t));
     archivedTasks.forEach(t => map.set(t.id, t));
-    return Array.from(map.values()).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
+    return Array.from(map.values());
   }, [tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
 
   const stats = {
     total: tasksAssignedToMe.length + tasksAssignedByMe.length, 
     completed: allTasks.filter(t => t.taskData.status === 'Completed' && !t.taskData.isArchived).length,
     pending: allTasks.filter(t => t.taskData.status !== 'Completed' && !t.taskData.isArchived).length,
-    archived: archivedTasks.length
   };
 
   const filteredTasks = useMemo(() => {
-    if (filter === 'Archived') return archivedTasks;
-    if (filter === 'Assigned To Me') return tasksAssignedToMe;
-    if (filter === 'Created By Me') return tasksAssignedByMe;
+    let res = [];
+    if (filter === 'Archived') res = archivedTasks;
+    else if (filter === 'Assigned To Me') res = tasksAssignedToMe;
+    else if (filter === 'Created By Me') res = tasksAssignedByMe;
+    else {
+        res = allTasks.filter(t => !t.taskData.isArchived); 
+        if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
+        if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
+    }
 
-    let res = allTasks.filter(t => !t.taskData.isArchived); 
-    if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
-    if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
-    return res;
-  }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
+    // Apply Date Range Filter
+    if (startDate) {
+        res = res.filter(t => new Date(t.taskData.deadline) >= new Date(startDate));
+    }
+    if (endDate) {
+        res = res.filter(t => new Date(t.taskData.deadline) <= new Date(endDate));
+    }
+
+    // Sort: Closer deadlines first
+    return res.sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime());
+  }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, archivedTasks, startDate, endDate]);
 
   return (
-    <div className="w-full md:w-[350px] lg:w-[400px] shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2">
+    <div className="w-full md:w-[350px] lg:w-[400px] shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2">
       
-      <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0">
+      <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0 shadow-sm">
         <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
           <div className="w-7 h-7 rounded bg-primary/10 flex items-center justify-center text-primary"><i className="fa-solid fa-layer-group text-sm"></i></div>
           Workspace Hub
         </h2>
-        <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-danger w-8 h-8 rounded-full hover:bg-red-50 flex items-center justify-center transition-colors">
+        <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 flex items-center justify-center transition-colors">
           <i className="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
@@ -62,22 +75,29 @@ export default function RightSidebar({
             </div>
          </div>
          
-         <div className="flex flex-wrap gap-2">
+         <div className="flex flex-wrap gap-2 mb-4">
             {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
-                <button 
-                  key={f} 
-                  onClick={()=>setFilter(f)} 
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}
-                >
+                <button key={f} onClick={()=>setFilter(f)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}>
                   {f}
                 </button>
             ))}
          </div>
+
+         {/* Date Range Filter */}
+         <div className="flex gap-2 items-center bg-slate-50 p-2 rounded-xl border border-slate-100 shadow-inner">
+             <i className="fa-solid fa-calendar-day text-slate-400 text-sm ml-1"></i>
+             <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="flex-1 text-[10px] uppercase font-bold text-slate-600 bg-transparent outline-none cursor-pointer" title="Start Date" />
+             <span className="text-slate-300">-</span>
+             <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="flex-1 text-[10px] uppercase font-bold text-slate-600 bg-transparent outline-none cursor-pointer" title="End Date" />
+             {(startDate || endDate) && (
+                 <button onClick={()=>{setStartDate(''); setEndDate('');}} className="text-rose-500 hover:text-rose-700 p-1"><i className="fa-solid fa-times"></i></button>
+             )}
+         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll space-y-3 bg-slate-50/50">
+      <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll space-y-3 bg-slate-50">
          {filteredTasks.length === 0 ? (
-             <div className="text-sm text-slate-400 italic text-center py-8 bg-white border border-slate-100 rounded-xl">No tasks found for "{filter}"</div>
+             <div className="text-sm text-slate-400 italic text-center py-8 bg-white border border-slate-100 rounded-xl shadow-sm">No tasks match criteria.</div>
          ) : (
              filteredTasks.map(task => {
                  const group = groups.find(g => g.id === task.groupId);
@@ -93,7 +113,6 @@ export default function RightSidebar({
                         }}
                         className={`bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-primary/40'}`}
                      >
-                        {/* Priority Color Bar */}
                         {!isArchived && !isDone && (
                            <div className={`absolute top-0 left-0 w-1.5 h-full ${task.taskData.priority==='High'?'bg-red-500':task.taskData.priority==='Medium'?'bg-amber-500':'bg-emerald-500'}`}></div>
                         )}
