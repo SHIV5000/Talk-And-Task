@@ -2,32 +2,12 @@ import React, { useState, useRef } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 export default function TaskTrailModal({
-  selectedMessage,
-  setSelectedMessage,
-  setActiveModal,
-  isEditingTaskTitle,
-  setIsEditingTaskTitle,
-  newTaskTitle,
-  setNewTaskTitle,
-  handleSaveTaskTitle,
-  delegateAssignees,
-  setDelegateAssignees,
-  showDelegateDropdown,
-  setShowDelegateDropdown,
-  handleDelegateTask,
-  trailComment,
-  setTrailComment,
-  handleAddComment,
-  handleCompleteTask,
-  handleArchiveTask,
-  trailFileInputRef,
-  handleTrailFileUpload,
-  activeGroup,
-  dbUsers,
-  user,
-  currentUserData,
-  isVipAdmin,
-  readOnly,
+  selectedMessage, setSelectedMessage, setActiveModal,
+  isEditingTaskTitle, setIsEditingTaskTitle, newTaskTitle, setNewTaskTitle, handleSaveTaskTitle,
+  delegateAssignees, setDelegateAssignees, showDelegateDropdown, setShowDelegateDropdown, handleDelegateTask,
+  trailComment, setTrailComment, handleAddComment, handleCompleteTask, handleArchiveTask,
+  trailFileInputRef, handleTrailFileUpload,
+  activeGroup, dbUsers, user, currentUserData, isVipAdmin, readOnly,
 }) {
   const modalRef = useRef(null);
   if (!selectedMessage?.taskData) return null;
@@ -43,8 +23,8 @@ export default function TaskTrailModal({
         className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+        {/* Header - Fixed */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0 bg-white z-10">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setActiveModal(null)}
@@ -70,19 +50,19 @@ export default function TaskTrailModal({
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        {/* Body - Scrollable */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 bg-slate-50/30 custom-sidebar-scroll">
           {/* Task title */}
           <div>
             {isEditingTaskTitle ? (
               <div className="flex gap-2">
                 <textarea autoFocus value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
-                  className="w-full text-base font-medium p-3 rounded-xl border border-primary outline-none resize-none focus:ring-2 focus:ring-primary/20" rows={2} />
+                  className="w-full text-base font-medium p-3 rounded-xl border border-primary outline-none resize-none focus:ring-2 focus:ring-primary/20 bg-white" rows={2} />
                 <div className="flex flex-col gap-2">
-                  <button onClick={handleSaveTaskTitle} className="w-9 h-9 bg-primary text-white rounded-lg flex items-center justify-center hover:bg-primary-hover">
+                  <button onClick={handleSaveTaskTitle} className="w-9 h-9 bg-primary text-white rounded-lg flex items-center justify-center hover:bg-primary-hover shadow-sm">
                     <i className="fa-solid fa-check"></i>
                   </button>
-                  <button onClick={() => setIsEditingTaskTitle(false)} className="w-9 h-9 bg-gray-100 text-text-secondary rounded-lg flex items-center justify-center hover:bg-gray-200">
+                  <button onClick={() => setIsEditingTaskTitle(false)} className="w-9 h-9 bg-gray-200 text-text-secondary rounded-lg flex items-center justify-center hover:bg-gray-300">
                     <i className="fa-solid fa-xmark"></i>
                   </button>
                 </div>
@@ -92,7 +72,7 @@ export default function TaskTrailModal({
                 <h3 className="text-base font-semibold text-text-primary">{task.text}</h3>
                 {!readOnly && (taskData.assignees?.includes(user.email) || task.senderEmail === user.email || isAdmin) && (
                   <button onClick={() => { setIsEditingTaskTitle(true); setNewTaskTitle(task.text); }}
-                    className="text-xs font-medium text-text-secondary hover:text-primary ml-2 whitespace-nowrap">
+                    className="text-xs font-medium text-text-secondary hover:text-primary ml-2 whitespace-nowrap bg-white border border-gray-200 px-2 py-1 rounded-md shadow-sm">
                     <i className="fa-solid fa-pen mr-1"></i>Edit
                   </button>
                 )}
@@ -101,7 +81,7 @@ export default function TaskTrailModal({
           </div>
 
           {/* Info grid */}
-          <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+          <div className="grid grid-cols-2 gap-4 bg-white shadow-sm rounded-xl p-4 border border-gray-100">
             <div>
               <div className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Assignees</div>
               <div className="flex items-center -space-x-2">
@@ -133,7 +113,7 @@ export default function TaskTrailModal({
             {taskData.trail.map((item, idx) => (
               <div key={idx} className="flex gap-4 relative z-10">
                 <div className="w-4 h-4 rounded-full bg-white border-2 border-primary shrink-0 mt-1"></div>
-                <div className="flex-1 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <div className="flex-1 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs font-bold text-primary uppercase tracking-wider">{item.action}</span>
                     <span className="text-[11px] text-text-secondary">{item.time}</span>
@@ -148,7 +128,7 @@ export default function TaskTrailModal({
                     )}
                   </div>
                   {item.comment && (
-                    <p className="mt-2 text-sm text-text-primary bg-white p-3 rounded-lg border border-gray-100">{item.comment}</p>
+                    <p className="mt-2 text-sm text-text-primary bg-gray-50 p-3 rounded-lg border border-gray-100">{item.comment}</p>
                   )}
                   {item.fileUrl && (
                     <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 mt-2 text-xs font-bold text-primary hover:underline">
@@ -161,9 +141,9 @@ export default function TaskTrailModal({
           </div>
         </div>
 
-        {/* Footer actions – hidden when readOnly (admin preview) */}
+        {/* Footer actions - Fixed */}
         {!readOnly && taskData.status !== 'Completed' && (taskData.assignees?.includes(user.email) || isAdmin) && (
-          <div className="border-t border-gray-100 px-6 py-4 space-y-4">
+          <div className="border-t border-gray-100 px-6 py-5 space-y-4 shrink-0 bg-white z-10">
             {/* Reassign / Update row */}
             <div className="flex flex-col md:flex-row gap-3">
               {/* Reassign */}
@@ -205,11 +185,11 @@ export default function TaskTrailModal({
             {/* Complete / Archive row */}
             <div className="flex gap-3">
               {taskData.status !== 'Completed' && (
-                <button onClick={handleCompleteTask} className="flex-1 bg-success text-white py-2.5 rounded-xl text-sm font-bold hover:bg-teal-600 transition-colors flex items-center justify-center gap-2">
+                <button onClick={handleCompleteTask} className="flex-1 bg-success text-white py-2.5 rounded-xl text-sm font-bold hover:bg-teal-600 transition-colors flex items-center justify-center gap-2 shadow-sm">
                   <i className="fa-solid fa-check"></i> Mark Completed
                 </button>
               )}
-              <button onClick={handleArchiveTask} className="flex-1 bg-gray-100 text-text-secondary hover:bg-gray-200 hover:text-text-primary py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 border border-gray-200">
+              <button onClick={handleArchiveTask} className="flex-1 bg-white text-text-secondary hover:bg-gray-50 hover:text-text-primary py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 border border-gray-200 shadow-sm">
                 <i className="fa-solid fa-box-archive"></i> Archive Task
               </button>
             </div>
