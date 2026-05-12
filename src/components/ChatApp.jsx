@@ -15,11 +15,10 @@ import ModalManager from './Modals/ModalManager.jsx';
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
 import useChatEngine from '../hooks/useChatEngine.js';
 
-// Utils & Firebase Core needed for specific tasks
+// Utils & Firebase Core
 import { lockExtension } from '../utils/helpers.js';
 import { auth, db, storage, signOut } from '../firebase.js';
-import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, ref, uploadBytesResumable, getDownloadURL, deleteDoc } from '../firebase.js';
 
 export default function ChatApp({ user, onLogout }) {
     // ==================== UI STATE ====================
@@ -166,7 +165,6 @@ export default function ChatApp({ user, onLogout }) {
         return () => clearTimeout(timer);
     }, []);
 
-    // Set Initial Active Group from Profile
     useEffect(() => {
         if (isWorkspaceLoading || !groups.length || activeGroup) return;
         const savedGroupId = currentUserData?.lastActiveGroupId;
@@ -176,7 +174,6 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [isWorkspaceLoading, groups, currentUserData?.lastActiveGroupId, user.email, activeGroup]);
 
-    // Save Active Group on change
     useEffect(() => {
         if (!activeGroup?.id || !user.uid) return;
         updateDoc(doc(db, "users", user.uid), { lastActiveGroupId: activeGroup.id }).catch(() => {});
@@ -188,7 +185,6 @@ export default function ChatApp({ user, onLogout }) {
         }, 300);
     }, [activeGroup?.id, user.uid]);
 
-    // Calculate unread highlight IDs
     useEffect(() => {
         if (!activeGroup?.id || !user.email) return;
         const unread = messages.filter(m => m.groupId === activeGroup.id && !m.isMine && !(m.seenBy || []).includes(user.email)).map(m => m.id);
@@ -200,7 +196,6 @@ export default function ChatApp({ user, onLogout }) {
         setUnreadHighlightIds([]);
     }, [activeGroup?.id, user.email, messages]);
 
-    // Chron Job for Tasks
     useEffect(() => {
         const deadlineChecker = setInterval(() => {
             const now = new Date();
@@ -698,36 +693,38 @@ export default function ChatApp({ user, onLogout }) {
     
     return (
         <div className="flex h-screen w-full bg-[#f3f4f6] text-[#111b21] overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100">
+            <audio id="app-sound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3" preload="auto" className="hidden"></audio>
+            
             {viewMode === "admin" ? (
            <AdminPanel
-  setViewMode={setViewMode}
-  setActiveModal={setActiveModal}
-  dbUsers={dbUsers}
-  groups={groups}
-  filteredAuditLogs={filteredAuditLogs}
-  adminFilterUser={adminFilterUser}
-  setAdminFilterUser={setAdminFilterUser}
-  adminFilterDate={adminFilterDate}
-  setAdminFilterDate={setAdminFilterDate}
-  adminFilterType={adminFilterType}
-  setAdminFilterType={setAdminFilterType}
-  adminFilterGroup={adminFilterGroup}
-  setAdminFilterGroup={setAdminFilterGroup}
-  handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
-  handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
-  handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
-  setSelectedMessage={setSelectedMessage}
-  setIsEditingTaskTitle={setIsEditingTaskTitle}
-  messages={messages}
-  setGroupForm={setGroupForm}
-  setEditingGroup={setEditingGroup}
-  groupForm={groupForm}
-  editingGroup={editingGroup}
-  handleAdminArchiveGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: true })}
-  handleAdminRecoverGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: false })}
-  handleGroupPicUpload={handleGroupPicUpload}
-  groupPicUploadProgress={groupPicUploadProgress}
-/>
+              setViewMode={setViewMode}
+              setActiveModal={setActiveModal}
+              dbUsers={dbUsers}
+              groups={groups}
+              filteredAuditLogs={filteredAuditLogs}
+              adminFilterUser={adminFilterUser}
+              setAdminFilterUser={setAdminFilterUser}
+              adminFilterDate={adminFilterDate}
+              setAdminFilterDate={setAdminFilterDate}
+              adminFilterType={adminFilterType}
+              setAdminFilterType={setAdminFilterType}
+              adminFilterGroup={adminFilterGroup}
+              setAdminFilterGroup={setAdminFilterGroup}
+              handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
+              handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
+              handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
+              setSelectedMessage={setSelectedMessage}
+              setIsEditingTaskTitle={setIsEditingTaskTitle}
+              messages={messages}
+              setGroupForm={setGroupForm}
+              setEditingGroup={setEditingGroup}
+              groupForm={groupForm}
+              editingGroup={editingGroup}
+              handleAdminArchiveGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: true })}
+              handleAdminRecoverGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: false })}
+              handleGroupPicUpload={handleGroupPicUpload}
+              groupPicUploadProgress={groupPicUploadProgress}
+            />
             ) : (
                 <div className="flex h-full w-full relative">
                     <LeftSidebar 
@@ -848,7 +845,9 @@ export default function ChatApp({ user, onLogout }) {
                                       </div>
                                     )}
                                   </div>
-                                    <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                    
+                                  <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                  
                                   {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200">Wipe Tasks</button>}
                                     
                                 </div>
