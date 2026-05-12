@@ -91,7 +91,6 @@ export default function ChatApp({ user, onLogout }) {
     const highlightTimerRef = useRef(null);
     const lastMessageTrackerId = useRef(null);
 
-    // Minor UI states
     const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
     const [currentTip, setCurrentTip] = useState("Type '@' to instantly mention peers.");
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -101,14 +100,12 @@ export default function ChatApp({ user, onLogout }) {
     const [scheduleDateTime, setScheduleDateTime] = useState("");
     const [pendingScheduledText, setPendingScheduledText] = useState("");
 
-    // ==================== 1. INITIALIZE DATA HOOK ====================
     const { 
         isVipAdmin, currentUserData, dbUsers, groups, 
         activeReminders, genericNotifications, allAdminReminders, 
         immutableAuditLogs, toolPreferences, setToolPreferences 
     } = useWorkspaceData(user, profileForm, setProfileForm);
 
-    // ==================== 2. INITIALIZE CHAT ENGINE HOOK ====================
     const {
         messages, typingStatus, isOnline, offlineDrafts,
         logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
@@ -118,7 +115,6 @@ export default function ChatApp({ user, onLogout }) {
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
 
-    // ==================== UI LOGIC / STARTUP ====================
     useEffect(() => {
         const timer = setTimeout(() => setIsWorkspaceLoading(false), 4000);
         return () => clearTimeout(timer);
@@ -155,12 +151,11 @@ export default function ChatApp({ user, onLogout }) {
         setUnreadHighlightIds([]);
     }, [activeGroup?.id, user.email, messages]);
 
-    // 👇 FIX: Tasks AND Reminders Cron Job Tracker
     useEffect(() => {
         const checkerInterval = setInterval(() => {
             const now = new Date();
             
-            // 1. Check Deadlines
+            // Check Deadlines
             const dueTasks = messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && !m.taskData?.deadlineAlerted && m.taskData?.deadline && new Date(m.taskData.deadline) <= now);
             dueTasks.forEach(async (task) => {
                 await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
@@ -173,7 +168,7 @@ export default function ChatApp({ user, onLogout }) {
                 });
             });
 
-            // 2. Check Reminders
+            // Check Reminders
             const dueReminders = (activeReminders || []).filter(r => !r.isTriggered && r.remindAt && new Date(r.remindAt) <= now);
             dueReminders.forEach(async (rem) => {
                 try {
@@ -182,11 +177,10 @@ export default function ChatApp({ user, onLogout }) {
                 } catch(e) {}
             });
 
-        }, 30000); // Check every 30 seconds
+        }, 30000);
         return () => clearInterval(checkerInterval);
     }, [messages, dbUsers, activeReminders, user.uid]);
 
-    // ==================== MEMOS ====================
     const myGroups = useMemo(() => {
         let filtered = groups.filter(g => g.members?.includes(user.email) && !g.isArchived);
         if (sidebarSearch) filtered = filtered.filter(g => g.name.toLowerCase().includes(sidebarSearch.toLowerCase()));
@@ -238,11 +232,10 @@ export default function ChatApp({ user, onLogout }) {
         return logs;
     }, [immutableAuditLogs, adminFilterUser, adminFilterDate, adminFilterType, adminFilterGroup]);
 
-    // ==================== ENGINE ACTION WRAPPERS ====================
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 4000); // Excatly 4 seconds
+        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 4000);
     }, []);
 
     const scrollToMessageDirect = useCallback((msgId) => {
@@ -250,15 +243,18 @@ export default function ChatApp({ user, onLogout }) {
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); triggerHighlight(msgId); }
     }, [triggerHighlight]);
 
+    // 👇 FIX: Reset Filters on Navigation so older tasks appear
     const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId) => {
         const targetGroup = groups.find(g => g.id === targetGroupId);
         if (targetGroup) {
+            setChatFilter('all'); // Force clear filters so message renders
+            setSearchQuery('');
             setActiveGroup(targetGroup);
             setShowRightSidebar(false);
             setMobileSidebarOpen(false);
             setShowNotifications(false);
-            setPendingScrollTarget(msgId);
             setActiveModal(null);
+            setPendingScrollTarget(msgId);
         }
     }, [groups]);
 
@@ -295,23 +291,30 @@ export default function ChatApp({ user, onLogout }) {
         setEditingMessageId(null);
     };
 
-    // 👇 FIX: File Upload text grabber
+    // 👇 FIX: Force-Grab Text for Uploads
     const handleSendPendingFiles = async () => {
         if (pendingFiles.length === 0) return;
+        const currentText = inputText.trim();
+        const filesToProcess = [...pendingFiles];
         
-        // Force grab the current text from the input bar before processing
-        const latestInput = inputText.trim();
-        const filesToUpload = pendingFiles.map((pf, i) => ({
-            ...pf,
-            caption: (i === 0 && latestInput && !pf.caption) ? latestInput : pf.caption
-        }));
+        setPendingFiles([]);
+        setShowFileRename(false);
+        setIsUploading(true);
+        setUploadProgress(0);
+        setInputText(""); // Clear instantly
 
-        setPendingFiles([]); setShowFileRename(false); setIsUploading(true); setUploadProgress(0);
-        setInputText(""); // Clear immediately so it doesn't linger
-
-        for (const pf of filesToUpload) {
+        for (let i = 0; i < filesToProcess.length; i++) {
+            let pf = filesToProcess[i];
+            let finalCaption = pf.caption || "";
+            // Combine any typed text into the first file's caption
+            if (i === 0 && currentText) {
+                finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText;
+            }
+            pf.caption = finalCaption;
+            pf.text = finalCaption; // Fallback for database structure
+            
             try { await uploadAndSendFileDB(pf, setUploadProgress); } 
-            catch (error) { alert(`Upload failed for ${pf.customName}: ${error.message}`); }
+            catch (error) { alert(`Upload failed: ${error.message}`); }
         }
         setIsUploading(false); setUploadProgress(0);
     };
@@ -355,7 +358,6 @@ export default function ChatApp({ user, onLogout }) {
         } catch(e) { alert("Failed to schedule."); }
     };
 
-    // Tasks Management UI Wrappers
     const notifyInvolvedInTask = async (taskMsg, actionText) => {
         const involved = new Set();
         if (taskMsg.senderEmail) involved.add(taskMsg.senderEmail);
@@ -620,7 +622,7 @@ export default function ChatApp({ user, onLogout }) {
         messages,
         groups,
         trailComment, setTrailComment,
-        activeReminders, // passed down to manage schedules
+        activeReminders,
         readOnly: viewMode === "admin",
     };
 
@@ -750,7 +752,7 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                   )}
 
-                                  {/* 👇 FIX: New Scheduled & Reminders Nav Button */}
+                                  {/* NEW CALENDAR ICON */}
                                   <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-primary hover:bg-primary/10`} title="Scheduled & Reminders">
                                     <i className="fa-solid fa-calendar-alt"></i>
                                   </button>
@@ -842,7 +844,15 @@ export default function ChatApp({ user, onLogout }) {
                                 handleTypingEvent={handleTypingEvent} handlePaste={handlePaste} chatInputRef={chatInputRef} fileInputRef={fileInputRef}
                                 handleFileUpload={handleFileUpload} emojiPickerOpen={emojiPickerOpen} setEmojiPickerOpen={setEmojiPickerOpen}
                                 emojiPickerRef={emojiPickerRef} pendingFiles={pendingFiles} setPendingFiles={setPendingFiles} showFileRename={showFileRename}
-                                setShowFileRename={setShowFileRename} uploadFileDirectly={(pf) => uploadAndSendFileDB(pf, setUploadProgress)} setActiveModal={setActiveModal}
+                                setShowFileRename={setShowFileRename} 
+                                uploadFileDirectly={async (pf) => {
+                                    const latestInput = inputText.trim();
+                                    let finalCaption = pf.caption || "";
+                                    if (latestInput) finalCaption = finalCaption ? `${latestInput}\n${finalCaption}` : latestInput;
+                                    pf.caption = finalCaption; pf.text = finalCaption; setInputText("");
+                                    await uploadAndSendFileDB(pf, setUploadProgress);
+                                }} 
+                                setActiveModal={setActiveModal}
                                 setPendingScheduledText={setPendingScheduledText} offlineDrafts={offlineDrafts} user={user} dbUsers={dbUsers}
                                 groups={groups} currentUserData={currentUserData} MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB} handleSendPendingFiles={handleSendPendingFiles}
                             />
