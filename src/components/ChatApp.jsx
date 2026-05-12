@@ -100,12 +100,14 @@ export default function ChatApp({ user, onLogout }) {
     const [scheduleDateTime, setScheduleDateTime] = useState("");
     const [pendingScheduledText, setPendingScheduledText] = useState("");
 
+    // ==================== 1. INITIALIZE DATA HOOK ====================
     const { 
         isVipAdmin, currentUserData, dbUsers, groups, 
         activeReminders, genericNotifications, allAdminReminders, 
         immutableAuditLogs, toolPreferences, setToolPreferences 
     } = useWorkspaceData(user, profileForm, setProfileForm);
 
+    // ==================== 2. INITIALIZE CHAT ENGINE HOOK ====================
     const {
         messages, typingStatus, isOnline, offlineDrafts,
         logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
@@ -115,6 +117,50 @@ export default function ChatApp({ user, onLogout }) {
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
 
+    // ==================== AUDIO ENGINE (HTML5) ====================
+    const playMelody = useCallback((type) => {
+        try {
+            const incomingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FINCOMING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=413e00ca-6dc0-41e1-85d9-3d02e53ca526';
+            const outgoingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FOUTGOING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=4f357d75-c496-4f53-8f6a-fd0e6e81b41d';
+
+            let soundUrl = outgoingSound; 
+            switch (type) {
+                case 'messageReceived':
+                case 'taskCreated':
+                case 'taskUpdated':
+                case 'taskFileUpload':
+                    soundUrl = incomingSound;
+                    break;
+                case 'messageSent':
+                case 'fileUpload':
+                default:
+                    soundUrl = outgoingSound;
+                    break;
+            }
+
+            const audio = new Audio(soundUrl);
+            audio.volume = 1.0;
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(err => console.warn("Browser blocked autoplay:", err));
+            }
+        } catch(e) { console.error("Audio Engine Error:", e); }
+    }, []);
+
+    // ==================== INCOMING MESSAGE LISTENER ====================
+    useEffect(() => {
+        if (messages.length > 0) {
+            const latestMsg = messages[messages.length - 1];
+            if (lastMessageTrackerId.current !== null && latestMsg.id !== lastMessageTrackerId.current) {
+                if (latestMsg.senderUid !== user.uid && !latestMsg.isTask) {
+                    playMelody('messageReceived');
+                }
+            }
+            lastMessageTrackerId.current = latestMsg.id;
+        }
+    }, [messages, user.uid, playMelody]);
+
+    // ==================== UI LOGIC / STARTUP ====================
     useEffect(() => {
         const timer = setTimeout(() => setIsWorkspaceLoading(false), 4000);
         return () => clearTimeout(timer);
@@ -151,11 +197,12 @@ export default function ChatApp({ user, onLogout }) {
         setUnreadHighlightIds([]);
     }, [activeGroup?.id, user.email, messages]);
 
+    // 👇 FIX: Master Cron Job (Runs every 15 seconds for accuracy)
     useEffect(() => {
-        const checkerInterval = setInterval(() => {
+        const checkerInterval = setInterval(async () => {
             const now = new Date();
             
-            // Check Deadlines
+            // 1. Task Deadlines
             const dueTasks = messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && !m.taskData?.deadlineAlerted && m.taskData?.deadline && new Date(m.taskData.deadline) <= now);
             dueTasks.forEach(async (task) => {
                 await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
@@ -168,19 +215,52 @@ export default function ChatApp({ user, onLogout }) {
                 });
             });
 
-            // Check Reminders
+            // 2. Active Reminders (FIRES ALERT UI & SOUND)
             const dueReminders = (activeReminders || []).filter(r => !r.isTriggered && r.remindAt && new Date(r.remindAt) <= now);
-            dueReminders.forEach(async (rem) => {
+            for (const rem of dueReminders) {
                 try {
                     await updateDoc(doc(db, "reminders", rem.id), { isTriggered: true });
                     await addDoc(collection(db, "notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
+                    
+                    playMelody('taskCreated'); // High priority incoming sound
+                    addToast(`⏰ Reminder Triggered!`, 'success');
+                    alert(`⏰ REMINDER ALARM\n\n"${rem.messageText}"`); // Hard browser alert ensuring the user sees it immediately
                 } catch(e) {}
-            });
+            }
 
-        }, 30000);
+            // 3. Pending Scheduled Messages (POSTS MESSAGE TO DB)
+            try {
+                const q = query(collection(db, "scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
+                const snap = await getDocs(q);
+                for (const document of snap.docs) {
+                    const data = document.data();
+                    if (new Date(data.scheduledFor) <= now) {
+                        const payload = {
+                            text: data.text,
+                            groupId: data.groupId,
+                            sender: currentUserData?.name || user.email.split('@')[0],
+                            senderEmail: user.email,
+                            senderUid: user.uid,
+                            timestamp: serverTimestamp(),
+                            dateString: new Date().toISOString().split('T')[0],
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            isTask: data.isTask || false,
+                            taskData: data.taskData || null,
+                            seenBy: [user.email]
+                        };
+                        await addDoc(collection(db, "messages"), payload);
+                        await updateDoc(doc(db, "scheduled_messages", document.id), { status: "sent" });
+                        addToast(`Scheduled message sent!`, 'success');
+                        playMelody('messageSent'); // Outgoing confirmation sound
+                    }
+                }
+            } catch(e) { console.error(e); }
+
+        }, 15000); 
         return () => clearInterval(checkerInterval);
-    }, [messages, dbUsers, activeReminders, user.uid]);
+    }, [messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
 
+    // ==================== MEMOS ====================
     const myGroups = useMemo(() => {
         let filtered = groups.filter(g => g.members?.includes(user.email) && !g.isArchived);
         if (sidebarSearch) filtered = filtered.filter(g => g.name.toLowerCase().includes(sidebarSearch.toLowerCase()));
@@ -243,20 +323,44 @@ export default function ChatApp({ user, onLogout }) {
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); triggerHighlight(msgId); }
     }, [triggerHighlight]);
 
-    // 👇 FIX: Reset Filters on Navigation so older tasks appear
+    // 👇 FIX: Reset Filters & Support Direct Messages for perfect cross-navigation
     const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId) => {
-        const targetGroup = groups.find(g => g.id === targetGroupId);
+        // Step 1: Wipe all chat filters so the old/completed task can render in the DOM
+        setChatFilter('all');
+        setSearchQuery('');
+        
+        let targetGroup = groups.find(g => g.id === targetGroupId);
+        
+        // Step 2: Handle Direct Messages (DMs are not natively in the 'groups' array)
+        if (!targetGroup && targetGroupId) {
+            const otherUid = targetGroupId.split('_').find(id => id !== user.uid);
+            if (otherUid) {
+                const otherUser = dbUsers.find(u => u.uid === otherUid);
+                if (otherUser) {
+                    targetGroup = {
+                        id: targetGroupId,
+                        isDM: true,
+                        name: otherUser.name,
+                        members: [user.email, otherUser.email],
+                        profilePicUrl: otherUser.profilePicUrl
+                    };
+                }
+            }
+        }
+
         if (targetGroup) {
-            setChatFilter('all'); // Force clear filters so message renders
-            setSearchQuery('');
             setActiveGroup(targetGroup);
             setShowRightSidebar(false);
             setMobileSidebarOpen(false);
             setShowNotifications(false);
             setActiveModal(null);
-            setPendingScrollTarget(msgId);
+            
+            // Allow React state to update the view, then set the scroll poller target
+            setTimeout(() => {
+                setPendingScrollTarget(msgId);
+            }, 50);
         }
-    }, [groups]);
+    }, [groups, dbUsers, user.uid, user.email]);
 
     const handleSendOfflineAware = async () => {
         if (!inputText.trim() || !activeGroup) return;
@@ -278,6 +382,7 @@ export default function ChatApp({ user, onLogout }) {
     const handleSendMessage = async () => {
         if (!inputText.trim() || !activeGroup) return;
         await sendMessageToDB(inputText.trim(), replyingTo);
+        playMelody('messageSent'); 
         setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
         if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -291,31 +396,31 @@ export default function ChatApp({ user, onLogout }) {
         setEditingMessageId(null);
     };
 
-    // 👇 FIX: Force-Grab Text for Uploads
+    // 👇 FIX: Force-Grab Text for File Uploads
     const handleSendPendingFiles = async () => {
         if (pendingFiles.length === 0) return;
+        
+        // Intercept exactly when user hits Send to grab the typed text
         const currentText = inputText.trim();
         const filesToProcess = [...pendingFiles];
         
-        setPendingFiles([]);
-        setShowFileRename(false);
-        setIsUploading(true);
-        setUploadProgress(0);
-        setInputText(""); // Clear instantly
+        setPendingFiles([]); setShowFileRename(false); setIsUploading(true); setUploadProgress(0);
+        setInputText(""); // Clear the input box immediately
 
         for (let i = 0; i < filesToProcess.length; i++) {
             let pf = filesToProcess[i];
             let finalCaption = pf.caption || "";
-            // Combine any typed text into the first file's caption
+            // Combine any typed text into the first file's caption payload
             if (i === 0 && currentText) {
                 finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText;
             }
             pf.caption = finalCaption;
-            pf.text = finalCaption; // Fallback for database structure
+            pf.text = finalCaption; // Ensure it writes to the DB correctly
             
             try { await uploadAndSendFileDB(pf, setUploadProgress); } 
             catch (error) { alert(`Upload failed: ${error.message}`); }
         }
+        playMelody('fileUpload');
         setIsUploading(false); setUploadProgress(0);
     };
 
@@ -392,6 +497,7 @@ export default function ChatApp({ user, onLogout }) {
             });
 
             logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
+            playMelody('taskCreated'); 
             setActiveModal(null); setTaskAssignees([]);
         } catch (error) { alert("Failed to create task."); }
     };
@@ -401,6 +507,7 @@ export default function ChatApp({ user, onLogout }) {
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { text: newTaskTitle });
             setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
+            playMelody('taskUpdated');
             setIsEditingTaskTitle(false);
         } catch (e) { alert("Failed to update task title."); }
     };
@@ -411,6 +518,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
+            playMelody('taskUpdated'); 
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
     };
@@ -421,6 +529,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
+            playMelody('taskUpdated'); 
             setActiveModal(null);
         } catch (error) {}
     };
@@ -429,6 +538,7 @@ export default function ChatApp({ user, onLogout }) {
         if (!selectedMessage) return;
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.isArchived": true });
+            playMelody('taskUpdated'); 
             setActiveModal(null);
         } catch (error) {}
     };
@@ -441,6 +551,7 @@ export default function ChatApp({ user, onLogout }) {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
+            playMelody('taskUpdated'); 
             if (closeModal) setActiveModal(null);
         } catch (error) {}
     };
@@ -458,6 +569,7 @@ export default function ChatApp({ user, onLogout }) {
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
+                playMelody('taskFileUpload'); 
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
     };
@@ -485,6 +597,7 @@ export default function ChatApp({ user, onLogout }) {
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
+            playMelody('taskUpdated'); 
         } catch (error) {}
     };
 
@@ -622,7 +735,7 @@ export default function ChatApp({ user, onLogout }) {
         messages,
         groups,
         trailComment, setTrailComment,
-        activeReminders,
+        activeReminders, // passed down to manage schedules
         readOnly: viewMode === "admin",
     };
 
