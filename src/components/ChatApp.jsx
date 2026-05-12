@@ -89,6 +89,7 @@ export default function ChatApp({ user, onLogout }) {
     const emojiPickerRef = useRef(null);
     const lastTypingTime = useRef(0);
     const highlightTimerRef = useRef(null);
+    const lastMessageTrackerId = useRef(null);
 
     // Minor UI states
     const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
@@ -117,61 +118,69 @@ export default function ChatApp({ user, onLogout }) {
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
 
-    // ==================== AUDIO ENGINE ====================
-    const playAlertSound = useCallback(() => {
+    // ==================== AUDIO SYNTHESIZER ENGINE ====================
+    const playMelody = useCallback((type) => {
         try {
-            if (!window.audioCtx) {
-                window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (window.audioCtx.state === 'suspended') {
-                window.audioCtx.resume();
-            }
-            const oscillator = window.audioCtx.createOscillator();
-            const gainNode = window.audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(window.audioCtx.destination);
-
-            const frequencies = {
-                classic: 880,
-                soft: 660,
-                subtle: 523.25
-            };
-            const freq = frequencies[toolPreferences.soundProfile] || frequencies.classic;
-            oscillator.frequency.setValueAtTime(freq, window.audioCtx.currentTime);
-            oscillator.type = 'sine';
-            gainNode.gain.setValueAtTime(0.3, window.audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, window.audioCtx.currentTime + 0.2);
-            oscillator.start(window.audioCtx.currentTime);
-            oscillator.stop(window.audioCtx.currentTime + 0.2);
-        } catch (e) {}
-    }, [toolPreferences.soundProfile]);
-
-    const playTaskSound = useCallback(() => {
-        try {
-            if (!window.audioCtx) return;
-            const now = window.audioCtx.currentTime;
-            [523.25, 659.25].forEach((freq, i) => {
-                const osc = window.audioCtx.createOscillator();
-                const gain = window.audioCtx.createGain();
+            if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (window.audioCtx.state === 'suspended') window.audioCtx.resume();
+            
+            const ctx = window.audioCtx;
+            const now = ctx.currentTime;
+            
+            const playOsc = (freq, oscType, startTime, duration, volStart = 0.3, volEnd = 0.001) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
                 osc.connect(gain);
-                gain.connect(window.audioCtx.destination);
-                osc.frequency.setValueAtTime(freq, now + i * 0.12);
-                osc.type = 'sine';
-                gain.gain.setValueAtTime(0.3, now + i * 0.12);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.15);
-                osc.start(now + i * 0.12);
-                osc.stop(now + i * 0.12 + 0.15);
-            });
-        } catch (e) {}
+                gain.connect(ctx.destination);
+                osc.type = oscType;
+                osc.frequency.setValueAtTime(freq, startTime);
+                gain.gain.setValueAtTime(volStart, startTime);
+                gain.gain.exponentialRampToValueAtTime(volEnd, startTime + duration);
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            };
+
+            switch (type) {
+                case 'messageSent':
+                    playOsc(440, 'sine', now, 0.1, 0.1, 0.01);
+                    playOsc(554.37, 'sine', now + 0.1, 0.15, 0.1, 0.001); // Ascending major 3rd
+                    break;
+                case 'messageReceived':
+                    playOsc(554.37, 'sine', now, 0.1, 0.15, 0.01);
+                    playOsc(440, 'sine', now + 0.1, 0.2, 0.15, 0.001); // Descending minor 3rd
+                    break;
+                case 'fileUpload':
+                    playOsc(523.25, 'sine', now, 0.1, 0.2); // C5
+                    playOsc(659.25, 'sine', now + 0.1, 0.1, 0.2); // E5
+                    playOsc(783.99, 'sine', now + 0.2, 0.2, 0.2); // G5 (Bright arpeggio)
+                    break;
+                case 'taskCreated':
+                    playOsc(440, 'triangle', now, 0.3, 0.2); // A4
+                    playOsc(660, 'triangle', now, 0.3, 0.2); // E5 (Solid Perfect 5th)
+                    playOsc(880, 'sine', now + 0.1, 0.3, 0.1); // Octave highlight
+                    break;
+                case 'taskUpdated':
+                    playOsc(880, 'sine', now, 0.05, 0.1);
+                    playOsc(880, 'sine', now + 0.1, 0.05, 0.1);
+                    playOsc(1046.50, 'sine', now + 0.2, 0.15, 0.1); // Quick bright triplet
+                    break;
+                case 'taskFileUpload':
+                    playOsc(523.25, 'square', now, 0.2, 0.05);
+                    playOsc(659.25, 'sine', now + 0.05, 0.2, 0.1);
+                    playOsc(783.99, 'sine', now + 0.1, 0.2, 0.1);
+                    playOsc(1046.50, 'sine', now + 0.15, 0.3, 0.15); // Shimmering chord sweep
+                    break;
+                default:
+                    playOsc(440, 'sine', now, 0.1, 0.1);
+            }
+        } catch(e) { console.error("Audio Engine Error:", e); }
     }, []);
 
     // ==================== AUDIO UNLOCK ON USER GESTURE ====================
     useEffect(() => {
         window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const resumeAudio = () => {
-            if (window.audioCtx && window.audioCtx.state === 'suspended') {
-                window.audioCtx.resume();
-            }
+            if (window.audioCtx && window.audioCtx.state === 'suspended') window.audioCtx.resume();
         };
         window.addEventListener('click', resumeAudio, { once: true });
         window.addEventListener('touchstart', resumeAudio, { once: true });
@@ -180,6 +189,19 @@ export default function ChatApp({ user, onLogout }) {
             window.removeEventListener('touchstart', resumeAudio);
         };
     }, []);
+
+    // ==================== INCOMING MESSAGE LISTENER ====================
+    useEffect(() => {
+        if (messages.length > 0) {
+            const latestMsg = messages[messages.length - 1];
+            if (lastMessageTrackerId.current !== null && latestMsg.id !== lastMessageTrackerId.current) {
+                if (latestMsg.senderUid !== user.uid && !latestMsg.isTask) {
+                    playMelody('messageReceived');
+                }
+            }
+            lastMessageTrackerId.current = latestMsg.id;
+        }
+    }, [messages, user.uid, playMelody]);
 
     // ==================== UI LOGIC / STARTUP ====================
     useEffect(() => {
@@ -345,6 +367,7 @@ export default function ChatApp({ user, onLogout }) {
     const handleSendMessage = async () => {
         if (!inputText.trim() || !activeGroup) return;
         await sendMessageToDB(inputText.trim(), replyingTo);
+        playMelody('messageSent'); // 🎵 Play sound on send
         setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
         if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -366,6 +389,7 @@ export default function ChatApp({ user, onLogout }) {
             try { await uploadAndSendFileDB(pf, setUploadProgress); } 
             catch (error) { alert(`Upload failed for ${pf.customName}: ${error.message}`); }
         }
+        playMelody('fileUpload'); // 🎵 Play sound on file upload completion
         setIsUploading(false); setUploadProgress(0);
     };
 
@@ -443,16 +467,17 @@ export default function ChatApp({ user, onLogout }) {
             });
 
             logImmutableAction("TASK_CREATE", `Converted to Task: "${selectedMessage.text}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
+            playMelody('taskCreated'); // 🎵 Play sound on task creation
             setActiveModal(null); setTaskAssignees([]);
         } catch (error) { alert("Failed to create task."); }
     };
 
-    // --- RESTORED MODAL HANDLERS ---
     const handleSaveTaskTitle = async () => {
         if (!newTaskTitle.trim() || !selectedMessage) return;
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { text: newTaskTitle });
             setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
+            playMelody('taskUpdated'); // 🎵 Play sound
             setIsEditingTaskTitle(false);
         } catch (e) { alert("Failed to update task title."); }
     };
@@ -463,6 +488,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
+            playMelody('taskUpdated'); // 🎵 Play sound
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
     };
@@ -473,6 +499,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
+            playMelody('taskUpdated'); // 🎵 Play sound
             setActiveModal(null);
         } catch (error) {}
     };
@@ -481,6 +508,7 @@ export default function ChatApp({ user, onLogout }) {
         if (!selectedMessage) return;
         try {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.isArchived": true });
+            playMelody('taskUpdated'); // 🎵 Play sound
             setActiveModal(null);
         } catch (error) {}
     };
@@ -493,6 +521,7 @@ export default function ChatApp({ user, onLogout }) {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
+            playMelody('taskUpdated'); // 🎵 Play sound
             if (closeModal) setActiveModal(null);
         } catch (error) {}
     };
@@ -510,6 +539,7 @@ export default function ChatApp({ user, onLogout }) {
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
+                playMelody('taskFileUpload'); // 🎵 Play sound
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
     };
@@ -536,6 +566,7 @@ export default function ChatApp({ user, onLogout }) {
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
+            playMelody('taskUpdated'); // 🎵 Play sound
         } catch (error) {}
     };
 
@@ -710,8 +741,6 @@ export default function ChatApp({ user, onLogout }) {
     
     return (
         <div className="flex h-screen w-full bg-[#f3f4f6] text-[#111b21] overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100">
-            <audio id="app-sound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3" preload="auto" className="hidden"></audio>
-
             {viewMode === "admin" ? (
            <AdminPanel
   setViewMode={setViewMode}
@@ -866,15 +895,10 @@ export default function ChatApp({ user, onLogout }) {
                                   </div>
                                     <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-primary-light text-primary' : 'text-primary hover:bg-primary/10'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
                                     <button
-                                      onClick={() => {
-                                        if (!window.audioCtx) {
-                                          window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                                        }
-                                        window.audioCtx.resume().then(() => playAlertSound());
-                                      }}
+                                      onClick={() => playMelody('fileUpload')}
                                       className="bg-primary text-white px-3 py-1 rounded-lg text-xs font-bold"
                                     >
-                                      Test Sound
+                                      Test Audio
                                     </button>
                                   {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200">Wipe Tasks</button>}
                                     
@@ -913,7 +937,7 @@ export default function ChatApp({ user, onLogout }) {
                         showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                         tasksAssignedByMe={tasksAssignedByMe} archivedTasks={archivedTasks} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
                         navigateToMessageFromNotification={navigateToMessageFromNotification} 
-                        handleAddInlineComment={handleAddInlineComment} // Added explicitly here
+                        handleAddInlineComment={handleAddInlineComment}
                       />
                     )}
                     <ModalManager {...modalProps} />
