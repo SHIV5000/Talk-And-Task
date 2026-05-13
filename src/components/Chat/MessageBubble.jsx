@@ -15,7 +15,7 @@ const MessageBubble = React.memo(({
   scrollToMessageDirect, handleReaction, handleToggleBookmark,
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
-  jumpToPrivateSource, handleAddInlineComment, customTags // 👈 RECEIVES GLOBAL TAGS
+  jumpToPrivateSource, handleAddInlineComment, customTags = [] // 👈 BULLETPROOF FALLBACK
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
@@ -202,13 +202,13 @@ const MessageBubble = React.memo(({
         {menuOpen && (
           <div ref={menuRef} className="absolute top-8 right-2 z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-56 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
             
-            {/* 👇 NEW QUICK TAG MENU BLOCK */}
+            {/* 👇 QUICK TAG MENU BLOCK (Safely checking customTags) */}
             {!msg.isTask && toolPreferences?.react !== false && (
                 <div className="px-3 py-2 border-b border-slate-100 mb-1">
                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2"><i className="fa-solid fa-hashtag mr-1"></i> Quick Tags</div>
                    <div className="flex flex-col gap-1.5">
                      {(toolPreferences?.quickTags || ['#Approved', '#Reviewing', '#ActionRequired', '#Noted']).map(tagLabel => {
-                        const tagObj = customTags.find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
+                        const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
                         if (!tagLabel) return null;
                         return (
                            <button key={tagLabel} onClick={() => { setMenuOpen(false); handleReaction(msg.id, tagLabel); }} className={`text-left text-[11px] font-bold px-2.5 py-1.5 rounded-md transition-colors ${tagObj.bgClass} ${tagObj.textClass} hover:opacity-80`}>
@@ -350,7 +350,7 @@ const MessageBubble = React.memo(({
               <p className={`text-sm leading-relaxed whitespace-pre-wrap ${currentUserData?.fontSize || 'text-sm'} text-slate-800`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text || '') }}></p>
             )}
             
-            {/* 👇 WHATSAPP STYLE TEXT STATUS LOGIC FIX */}
+            {/* WHATSAPP STYLE TEXT STATUS LOGIC FIX */}
             <div className="flex items-center gap-1.5 mt-1.5 justify-end">
               <span className="text-[10px] font-semibold text-slate-400 mr-1">{msg.time}</span>
               {msg.isEdited && <span className="text-[10px] text-slate-400 italic mr-1">(edited)</span>}
@@ -373,11 +373,11 @@ const MessageBubble = React.memo(({
           </>
         )}
 
-        {/* 👇 HASHTAG REACTIONS DISPLAY (Bottom-Left Alignment) */}
+        {/* 👇 HASHTAG REACTIONS DISPLAY (Safely checking customTags) */}
         {Object.keys(msg.reactions || {}).length > 0 && (
           <div className="absolute -bottom-3.5 left-2 flex gap-1.5 z-10">
             {Object.entries(msg.reactions).map(([tagLabel, users]) => {
-              const tagObj = customTags.find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
+              const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
               return (
                 <div key={tagLabel} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }} className={`text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 cursor-pointer hover:scale-105 transition-transform ${tagObj.bgClass} ${tagObj.textClass} border border-white`}>
                   <span>{tagLabel}</span><span className="opacity-70">{users.length}</span>
