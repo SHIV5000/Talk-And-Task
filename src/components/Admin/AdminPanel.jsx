@@ -100,7 +100,7 @@ export default function AdminPanel({
   setSelectedMessage, setIsEditingTaskTitle, messages,
   setGroupForm, setEditingGroup, editingGroup, groupForm,
   handleGroupSubmit, handleAdminArchiveGroup, handleAdminRecoverGroup,
-  handleGroupPicUpload, groupPicUploadProgress, playMelody, customTags // 👈 NEW
+  handleGroupPicUpload, groupPicUploadProgress, playMelody, customTags 
 }) { 
   const [activeTab, setActiveTab] = useState('tasks');
   const [logSubTab, setLogSubTab] = useState('tasks');
@@ -118,8 +118,9 @@ export default function AdminPanel({
   const [taskFilterStart, setTaskFilterStart] = useState('');
   const [taskFilterEnd, setTaskFilterEnd] = useState('');
   
-  // Tag Studio State
+  // 👇 TAG STUDIO LOGIC UPDATE
   const [newTagLabel, setNewTagLabel] = useState('');
+  const [newTagShort, setNewTagShort] = useState('');
   const [newTagTheme, setNewTagTheme] = useState('teal');
 
   const taskLogs = useMemo(() => filteredAuditLogs.filter(l => l.type.startsWith('TASK_')), [filteredAuditLogs]);
@@ -184,10 +185,18 @@ export default function AdminPanel({
 
   const handleAddTag = async () => {
       if(!newTagLabel.trim() || !newTagLabel.startsWith('#')) return alert("Tag label must begin with '#'");
+      if(!newTagShort.trim() || newTagShort.length > 4) return alert("Short code must be 1-4 characters max (e.g. APP, REV)");
       const theme = tagThemes[newTagTheme];
       try {
-          await addDoc(collection(db, "workspace_tags"), { label: newTagLabel.trim(), bgClass: theme.bg, textClass: theme.text, themeName: newTagTheme, createdAt: serverTimestamp() });
-          setNewTagLabel('');
+          await addDoc(collection(db, "workspace_tags"), { 
+             label: newTagLabel.trim(), 
+             shortCode: newTagShort.trim().toUpperCase(), 
+             bgClass: theme.bg, 
+             textClass: theme.text, 
+             themeName: newTagTheme, 
+             createdAt: serverTimestamp() 
+          });
+          setNewTagLabel(''); setNewTagShort('');
       } catch(e) { alert("Failed to save tag."); }
   };
 
@@ -243,7 +252,7 @@ export default function AdminPanel({
       </div>
 
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap">
-        {['tasks', 'groups', 'tags', 'users', 'logs', 'history'].map(tab => ( // 👈 TAGS TAB ADDED
+        {['tasks', 'groups', 'tags', 'users', 'logs', 'history'].map(tab => ( 
           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-t-lg text-sm font-bold transition-colors ${activeTab === tab ? 'bg-slate-50 text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}>
             {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}{tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}{tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}{tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}{tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}{tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -253,20 +262,24 @@ export default function AdminPanel({
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 relative">
         
-        {/* TAGS STUDIO */}
+        {/* 👇 TAGS STUDIO UPDATE 👇 */}
         {activeTab === 'tags' && (
            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-hashtag text-2xl"></i></div>
-                 <div><h2 className="font-bold text-slate-800 text-xl leading-tight">Universal Tag Studio</h2><span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manage Official Workflow Metadata</span></div>
+                 <div><h2 className="font-bold text-slate-800 text-xl leading-tight">Universal Tag Studio</h2><span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manage Official Slack-Style Badges</span></div>
              </div>
              
              <div className="flex flex-col md:flex-row gap-6 h-full min-h-0">
-                <div className="w-full md:w-1/3 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-inner">
+                <div className="w-full md:w-1/3 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-inner overflow-y-auto">
                    <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Create New Tag</h3>
+                   
                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Hashtag Label</label>
                    <input value={newTagLabel} onChange={e=>setNewTagLabel(e.target.value)} placeholder="#Example" className="w-full p-2.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-4 font-bold text-slate-700 shadow-sm"/>
                    
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Square Short Code (Max 4)</label>
+                   <input value={newTagShort} onChange={e=>setNewTagShort(e.target.value.toUpperCase().slice(0,4))} placeholder="EXMP" className="w-full p-2.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-4 font-extrabold text-slate-700 shadow-sm tracking-widest uppercase"/>
+
                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Select Theme</label>
                    <div className="flex flex-wrap gap-2 mb-6">
                       {Object.entries(tagThemes).map(([name, classes]) => (
@@ -274,18 +287,24 @@ export default function AdminPanel({
                       ))}
                    </div>
                    
-                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Live Preview</label>
-                   <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-bold shadow-sm mb-6 ${tagThemes[newTagTheme].bg} ${tagThemes[newTagTheme].text}`}>{newTagLabel || '#Preview'}</div>
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Slack-Style Preview</label>
+                   <div className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg border border-slate-200 bg-white w-fit mb-6 shadow-sm">
+                      <span className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-extrabold tracking-wider ${tagThemes[newTagTheme].bg} ${tagThemes[newTagTheme].text}`}>{newTagShort || 'EXM'}</span>
+                      <span className="text-[11px] font-bold pr-1 text-slate-500">1</span>
+                   </div>
                    
                    <button onClick={handleAddTag} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 shadow-sm transition-all">Publish Tag</button>
                 </div>
                 
                 <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-5 overflow-y-auto custom-sidebar-scroll">
                    <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Active Global Tags</h3>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                       {(customTags || []).map(tag => (
                          <div key={tag.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-white shadow-sm hover:border-indigo-200 transition-colors">
-                            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm ${tag.bgClass} ${tag.textClass}`}>{tag.label}</span>
+                            <div className="flex items-center gap-2">
+                               <span className={`w-7 h-7 flex items-center justify-center rounded font-extrabold text-[10px] shadow-sm tracking-wider ${tag.bgClass} ${tag.textClass}`}>{tag.shortCode}</span>
+                               <span className="text-[12px] font-bold text-slate-600">{tag.label}</span>
+                            </div>
                             <button onClick={()=>deleteDoc(doc(db, "workspace_tags", tag.id))} className="text-slate-400 hover:text-rose-500 w-6 h-6 flex items-center justify-center rounded-full hover:bg-rose-50 transition-colors"><i className="fa-solid fa-trash text-[10px]"></i></button>
                          </div>
                       ))}
