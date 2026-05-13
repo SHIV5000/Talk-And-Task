@@ -155,30 +155,21 @@ const MessageBubble = React.memo(({
     doc.save(`Task_Trail_${msg.id}.pdf`);
   };
 
-  const handleInlineReopen = async (e) => {
-    e.stopPropagation();
-    if(!window.confirm("Super Admin Override: Reopen this completed task?")) return;
-    try {
-        const now = new Date();
-        const newTrail = [...msg.taskData.trail, { action: "Reopened", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
-        await updateDoc(doc(db, "messages", msg.id), { "taskData.status": "In Progress", "taskData.trail": newTrail });
-        notifyTaskChange(`Super Admin reopened the task 🔓`);
-    } catch(e){}
-  };
-
   return (
-    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-50' : 'relative z-[1]'}`}>
+    // 👇 FIX 1: DYNAMIC INLINE THREAD INDENTATION & PADDING 👇
+    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${msg.isInlineReply ? 'mt-1 mb-3 pl-[12%] md:pl-[20%]' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-50' : 'relative z-[1]'}`}>
       
-      <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
+      <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass={`${msg.isInlineReply ? 'w-6 h-6' : 'w-8 h-8'} shrink-0 mt-1`} extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
       
-      <div className={`flex-1 w-full min-w-0 bg-white rounded-2xl shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
+      <div className={`flex-1 w-full min-w-0 bg-white ${msg.isInlineReply ? 'rounded-xl' : 'rounded-2xl'} shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
         
-        {/* 👇 FIX 1: STATIC, THICKER ARROWS (Animation Removed) 👇 */}
-        {msg.isMine ? (
+        {/* THICK STATIC ARROWS (Animations Removed) */}
+        {!msg.isInlineReply && msg.isMine && (
             <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Sent">
                 <i className="fa-solid fa-arrow-up text-[13px] text-green-700" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
             </div>
-        ) : (
+        )}
+        {!msg.isInlineReply && !msg.isMine && (
             <div className="absolute -top-2.5 -left-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Received">
                 <i className="fa-solid fa-arrow-down text-[13px] text-orange-600" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
             </div>
@@ -204,7 +195,14 @@ const MessageBubble = React.memo(({
               </div>
             )}
             
-            {msg.replyToId && !msg.text?.startsWith('[Task Update]') && (
+            {/* THREAD BADGE REPLACES QUOTE IF INLINE */}
+            {msg.isInlineReply && (
+               <div className="text-[10px] font-extrabold text-indigo-500 mb-2 mt-0.5 flex items-center gap-1.5 bg-indigo-50/80 px-2.5 py-1 rounded-md w-fit border border-indigo-100 uppercase tracking-widest shadow-sm">
+                  <i className="fa-solid fa-reply-all"></i> Thread Reply #{msg.threadIndex}
+               </div>
+            )}
+
+            {msg.replyToId && !msg.isInlineReply && !msg.text?.startsWith('[Task Update]') && (
               <div onClick={(e) => { e.stopPropagation(); scrollToMessageDirect(msg.replyToId); }} className="p-2 rounded bg-slate-50 mb-2 border-l-2 border-indigo-500 cursor-pointer opacity-80 hover:opacity-100">
                 <div className="font-semibold text-[11px] text-indigo-600">{(msg.originalSender||'').split('@')[0]}</div>
                 <div className="line-clamp-2 text-xs text-slate-500 mt-0.5">{msg.originalText}</div>
@@ -345,7 +343,7 @@ const MessageBubble = React.memo(({
                     const isEmoji = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(tagLabel) || STANDARD_EMOJIS.includes(tagLabel);
                     const isMe = users.includes(userEmail);
                     
-                    // 👇 FIX 2: HOVER SHOWS ALL USER NAMES
+                    // 👇 FIX 2: TOOLTIP PROUDLY DISPLAYS FULL NAMES 👇
                     const hoverNames = users.map(e => dbUsers?.find(u => u.email === e)?.name || e.split('@')[0]).join(', ');
                     const titleText = `${tagLabel} affixed by: ${hoverNames}`;
                     
