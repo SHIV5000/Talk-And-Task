@@ -21,6 +21,7 @@ import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, ref, uploadBytesResumable, getDownloadURL, deleteDoc } from '../firebase.js';
 
 export default function ChatApp({ user, onLogout }) {
+    // ==================== UI STATE ====================
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [viewMode, setViewMode] = useState("chat");
@@ -39,6 +40,7 @@ export default function ChatApp({ user, onLogout }) {
     const [editMessageText, setEditMessageText] = useState("");
     const [activeGroup, setActiveGroup] = useState(null);
     
+    // Task Modals specific states
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
     const [taskPriority, setTaskPriority] = useState("Medium");
@@ -94,7 +96,7 @@ export default function ChatApp({ user, onLogout }) {
     const [unreadHighlightIds, setUnreadHighlightIds] = useState([]);
     const [scheduleDateTime, setScheduleDateTime] = useState("");
     const [pendingScheduledText, setPendingScheduledText] = useState("");
-    const [activeReminderAlert, setActiveReminderAlert] = useState(null); 
+    const [activeReminderAlert, setActiveReminderAlert] = useState(null); // Sleek Reminder UI State
 
     const { 
         isVipAdmin, currentUserData, dbUsers, groups, 
@@ -110,6 +112,15 @@ export default function ChatApp({ user, onLogout }) {
     } = useChatEngine({ 
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
+
+    // Dark Mode Global Effect
+    useEffect(() => {
+        if (toolPreferences?.darkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [toolPreferences?.darkMode]);
 
     const playMelody = useCallback((type) => {
         try {
@@ -177,6 +188,7 @@ export default function ChatApp({ user, onLogout }) {
         setUnreadHighlightIds([]);
     }, [activeGroup?.id, user.email, messages]);
 
+    // MASTER CRON JOB (Tasks, Reminders, Schedules)
     useEffect(() => {
         const checkerInterval = setInterval(async () => {
             const now = new Date();
@@ -198,7 +210,7 @@ export default function ChatApp({ user, onLogout }) {
                     await updateDoc(doc(db, "reminders", rem.id), { isTriggered: true });
                     await addDoc(collection(db, "notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
                     playMelody('taskCreated'); 
-                    setActiveReminderAlert(rem); 
+                    setActiveReminderAlert(rem); // Sleek Alert
                 } catch(e) {}
             }
 
@@ -492,10 +504,9 @@ export default function ChatApp({ user, onLogout }) {
         try {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: trailComment }];
-            const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
-            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
             setTrailComment("");
-            setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
+            setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
             playMelody('taskUpdated'); 
             if (closeModal) setActiveModal(null);
         } catch (error) {}
@@ -512,9 +523,8 @@ export default function ChatApp({ user, onLogout }) {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 const now = new Date();
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
-                const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
-                await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
-                setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
+                await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail });
+                setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail}}));
                 playMelody('taskFileUpload'); 
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
@@ -541,8 +551,7 @@ export default function ChatApp({ user, onLogout }) {
         try {
             const now = new Date();
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
-            const newStatus = targetMsg.taskData.status === 'Pending' ? 'In Progress' : targetMsg.taskData.status;
-            await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
             playMelody('taskUpdated'); 
         } catch (error) {}
@@ -710,8 +719,9 @@ export default function ChatApp({ user, onLogout }) {
     }
     
     return (
-        <div className="flex h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100">
+        <div className="flex h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900">
             
+            {/* SLEEK REMINDER OVERLAY (SLIDE FROM TOP) */}
             {activeReminderAlert && (
                 <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white rounded-3xl shadow-2xl z-[100] border border-indigo-100 p-6 animate-in slide-in-from-top-10 duration-700">
                     <div className="flex items-center gap-4 mb-4">
@@ -736,18 +746,34 @@ export default function ChatApp({ user, onLogout }) {
 
             {viewMode === "admin" ? (
            <AdminPanel
-              setViewMode={setViewMode} setActiveModal={setActiveModal} dbUsers={dbUsers} groups={groups} filteredAuditLogs={filteredAuditLogs}
-              adminFilterUser={adminFilterUser} setAdminFilterUser={setAdminFilterUser} adminFilterDate={adminFilterDate} setAdminFilterDate={setAdminFilterDate}
-              adminFilterType={adminFilterType} setAdminFilterType={setAdminFilterType} adminFilterGroup={adminFilterGroup} setAdminFilterGroup={setAdminFilterGroup}
+              setViewMode={setViewMode}
+              setActiveModal={setActiveModal}
+              dbUsers={dbUsers}
+              groups={groups}
+              filteredAuditLogs={filteredAuditLogs}
+              adminFilterUser={adminFilterUser}
+              setAdminFilterUser={setAdminFilterUser}
+              adminFilterDate={adminFilterDate}
+              setAdminFilterDate={setAdminFilterDate}
+              adminFilterType={adminFilterType}
+              setAdminFilterType={setAdminFilterType}
+              adminFilterGroup={adminFilterGroup}
+              setAdminFilterGroup={setAdminFilterGroup}
               handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
               handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
               handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
-              setSelectedMessage={setSelectedMessage} setIsEditingTaskTitle={setIsEditingTaskTitle} messages={messages}
-              setGroupForm={setGroupForm} setEditingGroup={setEditingGroup} groupForm={groupForm} editingGroup={editingGroup} handleGroupSubmit={handleGroupSubmit}
+              setSelectedMessage={setSelectedMessage}
+              setIsEditingTaskTitle={setIsEditingTaskTitle}
+              messages={messages}
+              setGroupForm={setGroupForm}
+              setEditingGroup={setEditingGroup}
+              groupForm={groupForm}
+              editingGroup={editingGroup}
+              handleGroupSubmit={handleGroupSubmit}
               handleAdminArchiveGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: true })}
               handleAdminRecoverGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: false })}
-              handleGroupPicUpload={handleGroupPicUpload} groupPicUploadProgress={groupPicUploadProgress}
-              playMelody={playMelody} 
+              handleGroupPicUpload={handleGroupPicUpload}
+              groupPicUploadProgress={groupPicUploadProgress}
             />
             ) : (
                 <div className="flex h-full w-full relative">
@@ -810,6 +836,7 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                   )}
 
+                                  {/* NEW CALENDAR ICON */}
                                   <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
                                     <i className="fa-solid fa-calendar-alt"></i>
                                   </button>
@@ -851,13 +878,17 @@ export default function ChatApp({ user, onLogout }) {
                                                   {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
                                                   <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
                                                   <div className="space-y-2">
+                                                    {/* SORTED LATEST AT TOP */}
                                                     {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => {
                                                       const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
                                                       return (
-                                                        <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-all flex items-start gap-3 relative pr-8">
+                                                        <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow transition-all flex items-start gap-3 relative pr-8">
+                                                          
+                                                          {/* INDIVIDUAL CLEAR NOTIFICATION BUTTON */}
                                                           <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "notifications", n.id)); }} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
                                                             <i className="fa-solid fa-xmark text-[11px]"></i>
                                                           </button>
+
                                                           <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5"><i className={n.type === 'reply' ? 'fa-solid fa-reply text-xs' : n.type === 'mention' ? 'fa-solid fa-at text-xs' : n.type === 'reminder' ? 'fa-solid fa-clock text-xs' : 'fa-solid fa-bolt text-xs'}></i></div>
                                                           <div className="flex-1 overflow-hidden pb-4">
                                                             <div className="text-[13px] font-bold text-slate-800">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : n.type === 'reminder' ? 'Reminder Alert' : n.type === 'task' ? 'Task Update' : 'New Reaction'}</div>
@@ -880,6 +911,7 @@ export default function ChatApp({ user, onLogout }) {
                                   <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
                                   
                                   {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
+                                    
                                 </div>
                             </div>
                             
