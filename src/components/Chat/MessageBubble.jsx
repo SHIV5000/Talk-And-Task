@@ -173,13 +173,13 @@ const MessageBubble = React.memo(({
       
       <div className={`flex-1 w-full min-w-0 bg-white rounded-2xl shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
         
-        {/* 👇 ANIMATED, THICKER ARROWS 👇 */}
+        {/* 👇 FIX 1: STATIC, THICKER ARROWS (Animation Removed) 👇 */}
         {msg.isMine ? (
-            <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10 animate-bounce" title="Sent">
+            <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Sent">
                 <i className="fa-solid fa-arrow-up text-[13px] text-green-700" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
             </div>
         ) : (
-            <div className="absolute -top-2.5 -left-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10 animate-bounce" title="Received">
+            <div className="absolute -top-2.5 -left-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Received">
                 <i className="fa-solid fa-arrow-down text-[13px] text-orange-600" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
             </div>
         )}
@@ -345,7 +345,7 @@ const MessageBubble = React.memo(({
                     const isEmoji = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(tagLabel) || STANDARD_EMOJIS.includes(tagLabel);
                     const isMe = users.includes(userEmail);
                     
-                    // 👇 FIX 2: HOVER SHOWS ALL USER NAMES 👇
+                    // 👇 FIX 2: HOVER SHOWS ALL USER NAMES
                     const hoverNames = users.map(e => dbUsers?.find(u => u.email === e)?.name || e.split('@')[0]).join(', ');
                     const titleText = `${tagLabel} affixed by: ${hoverNames}`;
                     
