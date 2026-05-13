@@ -15,9 +15,10 @@ const MessageBubble = React.memo(({
   scrollToMessageDirect, handleReaction, handleToggleBookmark,
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
-  jumpToPrivateSource, handleAddInlineComment, customTags = [] // 👈 BULLETPROOF FALLBACK
+  jumpToPrivateSource, handleAddInlineComment, customTags = []
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false); // 👈 Replaced Emoji Picker with Tag Picker
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
   
   const [isAddingUpdate, setIsAddingUpdate] = useState(false);
@@ -30,6 +31,7 @@ const MessageBubble = React.memo(({
   const [trailEditText, setTrailEditText] = useState("");
   
   const menuRef = useRef(null);
+  const tagPickerRef = useRef(null);
   const inlineFileInputRef = useRef(null);
 
   const isBookmarked = msg.bookmarkedBy?.includes(userEmail);
@@ -49,6 +51,8 @@ const MessageBubble = React.memo(({
   const canEditTask = !isTaskArchived && (!isTaskCompleted || isSuperAdmin);
   const isCreator = msg.senderEmail === userEmail;
 
+  const hasReactions = Object.keys(msg.reactions || {}).length > 0;
+
   const getBorderColor = () => {
     if (msg.isTask) return isTaskArchived ? 'border-l-slate-200 opacity-80' : (isTaskCompleted ? 'border-l-slate-300' : 'border-l-warning');
     if (msg.isPrivateMention || msg.isPrivateForward) return 'border-l-purple-400';
@@ -58,8 +62,9 @@ const MessageBubble = React.memo(({
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+      if (tagPickerRef.current && !tagPickerRef.current.contains(e.target)) setTagPickerOpen(false);
     };
-    if (menuOpen) {
+    if (menuOpen || tagPickerOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('touchstart', handleClickOutside);
     }
@@ -67,7 +72,7 @@ const MessageBubble = React.memo(({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [menuOpen]);
+  }, [menuOpen, tagPickerOpen]);
 
   const notifyTaskChange = async (actionText) => {
     const involved = new Set();
@@ -200,26 +205,7 @@ const MessageBubble = React.memo(({
         
         {/* DROPDOWN MENU */}
         {menuOpen && (
-          <div ref={menuRef} className="absolute top-8 right-2 z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-56 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
-            
-            {/* 👇 QUICK TAG MENU BLOCK (Safely checking customTags) */}
-            {!msg.isTask && toolPreferences?.react !== false && (
-                <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2"><i className="fa-solid fa-hashtag mr-1"></i> Quick Tags</div>
-                   <div className="flex flex-col gap-1.5">
-                     {(toolPreferences?.quickTags || ['#Approved', '#Reviewing', '#ActionRequired', '#Noted']).map(tagLabel => {
-                        const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
-                        if (!tagLabel) return null;
-                        return (
-                           <button key={tagLabel} onClick={() => { setMenuOpen(false); handleReaction(msg.id, tagLabel); }} className={`text-left text-[11px] font-bold px-2.5 py-1.5 rounded-md transition-colors ${tagObj.bgClass} ${tagObj.textClass} hover:opacity-80`}>
-                             {tagLabel}
-                           </button>
-                        );
-                     })}
-                   </div>
-                </div>
-            )}
-
+          <div ref={menuRef} className="absolute top-8 right-2 z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
             {!msg.isTask && <button onClick={() => { setMenuOpen(false); setReplyingTo(msg); setTimeout(() => chatInputRef.current?.focus(), 100); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply</button>}
             {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
             <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
@@ -304,7 +290,6 @@ const MessageBubble = React.memo(({
                           <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 mt-1">
                             <i className={`text-[10px] ${t.action.includes('Archived') ? 'fa-solid fa-box-archive text-slate-400' : t.action.includes('Created') ? 'fa-solid fa-bolt text-amber-500' : t.action.includes('Completed') ? 'fa-solid fa-check text-teal-500' : t.action.includes('Delegated') ? 'fa-solid fa-share-nodes text-indigo-500' : t.fileUrl ? 'fa-solid fa-paperclip text-blue-500' : 'fa-solid fa-comment-dots text-indigo-500'}`}></i>
                           </div>
-                          
                           <div className="flex-1">
                               <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm relative">
                                 <div className="flex items-center justify-between mb-1">
@@ -349,15 +334,62 @@ const MessageBubble = React.memo(({
             ) : !msg.isTask && (
               <p className={`text-sm leading-relaxed whitespace-pre-wrap ${currentUserData?.fontSize || 'text-sm'} text-slate-800`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text || '') }}></p>
             )}
+
+            {/* 👇 SLACK-STYLE INLINE REACTION BAR 👇 */}
+            {!msg.isTask && (hasReactions || toolPreferences?.react !== false) && (
+               <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {Object.entries(msg.reactions || {}).map(([tagLabel, users]) => {
+                     const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600', shortCode: 'TAG' };
+                     const isMe = users.includes(userEmail);
+                     return (
+                       <button key={tagLabel} title={tagLabel} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
+                         className={`flex items-center gap-1.5 px-1.5 py-1 rounded-lg border transition-colors ${isMe ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                       >
+                          <span className={`w-5 h-5 flex items-center justify-center rounded font-extrabold text-[9px] tracking-wider ${tagObj.bgClass} ${tagObj.textClass}`}>
+                            {tagObj.shortCode || 'TAG'}
+                          </span>
+                          <span className={`text-[11px] font-bold pr-1 ${isMe ? 'text-indigo-600' : 'text-slate-500'}`}>{users.length}</span>
+                       </button>
+                     )
+                  })}
+                  
+                  {/* Plus Picker Button */}
+                  {toolPreferences?.react !== false && (
+                    <div className="relative" ref={tagPickerRef}>
+                      <button onClick={(e) => { e.stopPropagation(); setTagPickerOpen(!tagPickerOpen); }}
+                        className={`h-7 px-2 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors ${hasReactions ? '' : 'opacity-0 group-hover/msg:opacity-100'}`}
+                      >
+                        <i className="fa-solid fa-plus text-[11px]"></i><span className="text-[10px] font-bold ml-[3px] mt-[1px]"><i className="fa-regular fa-face-smile"></i></span>
+                      </button>
+                      
+                      {/* Picker Popover */}
+                      {tagPickerOpen && (
+                        <div className="absolute bottom-full left-0 mb-1 z-50 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 flex gap-1 animate-in fade-in zoom-in-95" onClick={e=>e.stopPropagation()}>
+                           {(toolPreferences?.quickTags || ['#Approved', '#Reviewing', '#ActionRequired', '#Noted']).map(tagLabel => {
+                              const tagObj = (customTags || []).find(t => t.label === tagLabel);
+                              if(!tagObj) return null;
+                              return (
+                                <button key={tagLabel} title={tagLabel} onClick={() => { setTagPickerOpen(false); handleReaction(msg.id, tagLabel); }}
+                                  className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-extrabold transition-transform hover:scale-110 tracking-widest ${tagObj.bgClass} ${tagObj.textClass}`}
+                                >
+                                  {tagObj.shortCode}
+                                </button>
+                              )
+                           })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+               </div>
+            )}
             
-            {/* WHATSAPP STYLE TEXT STATUS LOGIC FIX */}
+            {/* System Status Indicators */}
             <div className="flex items-center gap-1.5 mt-1.5 justify-end">
               <span className="text-[10px] font-semibold text-slate-400 mr-1">{msg.time}</span>
               {msg.isEdited && <span className="text-[10px] text-slate-400 italic mr-1">(edited)</span>}
               {msg.hasReminder && <i className="fa-regular fa-clock text-amber-500 text-[10px] mr-1"></i>}
               {isBookmarked && <i className="fa-solid fa-bookmark text-indigo-600 text-[10px] mr-1"></i>}
               
-              {/* Text Based Status Indicators */}
               {msg.isMine && !msg.isTask && (
                  <span className="text-[11px] font-bold ml-1 tracking-wide">
                     {seenByOthers ? (
@@ -372,22 +404,7 @@ const MessageBubble = React.memo(({
             </div>
           </>
         )}
-
-        {/* 👇 HASHTAG REACTIONS DISPLAY (Safely checking customTags) */}
-        {Object.keys(msg.reactions || {}).length > 0 && (
-          <div className="absolute -bottom-3.5 left-2 flex gap-1.5 z-10">
-            {Object.entries(msg.reactions).map(([tagLabel, users]) => {
-              const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
-              return (
-                <div key={tagLabel} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }} className={`text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 cursor-pointer hover:scale-105 transition-transform ${tagObj.bgClass} ${tagObj.textClass} border border-white`}>
-                  <span>{tagLabel}</span><span className="opacity-70">{users.length}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
-
     </div>
   );
 });
