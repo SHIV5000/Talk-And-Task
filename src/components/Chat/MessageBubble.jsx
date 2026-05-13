@@ -7,8 +7,8 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-// Expanded standard emojis for the universal picker
-const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌'];
+// 👇 FIX 3: 24 of the most common professional emojis
+const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
@@ -178,21 +178,40 @@ const MessageBubble = React.memo(({
     } catch(e){}
   };
 
+  const handleInlineReopen = async (e) => {
+    e.stopPropagation();
+    if(!window.confirm("Super Admin Override: Reopen this completed task?")) return;
+    try {
+        const now = new Date();
+        const newTrail = [...msg.taskData.trail, { action: "Reopened", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
+        await updateDoc(doc(db, "messages", msg.id), { "taskData.status": "In Progress", "taskData.trail": newTrail });
+        notifyTaskChange(`Super Admin reopened the task 🔓`);
+    } catch(e){}
+  };
+
   return (
     <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-50' : 'relative z-[1]'}`}>
       
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
       
-      {/* 👇 FIX 1: FULL WIDTH BUBBLE WITH ROUNDED CORNERS 👇 */}
       <div className={`flex-1 w-full min-w-0 bg-white rounded-2xl shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
         
-        {/* === PART 1: MAIN CONTENT === */}
+        {/* 👇 FIX 2: ABSOLUTE CORNER ARROWS 👇 */}
+        {msg.isMine ? (
+            <div className="absolute -top-1.5 -right-1.5 bg-white border border-slate-200 rounded-full w-5 h-5 flex items-center justify-center shadow-sm z-10" title="Sent">
+                <i className="fa-solid fa-arrow-up text-[9px] text-green-700"></i>
+            </div>
+        ) : (
+            <div className="absolute -top-1.5 -left-1.5 bg-white border border-slate-200 rounded-full w-5 h-5 flex items-center justify-center shadow-sm z-10" title="Received">
+                <i className="fa-solid fa-arrow-down text-[9px] text-orange-600"></i>
+            </div>
+        )}
+
         <div className="flex-1 w-full">
             <div className="flex items-baseline mb-1 pr-10">
               <span className="text-xs font-semibold text-indigo-600">{senderName}</span>
             </div>
             
-            {/* 3-DOTS MENU TRIGGER (Removed quick tags from here) */}
             <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-indigo-600 hover:bg-slate-100 p-1.5 w-6 h-6 rounded-full flex items-center justify-center">
               <i className="fa-solid fa-ellipsis-vertical text-[14px]"></i>
             </button>
@@ -308,7 +327,7 @@ const MessageBubble = React.memo(({
                   <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> PRIVATE</div>
                 )}
                 
-                {!msg.isTask && msg.isPrivateForward ? (
+                {!msg.isTask && msg.isPrivateForward && (
                   <div onClick={(e) => { e.stopPropagation(); jumpToPrivateSource(msg.originalMsgId, msg.originalGroupId); }} className="mt-1 mb-2 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-3 shadow-sm cursor-pointer hover:shadow-md transition-all group/forward relative">
                      <div className="flex items-center gap-2 mb-2">
                        <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0"><i className="fa-solid fa-share-nodes text-[10px]"></i></div>
@@ -316,25 +335,39 @@ const MessageBubble = React.memo(({
                      </div>
                      <p className="text-[13px] text-slate-700 font-medium italic border-l-[3px] border-purple-300 pl-3 ml-1 break-words">"{msg.text?.replace('[Forwarded Private Mention] ', '')}"</p>
                   </div>
-                ) : !msg.isTask && msg.fileUrl ? (
-                  <div className="flex flex-col gap-1 my-1">
-                    {msg.fileType?.startsWith('image/') ? <img src={msg.fileUrl} alt="Shared" className="rounded max-w-full max-h-64 object-cover cursor-pointer" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }} /> :
-                    <div className="flex items-center gap-3 p-2 rounded bg-slate-50 cursor-pointer hover:bg-slate-100 border border-slate-200" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}>
-                      <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-slate-500 shadow-sm"><i className="fa-solid fa-file-lines text-lg"></i></div>
-                      <div className="flex-1 overflow-hidden"><p className="text-sm font-medium text-slate-700 truncate">{msg.fileName}</p></div>
-                    </div>}
-                  </div>
-                ) : !msg.isTask && (
-                  <p className={`text-sm leading-relaxed whitespace-pre-wrap ${currentUserData?.fontSize || 'text-sm'} text-slate-800`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text || '') }}></p>
                 )}
+
+                {/* 👇 FIX 5: SIMULTANEOUS TEXT AND FILE RENDERING 👇 */}
+                {!msg.isTask && !msg.isPrivateForward && msg.text && (
+                  <p className={`text-sm leading-relaxed whitespace-pre-wrap ${currentUserData?.fontSize || 'text-sm'} text-slate-800 ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text || '') }}></p>
+                )}
+                
+                {/* 👇 FIX 4: CONFINED IMAGE PREVIEWS 👇 */}
+                {!msg.isTask && !msg.isPrivateForward && msg.fileUrl && (
+                  <div className="flex flex-col gap-1 my-1">
+                    {msg.fileType?.startsWith('image/') ? (
+                       <div className="relative group/img overflow-hidden rounded-xl border border-slate-200 w-fit">
+                          <img src={msg.fileUrl} alt="Shared" className="w-40 h-40 md:w-56 md:h-56 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }} />
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                              <i className="fa-solid fa-expand text-white text-3xl drop-shadow-md"></i>
+                          </div>
+                       </div>
+                    ) : (
+                       <div className="flex items-center gap-3 p-2 rounded bg-slate-50 cursor-pointer hover:bg-slate-100 border border-slate-200 w-fit max-w-[280px]" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }}>
+                          <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-slate-500 shadow-sm shrink-0"><i className="fa-solid fa-file-lines text-lg"></i></div>
+                          <div className="flex-1 overflow-hidden min-w-0"><p className="text-sm font-medium text-slate-700 truncate">{msg.fileName}</p></div>
+                          <i className="fa-solid fa-download text-slate-400 pr-1"></i>
+                       </div>
+                    )}
+                  </div>
+                )}
+
               </>
             )}
         </div>
 
-        {/* 👇 FIX 2 & 3: TWO-PART SEPARATOR & UNIVERSAL REACTION BAR 👇 */}
         <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-end justify-between gap-3 w-full">
             
-            {/* LEFT: Hashtag Reactions & Plus Picker */}
             <div className="flex flex-wrap items-center gap-1.5 flex-1">
                 {Object.entries(msg.reactions || {}).map(([tagLabel, users]) => {
                     const isEmoji = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(tagLabel) || STANDARD_EMOJIS.includes(tagLabel);
@@ -351,33 +384,31 @@ const MessageBubble = React.memo(({
                         )
                     }
 
-                    const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600', shortCode: 'TAG' };
+                    const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
                     return (
+                        // 👇 FIX 1: RESTORED FULL TEXT PILL 👇
                         <button key={tagLabel} title={tagLabel} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
-                            className={`flex items-center gap-1.5 px-1.5 py-1 rounded-lg border transition-colors shadow-sm ${isMe ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                            className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-colors shadow-sm ${isMe ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                         >
-                            <span className={`w-5 h-5 flex items-center justify-center rounded font-extrabold text-[9px] tracking-wider ${tagObj.bgClass} ${tagObj.textClass}`}>
-                                {tagObj.shortCode || 'TAG'}
+                            <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wide ${tagObj.bgClass} ${tagObj.textClass}`}>
+                                {tagObj.label}
                             </span>
                             <span className={`text-[11px] font-bold pr-1 ${isMe ? 'text-indigo-600' : 'text-slate-500'}`}>{users.length}</span>
                         </button>
                     )
                 })}
                 
-                {/* Plus Picker Button */}
                 {toolPreferences?.react !== false && !msg.isTask && (
                     <div className="relative" ref={tagPickerRef}>
                         <button onClick={(e) => { e.stopPropagation(); setTagPickerOpen(!tagPickerOpen); }}
-                            className={`h-7 px-2 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors shadow-sm ${hasReactions ? '' : 'opacity-0 group-hover/msg:opacity-100'}`}
+                            className={`h-8 px-2 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors shadow-sm ${hasReactions ? '' : 'opacity-0 group-hover/msg:opacity-100'}`}
                         >
                             <i className="fa-solid fa-plus text-[11px]"></i><span className="text-[10px] font-bold ml-[3px] mt-[1px]"><i className="fa-regular fa-face-smile"></i></span>
                         </button>
                         
-                        {/* THE UNIVERSAL TAG PICKER MENU */}
                         {tagPickerOpen && (
                             <div className="absolute bottom-full left-0 mb-1 z-50 bg-white rounded-xl shadow-xl border border-slate-200 p-3 w-56 max-h-72 overflow-y-auto custom-sidebar-scroll animate-in fade-in zoom-in-95" onClick={e=>e.stopPropagation()}>
                                 
-                                {/* 1. Frequent Tags */}
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1"><i className="fa-solid fa-bolt mr-1"></i> Frequent</div>
                                 <div className="flex flex-col gap-1.5 mb-3">
                                     {(toolPreferences?.quickTags || ['#Approved', '#Reviewing', '#ActionRequired', '#Noted']).map(tagLabel => {
@@ -395,7 +426,6 @@ const MessageBubble = React.memo(({
 
                                 <div className="h-px bg-slate-100 my-2"></div>
 
-                                {/* 2. All Workflows */}
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1 mt-2"><i className="fa-solid fa-tags mr-1"></i> All Workflows</div>
                                 <div className="flex flex-col gap-1.5 mb-3">
                                     {(customTags || []).map(tagObj => (
@@ -409,11 +439,10 @@ const MessageBubble = React.memo(({
 
                                 <div className="h-px bg-slate-100 my-2"></div>
 
-                                {/* 3. Standard Emojis */}
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1 mt-2"><i className="fa-regular fa-face-smile mr-1"></i> Standard Emoji</div>
                                 <div className="flex flex-wrap gap-1.5">
                                     {STANDARD_EMOJIS.map(emoji => (
-                                        <button key={emoji} onClick={() => { setTagPickerOpen(false); handleReaction(msg.id, emoji); }} className="w-8 h-8 flex items-center justify-center text-[16px] hover:bg-slate-100 rounded-lg transition-transform hover:scale-110" style={{fontFamily: '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif'}}>
+                                        <button key={emoji} onClick={() => { setTagPickerOpen(false); handleReaction(msg.id, emoji); }} className="w-8 h-8 flex items-center justify-center text-[18px] hover:bg-slate-100 rounded-lg transition-transform hover:scale-110" style={{fontFamily: '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif'}}>
                                             {emoji}
                                         </button>
                                     ))}
@@ -424,7 +453,6 @@ const MessageBubble = React.memo(({
                 )}
             </div>
 
-            {/* RIGHT: System Status Indicators */}
             <div className="flex items-center gap-1.5 justify-end shrink-0">
                 <span className="text-[10px] font-semibold text-slate-400 mr-1">{msg.time}</span>
                 {msg.isEdited && <span className="text-[10px] text-slate-400 italic mr-1">(edited)</span>}
