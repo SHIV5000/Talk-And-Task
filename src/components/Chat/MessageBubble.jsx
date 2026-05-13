@@ -7,7 +7,6 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-// 👇 FIX 3: 24 of the most common professional emojis
 const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
 const MessageBubble = React.memo(({
@@ -49,14 +48,13 @@ const MessageBubble = React.memo(({
 
   const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
-  const isTaskArchived = msg.isTask && msg.taskData?.isArchived === true;
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
-  const canEditTask = !isTaskArchived && (!isTaskCompleted || isSuperAdmin);
+  const canEditTask = !isTaskCompleted || isSuperAdmin;
 
   const hasReactions = Object.keys(msg.reactions || {}).length > 0;
 
   const getBorderColor = () => {
-    if (msg.isTask) return isTaskArchived ? 'border-l-slate-200 opacity-80' : (isTaskCompleted ? 'border-l-slate-300' : 'border-l-warning');
+    if (msg.isTask) return isTaskCompleted ? 'border-l-slate-300' : 'border-l-warning';
     if (msg.isPrivateMention || msg.isPrivateForward) return 'border-l-purple-400';
     return 'border-l-primary';
   };
@@ -157,27 +155,6 @@ const MessageBubble = React.memo(({
     doc.save(`Task_Trail_${msg.id}.pdf`);
   };
 
-  const handleInlineArchive = async (e) => {
-    e.stopPropagation();
-    if(!window.confirm("Archive this task? It will be locked and moved to the archive view.")) return;
-    try { 
-        const now = new Date();
-        const newTrail = [...msg.taskData.trail, { action: "Archived", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
-        await updateDoc(doc(db, "messages", msg.id), { "taskData.isArchived": true, "taskData.trail": newTrail }); 
-    } catch(e){}
-  };
-
-  const handleInlineRecover = async (e) => {
-    e.stopPropagation();
-    if(!window.confirm("Recover this archived task and make it active again?")) return;
-    try {
-        const now = new Date();
-        const newTrail = [...msg.taskData.trail, { action: "Recovered from Archive", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
-        await updateDoc(doc(db, "messages", msg.id), { "taskData.isArchived": false, "taskData.trail": newTrail });
-        notifyTaskChange(`Admin recovered the task from archive 📦`);
-    } catch(e){}
-  };
-
   const handleInlineReopen = async (e) => {
     e.stopPropagation();
     if(!window.confirm("Super Admin Override: Reopen this completed task?")) return;
@@ -196,14 +173,14 @@ const MessageBubble = React.memo(({
       
       <div className={`flex-1 w-full min-w-0 bg-white rounded-2xl shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
         
-        {/* 👇 FIX 2: ABSOLUTE CORNER ARROWS 👇 */}
+        {/* 👇 ANIMATED, THICKER ARROWS 👇 */}
         {msg.isMine ? (
-            <div className="absolute -top-1.5 -right-1.5 bg-white border border-slate-200 rounded-full w-5 h-5 flex items-center justify-center shadow-sm z-10" title="Sent">
-                <i className="fa-solid fa-arrow-up text-[9px] text-green-700"></i>
+            <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10 animate-bounce" title="Sent">
+                <i className="fa-solid fa-arrow-up text-[13px] text-green-700" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
             </div>
         ) : (
-            <div className="absolute -top-1.5 -left-1.5 bg-white border border-slate-200 rounded-full w-5 h-5 flex items-center justify-center shadow-sm z-10" title="Received">
-                <i className="fa-solid fa-arrow-down text-[9px] text-orange-600"></i>
+            <div className="absolute -top-2.5 -left-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10 animate-bounce" title="Received">
+                <i className="fa-solid fa-arrow-down text-[13px] text-orange-600" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
             </div>
         )}
 
@@ -242,20 +219,18 @@ const MessageBubble = React.memo(({
             ) : (
               <>
                 {msg.isTask && (
-                  <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isTaskArchived ? 'bg-slate-50 border-slate-200 opacity-80' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
+                  <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
                     <div className="p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          {!isTaskArchived && (
-                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${msg.taskData.priority === 'High' ? 'bg-rose-50 text-rose-700 border-rose-200' : msg.taskData.priority === 'Medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                              {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
-                            </span>
-                          )}
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${isTaskArchived ? 'bg-slate-100 text-slate-500 border-slate-200' : msg.taskData.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                            {isTaskArchived ? 'Archived' : msg.taskData.status}
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${msg.taskData.priority === 'High' ? 'bg-rose-50 text-rose-700 border-rose-200' : msg.taskData.priority === 'Medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                            {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${msg.taskData.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                            {msg.taskData.status}
                           </span>
                         </div>
-                        <span className={`text-[11px] font-bold flex items-center gap-1 ${isTaskCompleted || isTaskArchived ? 'text-slate-400' : 'text-slate-500'}`}>
+                        <span className={`text-[11px] font-bold flex items-center gap-1 ${isTaskCompleted ? 'text-slate-400' : 'text-slate-500'}`}>
                           <i className="fa-regular fa-calendar-check"></i> Due {new Date(msg.taskData.deadline).toLocaleDateString()}
                         </span>
                       </div>
@@ -267,7 +242,7 @@ const MessageBubble = React.memo(({
                           <button onClick={()=>{setIsEditingTitle(false); setTempTitle(msg.text);}} className="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded font-semibold hover:bg-slate-300">Cancel</button>
                         </div>
                       ) : (
-                        <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskArchived ? 'text-slate-500 italic' : isTaskCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                        <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
                           {msg.text}
                           {canEditTask && isTaskParticipant && <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer ml-2 opacity-0 group-hover/title:opacity-100 transition-opacity" onClick={(e)=>{e.stopPropagation(); setIsEditingTitle(true);}}></i>}
                         </p>
@@ -277,10 +252,10 @@ const MessageBubble = React.memo(({
                         <div className="flex items-center -space-x-2 relative group/assignees">
                           {(msg.taskData.assignees || []).slice(0, 3).map(email => {
                             const assignee = dbUsers?.find(u => u.email === email);
-                            return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses={`border-2 ${isTaskCompleted || isTaskArchived ? 'border-slate-50 opacity-70' : 'border-white'} relative z-10`} />;
+                            return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses={`border-2 ${isTaskCompleted ? 'border-slate-50 opacity-70' : 'border-white'} relative z-10`} />;
                           })}
                           {(msg.taskData.assignees || []).length > 3 && (
-                            <div className={`w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-600 border-2 ${isTaskCompleted || isTaskArchived ? 'border-slate-50' : 'border-white'} relative z-10`}>
+                            <div className={`w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-600 border-2 ${isTaskCompleted ? 'border-slate-50' : 'border-white'} relative z-10`}>
                               +{msg.taskData.assignees.length - 3}
                             </div>
                           )}
@@ -288,7 +263,7 @@ const MessageBubble = React.memo(({
                       </div>
                     </div>
 
-                    <button onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); setIsDelegating(false); }} className={`w-full border-t border-slate-200 py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isTaskArchived || isTaskCompleted ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}>
+                    <button onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); setIsDelegating(false); }} className={`w-full border-t border-slate-200 py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isTaskCompleted ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}>
                       <i className={`fa-solid fa-chevron-${isTaskExpanded ? 'up' : 'down'} text-[10px]`}></i>
                       {isTaskExpanded ? 'Hide Details' : `View Updates & Trail (${msg.taskData.trail?.length || 0})`}
                     </button>
@@ -300,7 +275,7 @@ const MessageBubble = React.memo(({
                             return (
                             <div key={idx} className="flex gap-3 text-sm group/trailitem">
                               <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 mt-1">
-                                <i className={`text-[10px] ${t.action.includes('Archived') ? 'fa-solid fa-box-archive text-slate-400' : t.action.includes('Created') ? 'fa-solid fa-bolt text-amber-500' : t.action.includes('Completed') ? 'fa-solid fa-check text-teal-500' : t.action.includes('Delegated') ? 'fa-solid fa-share-nodes text-indigo-500' : t.fileUrl ? 'fa-solid fa-paperclip text-blue-500' : 'fa-solid fa-comment-dots text-indigo-500'}`}></i>
+                                <i className={`text-[10px] ${t.action.includes('Created') ? 'fa-solid fa-bolt text-amber-500' : t.action.includes('Completed') ? 'fa-solid fa-check text-teal-500' : t.action.includes('Delegated') ? 'fa-solid fa-share-nodes text-indigo-500' : t.fileUrl ? 'fa-solid fa-paperclip text-blue-500' : 'fa-solid fa-comment-dots text-indigo-500'}`}></i>
                               </div>
                               <div className="flex-1">
                                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm relative">
@@ -337,17 +312,16 @@ const MessageBubble = React.memo(({
                   </div>
                 )}
 
-                {/* 👇 FIX 5: SIMULTANEOUS TEXT AND FILE RENDERING 👇 */}
+                {/* Simultaneous Text and File Rendering */}
                 {!msg.isTask && !msg.isPrivateForward && msg.text && (
                   <p className={`text-sm leading-relaxed whitespace-pre-wrap ${currentUserData?.fontSize || 'text-sm'} text-slate-800 ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text || '') }}></p>
                 )}
                 
-                {/* 👇 FIX 4: CONFINED IMAGE PREVIEWS 👇 */}
                 {!msg.isTask && !msg.isPrivateForward && msg.fileUrl && (
                   <div className="flex flex-col gap-1 my-1">
                     {msg.fileType?.startsWith('image/') ? (
                        <div className="relative group/img overflow-hidden rounded-xl border border-slate-200 w-fit">
-                          <img src={msg.fileUrl} alt="Shared" className="w-40 h-40 md:w-56 md:h-56 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }} />
+                          <img src={msg.fileUrl} alt="Shared" className="w-32 h-32 md:w-48 md:h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={(e) => { e.stopPropagation(); window.open(msg.fileUrl, '_blank'); }} />
                           <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                               <i className="fa-solid fa-expand text-white text-3xl drop-shadow-md"></i>
                           </div>
@@ -361,21 +335,23 @@ const MessageBubble = React.memo(({
                     )}
                   </div>
                 )}
-
               </>
             )}
         </div>
 
         <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-end justify-between gap-3 w-full">
-            
             <div className="flex flex-wrap items-center gap-1.5 flex-1">
                 {Object.entries(msg.reactions || {}).map(([tagLabel, users]) => {
                     const isEmoji = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(tagLabel) || STANDARD_EMOJIS.includes(tagLabel);
                     const isMe = users.includes(userEmail);
                     
+                    // 👇 FIX 2: HOVER SHOWS ALL USER NAMES 👇
+                    const hoverNames = users.map(e => dbUsers?.find(u => u.email === e)?.name || e.split('@')[0]).join(', ');
+                    const titleText = `${tagLabel} affixed by: ${hoverNames}`;
+                    
                     if (isEmoji) {
                         return (
-                            <button key={tagLabel} title={tagLabel} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
+                            <button key={tagLabel} title={titleText} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
                                 className={`flex items-center gap-1 px-2 py-1 rounded-lg border transition-colors shadow-sm ${isMe ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                             >
                                 <span className="text-[13px]" style={{fontFamily: '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif'}}>{tagLabel}</span>
@@ -386,8 +362,7 @@ const MessageBubble = React.memo(({
 
                     const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
                     return (
-                        // 👇 FIX 1: RESTORED FULL TEXT PILL 👇
-                        <button key={tagLabel} title={tagLabel} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
+                        <button key={tagLabel} title={titleText} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
                             className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-colors shadow-sm ${isMe ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                         >
                             <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wide ${tagObj.bgClass} ${tagObj.textClass}`}>
@@ -415,7 +390,7 @@ const MessageBubble = React.memo(({
                                         const tagObj = (customTags || []).find(t => t.label === tagLabel);
                                         if(!tagObj) return null;
                                         return (
-                                            <button key={`freq-${tagLabel}`} title={tagLabel} onClick={() => { setTagPickerOpen(false); handleReaction(msg.id, tagLabel); }}
+                                            <button key={`freq-${tagLabel}`} onClick={() => { setTagPickerOpen(false); handleReaction(msg.id, tagLabel); }}
                                                 className={`w-full text-left text-[11px] font-bold px-3 py-2 rounded-lg transition-colors ${tagObj.bgClass} ${tagObj.textClass} hover:opacity-80 border border-white hover:border-${tagObj.bgClass.replace('bg-', '')} shadow-sm`}
                                             >
                                                 {tagObj.label}
@@ -429,7 +404,7 @@ const MessageBubble = React.memo(({
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1 mt-2"><i className="fa-solid fa-tags mr-1"></i> All Workflows</div>
                                 <div className="flex flex-col gap-1.5 mb-3">
                                     {(customTags || []).map(tagObj => (
-                                        <button key={`all-${tagObj.id}`} title={tagObj.label} onClick={() => { setTagPickerOpen(false); handleReaction(msg.id, tagObj.label); }}
+                                        <button key={`all-${tagObj.id}`} onClick={() => { setTagPickerOpen(false); handleReaction(msg.id, tagObj.label); }}
                                             className={`w-full text-left text-[11px] font-bold px-3 py-2 rounded-lg transition-colors ${tagObj.bgClass} ${tagObj.textClass} hover:opacity-80 border border-white hover:border-${tagObj.bgClass.replace('bg-', '')} shadow-sm`}
                                         >
                                             {tagObj.label}
