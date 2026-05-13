@@ -26,7 +26,7 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
   const indentStyle = node.type !== 'org' ? { marginLeft: '1.25rem', paddingLeft: '1.25rem', borderLeft: '2px solid #e2e8f0' } : {};
 
   return (
-    <div style={indentStyle} className="relative py-1">
+    <div style={indentStyle} className="relative py-1 w-full max-w-4xl">
       {!isTask && (
         <div onClick={toggle} className="flex items-center gap-3 py-2 px-3 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors w-fit select-none border border-transparent hover:border-slate-200">
            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${node.type === 'org' ? 'bg-indigo-600 text-white shadow-indigo-600/30' : 'bg-slate-200 text-slate-600'}`}>
@@ -42,7 +42,7 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
 
       {isTask && (
         // 👇 FIX 4: LEFT ALIGNED FULL WIDTH CARD 👇
-        <div className="my-3 mx-4 w-full max-w-4xl bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
+        <div className="my-3 w-full bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
           {tData.poked && (
              <div className="absolute top-0 right-0 bg-rose-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg shadow-sm z-20 animate-pulse border-b border-l border-rose-600 tracking-widest">🚨 POKED</div>
           )}
@@ -73,7 +73,12 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
                   {(tData.trail || []).map((t, idx) => (
                      <div key={idx} className="relative z-10 text-left">
                         <div className={`w-2 h-2 rounded-full absolute -left-[14px] top-1.5 border-2 border-slate-50 ${t.action.includes('Completed') ? 'bg-teal-500' : 'bg-indigo-500'}`}></div>
-                        <div className="font-bold text-[11px] text-slate-700 leading-tight">{t.action} <span className="font-semibold text-slate-400 ml-1.5">{t.time?.split(',')[0]}</span></div>
+                        
+                        {/* 👇 FIX 5: EXPLICIT IDENTITY IN TASK TRAIL 👇 */}
+                        <div className="font-bold text-[11px] text-slate-700 leading-tight">
+                            <span className="text-indigo-600">{(t.by||'System').split('@')[0]}</span> <span className="text-slate-400 font-medium mx-1">did</span> {t.action}
+                            <span className="font-semibold text-slate-400 ml-2">{t.time?.split(',')[0]}</span>
+                        </div>
                         {t.comment && <div className="text-[12px] text-slate-600 italic mt-1 bg-white p-2 rounded-lg border border-slate-200 shadow-sm w-fit">"{t.comment}"</div>}
                      </div>
                   ))}
@@ -105,7 +110,12 @@ export default function AdminPanel({
 }) { 
   const [activeTab, setActiveTab] = useState('tasks');
   const [logSubTab, setLogSubTab] = useState('tasks');
+  
+  // 👇 FIX 6: History Date Range Filters 👇
   const [historyUserEmail, setHistoryUserEmail] = useState('');
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
+
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
@@ -114,7 +124,6 @@ export default function AdminPanel({
   const [selectedLogs, setSelectedLogs] = useState(new Set());
   const [selectedHistory, setSelectedHistory] = useState(new Set());
   const [selectedReactions, setSelectedReactions] = useState(new Set()); 
-  const [showArchivedUsers, setShowArchivedUsers] = useState(false);
   const [localOverlay, setLocalOverlay] = useState(null); 
   const [taskFilterStatus, setTaskFilterStatus] = useState('All');
   const [taskFilterStart, setTaskFilterStart] = useState('');
@@ -133,13 +142,14 @@ export default function AdminPanel({
   const currentLogs = logSubTab === 'tasks' ? taskLogs : messageLogs;
 
   const userHistoryLogs = useMemo(() => {
-    if (!historyUserEmail) return [];
-    return filteredAuditLogs.filter(l => l.user === historyUserEmail).sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
-  }, [filteredAuditLogs, historyUserEmail]);
+    let logs = filteredAuditLogs; // Received immutable complete logs
+    if (historyUserEmail) logs = logs.filter(l => l.user === historyUserEmail);
+    if (historyStartDate) logs = logs.filter(l => new Date(l.dateString) >= new Date(historyStartDate));
+    if (historyEndDate) logs = logs.filter(l => new Date(l.dateString) <= new Date(historyEndDate));
+    return logs.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
+  }, [filteredAuditLogs, historyUserEmail, historyStartDate, historyEndDate]);
 
-  const filteredUsers = useMemo(() => {
-    return dbUsers.filter(u => showArchivedUsers ? u.isArchived : !u.isArchived);
-  }, [dbUsers, showArchivedUsers]);
+  const filteredUsers = useMemo(() => dbUsers, [dbUsers]);
 
   const filteredTaskMessages = useMemo(() => {
     let filtered = messages.filter(m => m.isTask);
@@ -193,11 +203,7 @@ export default function AdminPanel({
       const theme = tagThemes[newTagTheme];
       try {
           await addDoc(collection(db, "workspace_tags"), { 
-             label: newTagLabel.trim(), 
-             bgClass: theme.bg, 
-             textClass: theme.text, 
-             themeName: newTagTheme, 
-             createdAt: serverTimestamp() 
+             label: newTagLabel.trim(), bgClass: theme.bg, textClass: theme.text, themeName: newTagTheme, createdAt: serverTimestamp() 
           });
           setNewTagLabel('');
       } catch(e) { alert("Failed to save tag."); }
@@ -263,10 +269,6 @@ export default function AdminPanel({
       await addDoc(collection(db, "users"), { uid: `manual_${Date.now()}`, email: newUserEmail, name: newUserName, isApproved: newUserApprove, isAdmin: false, canCreateGroups: false, isArchived: false, lastActive: serverTimestamp(), toolPreferences: { reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic' } });
       setNewUserEmail(''); setNewUserName(''); setShowAddUser(false); alert('User added successfully!');
     } catch (e) { alert('Failed to add user.'); }
-  };
-
-  const handleToggleArchiveUser = async (u) => {
-    try { const { updateDoc, doc } = await import('firebase/firestore'); await updateDoc(doc(db, "users", u.uid), { isArchived: !u.isArchived }); } catch (e) { alert('Failed to update user.'); }
   };
 
   return (
@@ -437,7 +439,6 @@ export default function AdminPanel({
               </div>
             </div>
             
-            {/* Left Aligned Width Container */}
             <div className="flex-1 overflow-auto custom-sidebar-scroll pb-12 w-full">
                {treeData.children.length === 0 ? (
                  <div className="flex flex-col items-center justify-center mt-20 opacity-50">
@@ -461,7 +462,7 @@ export default function AdminPanel({
               <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setLocalOverlay('group_form'); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm"><i className="fa-solid fa-plus mr-2"></i>Create Team</button>
             </div>
             <div className="flex-1 overflow-auto bg-slate-50 custom-sidebar-scroll p-6">
-               <div className="relative py-1">
+               <div className="relative py-1 w-full max-w-4xl">
                   <div className="flex items-center gap-3 py-2 px-3 hover:bg-slate-100 rounded-xl w-fit transition-colors select-none">
                      <div className="bg-indigo-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-indigo-600/30 shadow-sm">
                        <i className="fa-solid fa-sitemap text-lg"></i>
@@ -469,16 +470,16 @@ export default function AdminPanel({
                      <div className="font-extrabold text-slate-800 text-[15px]">Organisation</div>
                   </div>
                   
-                  <div className="mt-1 ml-[1.25rem] pl-[1.25rem] border-l-2 border-slate-200">
+                  <div className="mt-1 ml-[1.25rem] pl-[1.25rem] border-l-2 border-slate-200 w-full">
                      {groups.map((g, idx) => (
-                        <div key={g.id} className="relative py-1">
-                           <div className="my-3 w-full max-w-4xl bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
+                        <div key={g.id} className="relative py-1 w-full">
+                           <div className="my-3 w-full bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
                              <div className="p-4 md:p-5">
                                 <div className="flex items-center gap-4 mb-4">
                                    <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-14 h-14 shadow-sm" isGroup={true} />
                                    <div className="flex-1 min-w-0">
                                       <h3 className="font-bold text-slate-800 text-lg truncate group-hover:text-indigo-600 transition-colors">{g.name}</h3>
-                                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{g.members?.length || 0} Members {g.isArchived && '· Archived'}</p>
+                                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{g.members?.length || 0} Members</p>
                                       <div className="flex -space-x-1.5 mt-2.5">
                                           {(g.members || []).slice(0, 10).map(email => {
                                              const u = dbUsers.find(u => u.email === email);
@@ -494,7 +495,6 @@ export default function AdminPanel({
                                 </div>
                                 <div className="flex gap-3 mt-4 pt-4 border-t border-slate-100">
                                    <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); setLocalOverlay('group_form'); }} className="flex-1 bg-slate-50 text-slate-600 py-2.5 rounded-lg text-sm font-bold border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-all"><i className="fa-solid fa-pen mr-2"></i>Edit Details</button>
-                                   <button onClick={() => { if (window.confirm('Archive?')) handleAdminArchiveGroup(g.id, g.name); }} className="flex-1 bg-rose-50 text-rose-600 py-2.5 rounded-lg text-sm font-bold border border-rose-200 hover:bg-rose-100 shadow-sm transition-all"><i className="fa-solid fa-box-archive mr-2"></i>Archive Group</button>
                                 </div>
                              </div>
                            </div>
@@ -588,22 +588,43 @@ export default function AdminPanel({
           </div>
         )}
 
+        {/* 👇 FIX 6: HISTORY TAB UPDATED WITH DATE FILTERS 👇 */}
         {activeTab === 'history' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100"><h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-clock-rotate-left text-indigo-600 mr-2"></i>User Activity History</h2></div>
             <div className="p-5 bg-slate-50 border-b border-slate-200">
               <div className="flex flex-wrap gap-4 items-end">
-                <div className="flex-1 min-w-[200px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Select User</label><select value={historyUserEmail} onChange={e => setHistoryUserEmail(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">Select a user...</option>{dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name} ({u.email})</option>)}</select></div>
-                <button onClick={() => setHistoryUserEmail('')} className="bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-300">Clear</button>
+                <div className="flex-1 min-w-[200px]">
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Select User</label>
+                   <select value={historyUserEmail} onChange={e => setHistoryUserEmail(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium">
+                      <option value="">Select a user...</option>{dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name} ({u.email})</option>)}
+                   </select>
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">From Date</label>
+                   <input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" />
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">To Date</label>
+                   <input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" />
+                </div>
+                <button onClick={() => { setHistoryUserEmail(''); setHistoryStartDate(''); setHistoryEndDate(''); }} className="bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-300">Clear Filters</button>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500 text-xs uppercase"><tr><th className="px-5 py-3"><input type="checkbox" onChange={toggleSelectAllHistory} checked={selectedHistory.size === userHistoryLogs.length && userHistoryLogs.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-5 py-3">#</th><th className="px-5 py-3">Time</th><th className="px-5 py-3">Action</th><th className="px-5 py-3">Details</th></tr></thead>
+                <thead className="bg-slate-50 text-slate-500 text-xs uppercase"><tr><th className="px-5 py-3"><input type="checkbox" onChange={toggleSelectAllHistory} checked={selectedHistory.size === userHistoryLogs.length && userHistoryLogs.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-5 py-3">#</th><th className="px-5 py-3">Time</th><th className="px-5 py-3">User</th><th className="px-5 py-3">Action</th><th className="px-5 py-3">Details</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
-                  {userHistoryLogs.length === 0 && <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400 italic font-medium">{historyUserEmail ? 'No activity found.' : 'Select a user above.'}</td></tr>}
+                  {userHistoryLogs.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400 italic font-medium">No records found. Adjust filters to search.</td></tr>}
                   {userHistoryLogs.map((log, idx) => (
-                    <tr key={log.id} className="hover:bg-slate-50"><td className="px-5 py-3"><input type="checkbox" checked={selectedHistory.has(log.id)} onChange={() => toggleSelectHistory(log.id)} className="w-4 h-4 accent-indigo-600" /></td><td className="px-5 py-3 text-slate-500 font-bold">{idx + 1}</td><td className="px-5 py-3"><div className="text-xs font-bold text-slate-600">{log.dateString}</div><div className="text-[11px] text-slate-400 font-medium">{log.time}</div></td><td className="px-5 py-3"><span className="text-[11px] font-bold bg-white text-slate-600 px-2.5 py-1 rounded-full border border-slate-200 shadow-sm">{log.type}</span></td><td className="px-5 py-3 text-slate-700 font-medium">{log.content}</td></tr>
+                    <tr key={log.id} className="hover:bg-slate-50">
+                       <td className="px-5 py-3"><input type="checkbox" checked={selectedHistory.has(log.id)} onChange={() => toggleSelectHistory(log.id)} className="w-4 h-4 accent-indigo-600" /></td>
+                       <td className="px-5 py-3 text-slate-500 font-bold">{idx + 1}</td>
+                       <td className="px-5 py-3"><div className="text-xs font-bold text-slate-600">{log.dateString}</div><div className="text-[11px] text-slate-400 font-medium">{log.time}</div></td>
+                       <td className="px-5 py-3 font-bold text-indigo-600">{(log.user || '').split('@')[0]}</td>
+                       <td className="px-5 py-3"><span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm ${log.type === 'LOGIN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : log.type === 'LOGOUT' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-white text-slate-600 border border-slate-200'}`}>{log.type}</span></td>
+                       <td className="px-5 py-3 text-slate-700 font-medium">{log.content}</td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
