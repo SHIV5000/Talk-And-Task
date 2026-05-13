@@ -12,7 +12,8 @@ export default function ChatView({
   editingMessageId, editMessageText, setEditingMessageId, setEditMessageText,
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
-  unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource 
+  unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
+  customTags // 👈 RECEIVED FROM CHAT APP
 }) {
   
   const handleChatScroll = (e) => {
@@ -114,6 +115,7 @@ export default function ChatView({
               dbUsers={dbUsers}
               jumpToPrivateSource={jumpToPrivateSource} 
               handleAddInlineComment={handleAddInlineComment} 
+              customTags={customTags || []} // 👈 FORWARDED TO MESSAGE BUBBLE SAFELY
             />
           ))}
         </div>
@@ -136,7 +138,6 @@ export default function ChatView({
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
 
-      {/* Always-On Scroll Arrows (Unobtrusive) */}
       <div className="absolute bottom-[80px] right-4 flex flex-col gap-2 z-30">
         <button
           onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
