@@ -118,9 +118,8 @@ export default function AdminPanel({
   const [taskFilterStart, setTaskFilterStart] = useState('');
   const [taskFilterEnd, setTaskFilterEnd] = useState('');
   
-  // 👇 TAG STUDIO LOGIC UPDATE
+  // Tag Studio Logic
   const [newTagLabel, setNewTagLabel] = useState('');
-  const [newTagShort, setNewTagShort] = useState('');
   const [newTagTheme, setNewTagTheme] = useState('teal');
 
   const taskLogs = useMemo(() => filteredAuditLogs.filter(l => l.type.startsWith('TASK_')), [filteredAuditLogs]);
@@ -185,18 +184,16 @@ export default function AdminPanel({
 
   const handleAddTag = async () => {
       if(!newTagLabel.trim() || !newTagLabel.startsWith('#')) return alert("Tag label must begin with '#'");
-      if(!newTagShort.trim() || newTagShort.length > 4) return alert("Short code must be 1-4 characters max (e.g. APP, REV)");
       const theme = tagThemes[newTagTheme];
       try {
           await addDoc(collection(db, "workspace_tags"), { 
              label: newTagLabel.trim(), 
-             shortCode: newTagShort.trim().toUpperCase(), 
              bgClass: theme.bg, 
              textClass: theme.text, 
              themeName: newTagTheme, 
              createdAt: serverTimestamp() 
           });
-          setNewTagLabel(''); setNewTagShort('');
+          setNewTagLabel('');
       } catch(e) { alert("Failed to save tag."); }
   };
 
@@ -267,7 +264,7 @@ export default function AdminPanel({
            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-hashtag text-2xl"></i></div>
-                 <div><h2 className="font-bold text-slate-800 text-xl leading-tight">Universal Tag Studio</h2><span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manage Official Slack-Style Badges</span></div>
+                 <div><h2 className="font-bold text-slate-800 text-xl leading-tight">Universal Tag Studio</h2><span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manage Official Workflow Metadata</span></div>
              </div>
              
              <div className="flex flex-col md:flex-row gap-6 h-full min-h-0">
@@ -276,9 +273,6 @@ export default function AdminPanel({
                    
                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Hashtag Label</label>
                    <input value={newTagLabel} onChange={e=>setNewTagLabel(e.target.value)} placeholder="#Example" className="w-full p-2.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-4 font-bold text-slate-700 shadow-sm"/>
-                   
-                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Square Short Code (Max 4)</label>
-                   <input value={newTagShort} onChange={e=>setNewTagShort(e.target.value.toUpperCase().slice(0,4))} placeholder="EXMP" className="w-full p-2.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-4 font-extrabold text-slate-700 shadow-sm tracking-widest uppercase"/>
 
                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Select Theme</label>
                    <div className="flex flex-wrap gap-2 mb-6">
@@ -287,9 +281,10 @@ export default function AdminPanel({
                       ))}
                    </div>
                    
-                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Slack-Style Preview</label>
-                   <div className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg border border-slate-200 bg-white w-fit mb-6 shadow-sm">
-                      <span className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-extrabold tracking-wider ${tagThemes[newTagTheme].bg} ${tagThemes[newTagTheme].text}`}>{newTagShort || 'EXM'}</span>
+                   {/* Full Badge Preview */}
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Live Preview</label>
+                   <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-slate-200 bg-white w-fit mb-6 shadow-sm">
+                      <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wide ${tagThemes[newTagTheme].bg} ${tagThemes[newTagTheme].text}`}>{newTagLabel || '#Preview'}</span>
                       <span className="text-[11px] font-bold pr-1 text-slate-500">1</span>
                    </div>
                    
@@ -301,10 +296,7 @@ export default function AdminPanel({
                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                       {(customTags || []).map(tag => (
                          <div key={tag.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-white shadow-sm hover:border-indigo-200 transition-colors">
-                            <div className="flex items-center gap-2">
-                               <span className={`w-7 h-7 flex items-center justify-center rounded font-extrabold text-[10px] shadow-sm tracking-wider ${tag.bgClass} ${tag.textClass}`}>{tag.shortCode}</span>
-                               <span className="text-[12px] font-bold text-slate-600">{tag.label}</span>
-                            </div>
+                            <span className={`px-2 py-1 rounded-md font-bold text-[11px] shadow-sm tracking-wide ${tag.bgClass} ${tag.textClass}`}>{tag.label}</span>
                             <button onClick={()=>deleteDoc(doc(db, "workspace_tags", tag.id))} className="text-slate-400 hover:text-rose-500 w-6 h-6 flex items-center justify-center rounded-full hover:bg-rose-50 transition-colors"><i className="fa-solid fa-trash text-[10px]"></i></button>
                          </div>
                       ))}
