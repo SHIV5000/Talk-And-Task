@@ -99,7 +99,7 @@ export default function ChatApp({ user, onLogout }) {
     const [activeReminderAlert, setActiveReminderAlert] = useState(null); 
 
     const { 
-        isVipAdmin, currentUserData, dbUsers, groups, customTags, // 👈 TAGS IMPORTED
+        isVipAdmin, currentUserData, dbUsers, groups, customTags,
         activeReminders, genericNotifications, allAdminReminders, 
         immutableAuditLogs, toolPreferences, setToolPreferences 
     } = useWorkspaceData(user, profileForm, setProfileForm);
@@ -245,7 +245,7 @@ export default function ChatApp({ user, onLogout }) {
     }, [dbUsers, user.uid, sidebarSearch]);
 
     const activeActionableTasks = useMemo(() => {
-        return messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid) && !m.taskData?.isArchived);
+        return messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid));
     }, [messages, user.email, user.uid]);
     
     const totalNotifications = genericNotifications.length + activeActionableTasks.length;
@@ -256,7 +256,6 @@ export default function ChatApp({ user, onLogout }) {
         if(!activeGroup) return [];
         let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
         
-        // 👇 UPDATED SEARCH ENGINE: Now explicitly searches for Tags / Hashtags inside reactions
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             filtered = filtered.filter(m => 
@@ -275,9 +274,9 @@ export default function ChatApp({ user, onLogout }) {
         return filtered;
     }, [messages, activeGroup, user.email, chatFilter, searchQuery]);
 
-    const tasksAssignedToMe = useMemo(() => messages.filter(m => m.isTask && m.taskData?.assignees?.includes(user.email) && !m.taskData?.isArchived).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
-    const tasksAssignedByMe = useMemo(() => messages.filter(m => m.isTask && m.senderEmail === user.email && !m.taskData?.isArchived).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
-    const archivedTasks = useMemo(() => messages.filter(m => m.isTask && m.taskData?.isArchived && (m.senderEmail === user.email || m.taskData?.assignees?.includes(user.email))).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)), [messages, user.email]);
+    // 👇 FIX 4: ARCHIVE FEATURE COMPLETELY PURGED FROM TASK FILTERS 👇
+    const tasksAssignedToMe = useMemo(() => messages.filter(m => m.isTask && m.taskData?.assignees?.includes(user.email)).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
+    const tasksAssignedByMe = useMemo(() => messages.filter(m => m.isTask && m.senderEmail === user.email).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
 
     const filteredAuditLogs = useMemo(() => {
         let logs = immutableAuditLogs;
@@ -488,15 +487,6 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) {}
     };
 
-    const handleArchiveTask = async () => {
-        if (!selectedMessage) return;
-        try {
-            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.isArchived": true });
-            playMelody('taskUpdated'); 
-            setActiveModal(null);
-        } catch (error) {}
-    };
-
     const handleAddComment = async (closeModal = false) => {
         if (!selectedMessage || !trailComment.trim()) return;
         try {
@@ -654,7 +644,7 @@ export default function ChatApp({ user, onLogout }) {
         const dmIdStr = dmIdList.join('_');
         const dmMessages = messages.filter(m => m.groupId === dmIdStr);
         const unreadMsgs = dmMessages.filter(m => m.senderUid !== user.uid && !(m.seenBy || []).includes(user.email));
-        const pendingTasks = dmMessages.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid) && m.senderEmail === otherUserEmail && !m.taskData?.isArchived);
+        const pendingTasks = dmMessages.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid) && m.senderEmail === otherUserEmail);
         return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
     }, [messages, user.uid, user.email]);
 
@@ -662,7 +652,7 @@ export default function ChatApp({ user, onLogout }) {
         const groupMsgs = messages.filter(m => m.groupId === groupId);
         const visibleMsgs = groupMsgs.filter(m => !m.isPrivateMention || m.allowedUsers?.includes(user.email));
         const unreadMsgs = visibleMsgs.filter(m => m.senderUid !== user.uid && !(m.seenBy || []).includes(user.email));
-        const pendingTasks = visibleMsgs.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid) && !m.taskData?.isArchived);
+        const pendingTasks = visibleMsgs.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid));
         return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
     }, [messages, user.uid, user.email]);
 
@@ -673,7 +663,7 @@ export default function ChatApp({ user, onLogout }) {
         setProfileUploadProgress, handleProfileSubmit, toolPreferences,
         setToolPreferences, user, groupForm, setGroupForm, editingGroup,
         handleGroupSubmit, groupPicInputRef, handleGroupPicUpload,
-        groupPicUploadProgress, dbUsers, activeGroup, isVipAdmin, customTags, // 👈 TAGS PASSED TO PROFILE MODAL
+        groupPicUploadProgress, dbUsers, activeGroup, isVipAdmin, customTags,
         handleUpdateGroupMembers, onGroupUpdate, isEditingTaskTitle,
         setIsEditingTaskTitle, newTaskTitle, setNewTaskTitle, handleSaveTaskTitle,
         delegateAssignees, setDelegateAssignees, showDelegateDropdown,
@@ -682,7 +672,7 @@ export default function ChatApp({ user, onLogout }) {
         reminderDateTime, setReminderDateTime, scheduleDateTime, setScheduleDateTime,
         pendingScheduledText, handleScheduleMessage, adminForm, setAdminForm,
         isUploading, uploadProgress, setReminder,
-        handleDelegateTask, handleCompleteTask, handleArchiveTask,
+        handleDelegateTask, handleCompleteTask,
         trailFileInputRef, handleTrailFileUpload, handleAddComment,
         messages, groups, trailComment, setTrailComment, activeReminders, 
         readOnly: viewMode === "admin",
@@ -757,7 +747,7 @@ export default function ChatApp({ user, onLogout }) {
               handleAdminArchiveGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: true })}
               handleAdminRecoverGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: false })}
               handleGroupPicUpload={handleGroupPicUpload} groupPicUploadProgress={groupPicUploadProgress}
-              playMelody={playMelody} customTags={customTags} // 👈 TAGS PASSED TO ADMIN PANEL
+              playMelody={playMelody} customTags={customTags} 
             />
             ) : (
                 <div className="flex h-full w-full relative">
@@ -861,16 +851,13 @@ export default function ChatApp({ user, onLogout }) {
                                                   {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
                                                   <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
                                                   <div className="space-y-2">
-                                                    {/* SORTED LATEST AT TOP */}
                                                     {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => {
                                                       const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
                                                       return (
                                                         <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-all flex items-start gap-3 relative pr-8">
-                                                          
                                                           <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "notifications", n.id)); }} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
                                                             <i className="fa-solid fa-xmark text-[11px]"></i>
                                                           </button>
-
                                                           <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5"><i className={n.type === 'reply' ? 'fa-solid fa-reply text-xs' : n.type === 'mention' ? 'fa-solid fa-at text-xs' : n.type === 'reminder' ? 'fa-solid fa-clock text-xs' : 'fa-solid fa-bolt text-xs'}></i></div>
                                                           <div className="flex-1 overflow-hidden pb-4">
                                                             <div className="text-[13px] font-bold text-slate-800">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : n.type === 'reminder' ? 'Reminder Alert' : n.type === 'task' ? 'Task Update' : 'New Reaction'}</div>
@@ -908,7 +895,7 @@ export default function ChatApp({ user, onLogout }) {
                                 setIsEditingTaskTitle={setIsEditingTaskTitle} messagesEndRef={messagesEndRef} chatContainerRef={chatContainerRef} 
                                 isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId} unreadHighlightIds={unreadHighlightIds} 
                                 handleAddInlineComment={handleAddInlineComment} jumpToPrivateSource={(msgId, groupId) => navigateToMessageFromNotification(msgId, groupId)}
-                                customTags={customTags} // 👈 TAGS PASSED DOWN
+                                customTags={customTags} 
                             />
 
                             <InputArea
@@ -935,8 +922,8 @@ export default function ChatApp({ user, onLogout }) {
                     {showRightSidebar && (
                       <RightSidebar
                         showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
-                        tasksAssignedByMe={tasksAssignedByMe} archivedTasks={archivedTasks} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                        navigateToMessageFromNotification={navigateToMessageFromNotification} 
+                        tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
+                        navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
                       />
                     )}
                     <ModalManager {...modalProps} />
