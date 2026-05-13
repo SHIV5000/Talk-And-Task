@@ -5,7 +5,8 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/fi
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-function OrgTreeNode({ node, dbUsers, handlePoke, isFilterActive }) {
+// 👇 FIX 1: Correctly named function and passed depth prop
+function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive }) {
   const [localExpanded, setLocalExpanded] = useState(node.type === 'org');
   const [showInlineTrail, setShowInlineTrail] = useState(false);
 
@@ -34,10 +35,8 @@ function OrgTreeNode({ node, dbUsers, handlePoke, isFilterActive }) {
       )}
 
       {isTask && (
-        // 👇 JIRA STYLE CARD DESIGN
         <div className="my-3 mx-4 w-[320px] bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
           
-          {/* POKED BADGE FIX */}
           {tData.poked && (
              <div className="absolute top-0 right-0 bg-rose-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg shadow-sm z-20 animate-pulse border-b border-l border-rose-600 tracking-widest">
                 🚨 POKED
@@ -58,7 +57,6 @@ function OrgTreeNode({ node, dbUsers, handlePoke, isFilterActive }) {
                <div className="flex items-center gap-2">
                  <i className={`fa-solid fa-flag text-[12px] ${tData.priority==='High'?'text-rose-500':tData.priority==='Medium'?'text-amber-500':'text-emerald-500'}`} title={tData.priority}></i>
                  
-                 {/* Poke Button */}
                  {tData.status !== 'Completed' && (
                     <button onClick={(e) => handlePoke(node.task, e)} className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-transparent hover:border-indigo-200 px-2 py-1 rounded text-[10px] font-extrabold transition-all shadow-sm">
                       POKE
@@ -96,7 +94,7 @@ function OrgTreeNode({ node, dbUsers, handlePoke, isFilterActive }) {
       {hasChildren && isExpanded && (
         <div className="mt-1">
           {node.children.map(child => (
-            <OrgTreeNode key={child.id} node={child} depth={depth + 1} dbUsers={dbUsers} handlePoke={handlePoke} isFilterActive={isFilterActive} />
+            <VerticalTreeNode key={child.id} node={child} depth={depth + 1} dbUsers={dbUsers} handlePoke={handlePoke} isFilterActive={isFilterActive} />
           ))}
         </div>
       )}
@@ -302,20 +300,22 @@ export default function AdminPanel({
                   )}
               </div>
             </div>
-            <div className="flex-1 overflow-auto custom-sidebar-scroll pb-12 w-full">
+            <div className="flex-1 overflow-auto custom-sidebar-scroll pb-12 w-full flex justify-center">
                {treeData.children.length === 0 ? (
                  <div className="flex flex-col items-center justify-center mt-20 opacity-50">
                     <i className="fa-solid fa-folder-open text-6xl text-slate-300 mb-4"></i>
                     <p className="text-sm text-slate-500 font-bold">No tasks match your filters.</p>
                  </div>
                ) : (
-                 <VerticalTreeNode node={treeData} depth={0} dbUsers={dbUsers} handlePoke={handlePoke} isFilterActive={isFilterActive} />
+                 <div className="org-tree inline-block min-w-max">
+                    <ul><VerticalTreeNode node={treeData} depth={0} dbUsers={dbUsers} handlePoke={handlePoke} isFilterActive={isFilterActive} /></ul>
+                 </div>
                )}
             </div>
           </div>
         )}
 
-        {/* 👇 BEAUTIFUL HORIZONTAL GROUP TREE (Fix 6) 👇 */}
+        {/* HORIZONTAL GROUP TREE */}
         {activeTab === 'groups' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
@@ -325,25 +325,16 @@ export default function AdminPanel({
             
             <div className="flex-1 overflow-auto bg-slate-50 custom-sidebar-scroll p-8">
                <div className="flex items-center min-w-max h-full">
-                  
-                  {/* Root */}
                   <div className="flex flex-col items-center justify-center gap-2 w-32 h-32 rounded-full border-4 shadow-md transition-all hover:scale-105 bg-indigo-600 border-indigo-200 text-white z-10 shrink-0">
                      <i className="fa-solid fa-sitemap text-3xl"></i>
                      <span className="font-bold text-xs text-center leading-tight px-2">Organisation</span>
                   </div>
-                  
-                  {/* Trunk Line */}
                   {groups.length > 0 && <div className="w-12 h-1.5 bg-indigo-200 shrink-0 -ml-2 rounded-r-full"></div>}
-
-                  {/* Branches */}
                   {groups.length > 0 && (
                     <div className="relative flex flex-col gap-6 py-8 border-l-4 border-indigo-200 pl-10 ml-[-2px] rounded-l-xl">
                        {groups.map((g, idx) => (
                           <div key={g.id} className="relative flex items-center">
-                             {/* Branch Line */}
                              <div className="absolute -left-10 w-10 h-1 bg-indigo-200"></div>
-                             
-                             {/* Group Card */}
                              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm w-[320px] hover:border-indigo-300 hover:shadow-md transition-all z-10 group">
                                <div className="flex items-center gap-4 mb-4">
                                  <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-12 h-12 shadow-sm" isGroup={true} />
