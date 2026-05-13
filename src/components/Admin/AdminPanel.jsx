@@ -41,39 +41,40 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
       )}
 
       {isTask && (
-        <div className="my-3 mx-4 w-[320px] bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
+        // 👇 FIX 4: LEFT ALIGNED FULL WIDTH CARD 👇
+        <div className="my-3 mx-4 w-full max-w-4xl bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
           {tData.poked && (
              <div className="absolute top-0 right-0 bg-rose-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg shadow-sm z-20 animate-pulse border-b border-l border-rose-600 tracking-widest">🚨 POKED</div>
           )}
-          <div className="p-3.5 cursor-pointer" onClick={() => setShowInlineTrail(!showInlineTrail)}>
+          <div className="p-4 md:p-5 cursor-pointer" onClick={() => setShowInlineTrail(!showInlineTrail)}>
             <div className="flex justify-between items-center mb-2.5">
                <div className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5"><i className="fa-solid fa-square-check text-indigo-500"></i> {node.id.slice(-5).toUpperCase()}</div>
                <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${tData.status === 'Completed' ? 'bg-teal-100 text-teal-700' : tData.status === 'In Progress' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{tData.status}</span>
             </div>
-            <h4 className="text-[13.5px] font-semibold text-slate-800 leading-snug mb-4 line-clamp-2">{node.name}</h4>
+            <h4 className="text-[15px] font-semibold text-slate-800 leading-snug mb-5">{node.name}</h4>
             <div className="flex items-end justify-between">
-               <div className="flex items-center gap-2">
-                 <i className={`fa-solid fa-flag text-[12px] ${tData.priority==='High'?'text-rose-500':tData.priority==='Medium'?'text-amber-500':'text-emerald-500'}`} title={tData.priority}></i>
+               <div className="flex items-center gap-3">
+                 <i className={`fa-solid fa-flag text-[14px] ${tData.priority==='High'?'text-rose-500':tData.priority==='Medium'?'text-amber-500':'text-emerald-500'}`} title={tData.priority}></i>
                  {tData.status !== 'Completed' && (
-                    <button onClick={(e) => handlePoke(node.task, e)} className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-transparent hover:border-indigo-200 px-2 py-1 rounded text-[10px] font-extrabold transition-all shadow-sm">POKE</button>
+                    <button onClick={(e) => handlePoke(node.task, e)} className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-transparent hover:border-indigo-200 px-3 py-1.5 rounded-lg text-[11px] font-extrabold transition-all shadow-sm">POKE</button>
                  )}
                </div>
-               <div className="flex -space-x-1">
-                  {(tData.assignees || []).slice(0, 3).map(email => {
+               <div className="flex -space-x-1.5">
+                  {(tData.assignees || []).slice(0, 5).map(email => {
                      const assignee = dbUsers.find(u => u.email === email);
-                     return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses="border border-white shadow-sm" />;
+                     return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-7 h-7" extraClasses="border-2 border-white shadow-sm" />;
                   })}
                </div>
             </div>
           </div>
           {showInlineTrail && (
-            <div className="border-t border-slate-100 bg-slate-50 p-3 max-h-[250px] overflow-y-auto custom-sidebar-scroll">
-               <div className="relative pl-3 space-y-3 before:absolute before:inset-y-0 before:left-[5px] before:w-px before:bg-slate-300">
+            <div className="border-t border-slate-100 bg-slate-50 p-4 md:p-5 max-h-[300px] overflow-y-auto custom-sidebar-scroll">
+               <div className="relative pl-4 space-y-4 before:absolute before:inset-y-0 before:left-[7px] before:w-px before:bg-slate-300">
                   {(tData.trail || []).map((t, idx) => (
                      <div key={idx} className="relative z-10 text-left">
-                        <div className={`w-2 h-2 rounded-full absolute -left-[11px] top-1 border-2 border-slate-50 ${t.action.includes('Completed') ? 'bg-teal-500' : 'bg-indigo-500'}`}></div>
-                        <div className="font-bold text-[10px] text-slate-700 leading-tight">{t.action} <span className="font-semibold text-slate-400 ml-1">{t.time?.split(',')[0]}</span></div>
-                        {t.comment && <div className="text-[10px] text-slate-500 italic mt-0.5">"{t.comment}"</div>}
+                        <div className={`w-2 h-2 rounded-full absolute -left-[14px] top-1.5 border-2 border-slate-50 ${t.action.includes('Completed') ? 'bg-teal-500' : 'bg-indigo-500'}`}></div>
+                        <div className="font-bold text-[11px] text-slate-700 leading-tight">{t.action} <span className="font-semibold text-slate-400 ml-1.5">{t.time?.split(',')[0]}</span></div>
+                        {t.comment && <div className="text-[12px] text-slate-600 italic mt-1 bg-white p-2 rounded-lg border border-slate-200 shadow-sm w-fit">"{t.comment}"</div>}
                      </div>
                   ))}
                </div>
@@ -112,33 +113,24 @@ export default function AdminPanel({
   const [selectedUsers, setSelectedUsers] = useState(new Set());
   const [selectedLogs, setSelectedLogs] = useState(new Set());
   const [selectedHistory, setSelectedHistory] = useState(new Set());
-  const [selectedReactions, setSelectedReactions] = useState(new Set()); // 👈 NEW FOR REACTION LOGS
+  const [selectedReactions, setSelectedReactions] = useState(new Set()); 
   const [showArchivedUsers, setShowArchivedUsers] = useState(false);
   const [localOverlay, setLocalOverlay] = useState(null); 
   const [taskFilterStatus, setTaskFilterStatus] = useState('All');
   const [taskFilterStart, setTaskFilterStart] = useState('');
   const [taskFilterEnd, setTaskFilterEnd] = useState('');
   
-  // Tag Studio Logic
   const [newTagLabel, setNewTagLabel] = useState('');
   const [newTagTheme, setNewTagTheme] = useState('teal');
 
-  // 👇 FIX 3: Reactions Filter Logic 👇
-  const [reactionFilterUser, setReactionFilterUser] = useState("");
-  const [reactionFilterTag, setReactionFilterTag] = useState("");
+  // 👇 FIX 3: Master-Detail Reactions State 👇
+  const [reactionFilterSender, setReactionFilterSender] = useState("");
+  const [reactionFilterMsgId, setReactionFilterMsgId] = useState("");
   const [reactionFilterDate, setReactionFilterDate] = useState("");
 
   const taskLogs = useMemo(() => filteredAuditLogs.filter(l => l.type.startsWith('TASK_')), [filteredAuditLogs]);
   const messageLogs = useMemo(() => filteredAuditLogs.filter(l => !l.type.startsWith('TASK_')), [filteredAuditLogs]);
   const currentLogs = logSubTab === 'tasks' ? taskLogs : messageLogs;
-
-  const reactionLogs = useMemo(() => {
-    let logs = filteredAuditLogs.filter(l => l.type === 'REACTION');
-    if (reactionFilterUser) logs = logs.filter(l => l.user === reactionFilterUser);
-    if (reactionFilterDate) logs = logs.filter(l => l.dateString === reactionFilterDate);
-    if (reactionFilterTag) logs = logs.filter(l => l.content.toLowerCase().includes(reactionFilterTag.toLowerCase()));
-    return logs;
-  }, [filteredAuditLogs, reactionFilterUser, reactionFilterDate, reactionFilterTag]);
 
   const userHistoryLogs = useMemo(() => {
     if (!historyUserEmail) return [];
@@ -211,6 +203,32 @@ export default function AdminPanel({
       } catch(e) { alert("Failed to save tag."); }
   };
 
+  // 👇 FIX 3: Master-Detail Reaction Logic 👇
+  const sendersWithReactions = useMemo(() => {
+      const senders = new Set();
+      messages.forEach(m => { if (Object.keys(m.reactions||{}).length > 0) senders.add(m.senderEmail); });
+      return dbUsers.filter(u => senders.has(u.email));
+  }, [messages, dbUsers]);
+
+  const messagesBySender = useMemo(() => {
+      if (!reactionFilterSender) return [];
+      return messages.filter(m => m.senderEmail === reactionFilterSender && Object.keys(m.reactions||{}).length > 0);
+  }, [messages, reactionFilterSender]);
+
+  const reactionLogs = useMemo(() => {
+      let logs = filteredAuditLogs.filter(l => l.type === 'REACTION');
+      let mappedLogs = logs.map(l => {
+          const msg = messages.find(m => m.id === l.messageId) || messages.find(m => m.text && m.text.includes(l.target)) || null;
+          return { ...l, msgObj: msg };
+      }).filter(l => l.msgObj);
+
+      if (reactionFilterSender) mappedLogs = mappedLogs.filter(l => l.msgObj.senderEmail === reactionFilterSender);
+      if (reactionFilterMsgId) mappedLogs = mappedLogs.filter(l => l.msgObj.id === reactionFilterMsgId);
+      if (reactionFilterDate) mappedLogs = mappedLogs.filter(l => l.dateString === reactionFilterDate);
+
+      return mappedLogs.sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
+  }, [filteredAuditLogs, messages, reactionFilterSender, reactionFilterMsgId, reactionFilterDate]);
+
   const toggleSelectAllUsers = () => { if (selectedUsers.size === filteredUsers.length) setSelectedUsers(new Set()); else setSelectedUsers(new Set(filteredUsers.map(u => u.uid))); };
   const toggleSelectUser = (uid) => { const s = new Set(selectedUsers); s.has(uid) ? s.delete(uid) : s.add(uid); setSelectedUsers(s); };
   const toggleSelectAllLogs = () => { if (selectedLogs.size === currentLogs.length) setSelectedLogs(new Set()); else setSelectedLogs(new Set(currentLogs.map(l => l.id))); };
@@ -278,7 +296,7 @@ export default function AdminPanel({
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 relative">
         
-        {/* TAGS STUDIO UPDATE */}
+        {/* TAGS STUDIO */}
         {activeTab === 'tags' && (
            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
@@ -324,33 +342,72 @@ export default function AdminPanel({
            </div>
         )}
 
-        {/* 👇 FIX 3: NEW REACTIONS TAB 👇 */}
+        {/* 👇 FIX 3: Master-Detail Reactions Tab 👇 */}
         {activeTab === 'reactions' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100"><h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-face-smile text-indigo-600 mr-2"></i>Tags & Emojis Log</h2></div>
             <div className="p-5 bg-slate-50 border-b border-slate-200">
               <div className="flex flex-wrap gap-4 items-end">
-                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">User</label><select value={reactionFilterUser} onChange={e => setReactionFilterUser(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">All Users</option>{dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}</select></div>
-                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Tag / Emoji</label><input type="text" value={reactionFilterTag} onChange={e => setReactionFilterTag(e.target.value)} placeholder="e.g. #Approved or 👍" className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" /></div>
-                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Date</label><input type="date" value={reactionFilterDate} onChange={e => setReactionFilterDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" /></div>
-                <button onClick={() => { setReactionFilterUser(''); setReactionFilterTag(''); setReactionFilterDate(''); }} className="bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-300">Clear Filters</button>
+                
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">1. Filter By Sender</label>
+                  <select value={reactionFilterSender} onChange={e => { setReactionFilterSender(e.target.value); setReactionFilterMsgId(""); }} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium">
+                    <option value="">All Senders...</option>
+                    {sendersWithReactions.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
+                  </select>
+                </div>
+                
+                <div className="flex-[2] min-w-[300px]">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">2. Filter By Message</label>
+                  <select value={reactionFilterMsgId} onChange={e => setReactionFilterMsgId(e.target.value)} disabled={!reactionFilterSender} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium disabled:opacity-50">
+                    <option value="">{reactionFilterSender ? "All Messages from Sender..." : "Select Sender First..."}</option>
+                    {messagesBySender.map(m => (
+                        <option key={m.id} value={m.id}>{m.text ? m.text.substring(0,60) + '...' : m.fileName || 'Attached File'}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex-1 min-w-[150px]">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">3. By Date</label>
+                  <input type="date" value={reactionFilterDate} onChange={e => setReactionFilterDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" />
+                </div>
+
+                <button onClick={() => { setReactionFilterSender(''); setReactionFilterMsgId(''); setReactionFilterDate(''); }} className="bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-300">Clear</button>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500 text-xs uppercase"><tr><th className="px-5 py-3"><input type="checkbox" onChange={toggleSelectAllReactions} checked={selectedReactions.size === reactionLogs.length && reactionLogs.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-5 py-3">#</th><th className="px-5 py-3">Time</th><th className="px-5 py-3">User</th><th className="px-5 py-3">Reaction</th><th className="px-5 py-3">Message Ref</th></tr></thead>
+                <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                  <tr>
+                     <th className="px-5 py-3"><input type="checkbox" onChange={toggleSelectAllReactions} checked={selectedReactions.size === reactionLogs.length && reactionLogs.length > 0} className="w-4 h-4 accent-indigo-600" /></th>
+                     <th className="px-5 py-3">#</th>
+                     <th className="px-5 py-3">Time</th>
+                     <th className="px-5 py-3">Reacted By</th>
+                     <th className="px-5 py-3">Tag/Emoji</th>
+                     <th className="px-5 py-3">Message Snippet</th>
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {reactionLogs.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400 italic font-medium">No reactions found.</td></tr>}
-                  {reactionLogs.map((log, idx) => (
-                    <tr key={log.id} className="hover:bg-slate-50"><td className="px-5 py-3"><input type="checkbox" checked={selectedReactions.has(log.id)} onChange={() => toggleSelectReaction(log.id)} className="w-4 h-4 accent-indigo-600" /></td><td className="px-5 py-3 text-slate-500 font-bold">{idx + 1}</td><td className="px-5 py-3"><div className="text-xs font-bold text-slate-600">{log.dateString}</div><div className="text-[11px] text-slate-400 font-medium">{log.time}</div></td><td className="px-5 py-3 font-bold text-indigo-600">{(log.user || '').split('@')[0]}</td><td className="px-5 py-3"><span className="text-[12px] font-bold bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">{log.content.replace('Reacted with ', '')}</span></td><td className="px-5 py-3 text-[11px] text-slate-500 truncate max-w-xs">{log.target}</td></tr>
-                  ))}
+                  {reactionLogs.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400 italic font-medium">No reactions found matching filters.</td></tr>}
+                  {reactionLogs.map((log, idx) => {
+                     const msgText = log.msgObj?.text || log.msgObj?.fileName || log.target || 'Unknown Message';
+                     return (
+                    <tr key={log.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-3"><input type="checkbox" checked={selectedReactions.has(log.id)} onChange={() => toggleSelectReaction(log.id)} className="w-4 h-4 accent-indigo-600" /></td>
+                      <td className="px-5 py-3 text-slate-500 font-bold">{idx + 1}</td>
+                      <td className="px-5 py-3"><div className="text-xs font-bold text-slate-600">{log.dateString}</div><div className="text-[11px] text-slate-400 font-medium">{log.time}</div></td>
+                      <td className="px-5 py-3 font-bold text-indigo-600">{(log.user || '').split('@')[0]}</td>
+                      <td className="px-5 py-3"><span className="text-[12px] font-bold bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">{log.content.replace('Reacted with ', '')}</span></td>
+                      <td className="px-5 py-3 text-[11px] text-slate-500 truncate max-w-xs">{msgText.substring(0, 50)}...</td>
+                    </tr>
+                  )})}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* TASK TREE TAB */}
+        {/* 👇 FIX 4: LEFT ALIGNED FULL WIDTH TASK TREE CARDS 👇 */}
         {activeTab === 'tasks' && (
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
             <div className="flex flex-wrap items-center justify-between mb-6 gap-4 border-b border-slate-100 pb-4 shrink-0">
@@ -379,14 +436,16 @@ export default function AdminPanel({
                   )}
               </div>
             </div>
-            <div className="flex-1 overflow-auto custom-sidebar-scroll pb-12 w-full flex justify-center">
+            
+            {/* Left Aligned Width Container */}
+            <div className="flex-1 overflow-auto custom-sidebar-scroll pb-12 w-full">
                {treeData.children.length === 0 ? (
                  <div className="flex flex-col items-center justify-center mt-20 opacity-50">
                     <i className="fa-solid fa-folder-open text-6xl text-slate-300 mb-4"></i>
                     <p className="text-sm text-slate-500 font-bold">No tasks match your filters.</p>
                  </div>
                ) : (
-                 <div className="org-tree inline-block min-w-max">
+                 <div className="org-tree w-full">
                     <ul><VerticalTreeNode node={treeData} depth={0} dbUsers={dbUsers} handlePoke={handlePoke} isFilterActive={isFilterActive} /></ul>
                  </div>
                )}
@@ -394,46 +453,54 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* HORIZONTAL GROUP TREE */}
+        {/* 👇 FIX 4: LEFT ALIGNED FULL WIDTH GROUP TREE CARDS 👇 */}
         {activeTab === 'groups' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
               <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Team Management</h2>
               <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setLocalOverlay('group_form'); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm"><i className="fa-solid fa-plus mr-2"></i>Create Team</button>
             </div>
-            <div className="flex-1 overflow-auto bg-slate-50 custom-sidebar-scroll p-8">
-               <div className="flex items-center min-w-max h-full">
-                  <div className="flex flex-col items-center justify-center gap-2 w-32 h-32 rounded-full border-4 shadow-md transition-all hover:scale-105 bg-indigo-600 border-indigo-200 text-white z-10 shrink-0">
-                     <i className="fa-solid fa-sitemap text-3xl"></i>
-                     <span className="font-bold text-xs text-center leading-tight px-2">Organisation</span>
+            <div className="flex-1 overflow-auto bg-slate-50 custom-sidebar-scroll p-6">
+               <div className="relative py-1">
+                  <div className="flex items-center gap-3 py-2 px-3 hover:bg-slate-100 rounded-xl w-fit transition-colors select-none">
+                     <div className="bg-indigo-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-indigo-600/30 shadow-sm">
+                       <i className="fa-solid fa-sitemap text-lg"></i>
+                     </div>
+                     <div className="font-extrabold text-slate-800 text-[15px]">Organisation</div>
                   </div>
-                  {groups.length > 0 && <div className="w-12 h-1.5 bg-indigo-200 shrink-0 -ml-2 rounded-r-full"></div>}
-                  {groups.length > 0 && (
-                    <div className="relative flex flex-col gap-6 py-8 border-l-4 border-indigo-200 pl-10 ml-[-2px] rounded-l-xl">
-                       {groups.map((g, idx) => (
-                          <div key={g.id} className="relative flex items-center">
-                             <div className="absolute -left-10 w-10 h-1 bg-indigo-200"></div>
-                             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm w-[320px] hover:border-indigo-300 hover:shadow-md transition-all z-10 group">
-                               <div className="flex items-center gap-4 mb-4">
-                                 <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-12 h-12 shadow-sm" isGroup={true} />
-                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-bold text-slate-800 text-[15px] truncate group-hover:text-indigo-600 transition-colors">{g.name}</h3>
-                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{g.members?.length || 0} Members {g.isArchived && '· Archived'}</p>
-                                 </div>
-                               </div>
-                               <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
-                                 <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); setLocalOverlay('group_form'); }} className="flex-1 bg-slate-50 text-slate-600 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-all"><i className="fa-solid fa-pen mr-1"></i>Edit</button>
-                                 {g.isArchived ? (
-                                   <button onClick={() => { if (window.confirm('Recover?')) handleAdminRecoverGroup(g.id, g.name); }} className="flex-1 bg-teal-50 text-teal-700 py-2 rounded-lg text-xs font-bold border border-teal-200 hover:bg-teal-100 shadow-sm transition-all"><i className="fa-solid fa-rotate-left mr-1"></i>Recover</button>
-                                 ) : (
-                                   <button onClick={() => { if (window.confirm('Archive?')) handleAdminArchiveGroup(g.id, g.name); }} className="flex-1 bg-rose-50 text-rose-600 py-2 rounded-lg text-xs font-bold border border-rose-200 hover:bg-rose-100 shadow-sm transition-all"><i className="fa-solid fa-box-archive mr-1"></i>Archive</button>
-                                 )}
-                               </div>
+                  
+                  <div className="mt-1 ml-[1.25rem] pl-[1.25rem] border-l-2 border-slate-200">
+                     {groups.map((g, idx) => (
+                        <div key={g.id} className="relative py-1">
+                           <div className="my-3 w-full max-w-4xl bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
+                             <div className="p-4 md:p-5">
+                                <div className="flex items-center gap-4 mb-4">
+                                   <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-14 h-14 shadow-sm" isGroup={true} />
+                                   <div className="flex-1 min-w-0">
+                                      <h3 className="font-bold text-slate-800 text-lg truncate group-hover:text-indigo-600 transition-colors">{g.name}</h3>
+                                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{g.members?.length || 0} Members {g.isArchived && '· Archived'}</p>
+                                      <div className="flex -space-x-1.5 mt-2.5">
+                                          {(g.members || []).slice(0, 10).map(email => {
+                                             const u = dbUsers.find(u => u.email === email);
+                                             return <MemoizedAvatar key={email} uid={u?.uid||email} url={u?.profilePicUrl} name={u?.name||email.split('@')[0]} sizeClass="w-7 h-7 border-2 border-white shadow-sm" />
+                                          })}
+                                          {(g.members || []).length > 10 && (
+                                             <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-600 border-2 border-white shadow-sm relative z-10">
+                                                +{(g.members || []).length - 10}
+                                             </div>
+                                          )}
+                                      </div>
+                                   </div>
+                                </div>
+                                <div className="flex gap-3 mt-4 pt-4 border-t border-slate-100">
+                                   <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); setLocalOverlay('group_form'); }} className="flex-1 bg-slate-50 text-slate-600 py-2.5 rounded-lg text-sm font-bold border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-all"><i className="fa-solid fa-pen mr-2"></i>Edit Details</button>
+                                   <button onClick={() => { if (window.confirm('Archive?')) handleAdminArchiveGroup(g.id, g.name); }} className="flex-1 bg-rose-50 text-rose-600 py-2.5 rounded-lg text-sm font-bold border border-rose-200 hover:bg-rose-100 shadow-sm transition-all"><i className="fa-solid fa-box-archive mr-2"></i>Archive Group</button>
+                                </div>
                              </div>
-                          </div>
-                       ))}
-                    </div>
-                  )}
+                           </div>
+                        </div>
+                     ))}
+                  </div>
                </div>
             </div>
           </div>
@@ -445,9 +512,6 @@ export default function AdminPanel({
             <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
               <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
               <div className="flex gap-2">
-                <button onClick={() => setShowArchivedUsers(!showArchivedUsers)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showArchivedUsers ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                  <i className={`fa-solid ${showArchivedUsers ? 'fa-eye' : 'fa-box-archive'} mr-2`}></i>{showArchivedUsers ? 'Show Active' : 'Show Archived'}
-                </button>
                 <button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button>
               </div>
             </div>
@@ -463,7 +527,7 @@ export default function AdminPanel({
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-                  <tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllUsers} checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">User</th><th className="px-3 py-3">Email</th><th className="px-3 py-3">Status</th><th className="px-2 py-3 text-center">Admin</th><th className="px-2 py-3 text-center">Groups</th><th className="px-3 py-3 text-center">Login</th><th className="px-3 py-3 text-center">Archive</th><th className="px-3 py-3 text-center">History</th></tr>
+                  <tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllUsers} checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">User</th><th className="px-3 py-3">Email</th><th className="px-3 py-3">Status</th><th className="px-2 py-3 text-center">Admin</th><th className="px-2 py-3 text-center">Groups</th><th className="px-3 py-3 text-center">Login</th><th className="px-3 py-3 text-center">History</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredUsers.map((u, idx) => (
@@ -476,7 +540,6 @@ export default function AdminPanel({
                       <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.isAdmin || false} onChange={() => handleToggleAdmin(u)} className="w-4 h-4 accent-indigo-600" /></td>
                       <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-4 h-4 accent-indigo-600" /></td>
                       <td className="px-3 py-3 text-center text-[11px] text-slate-500">{u.lastLogin?.toDate ? new Date(u.lastLogin.toDate()).toLocaleString() : '—'}</td>
-                      <td className="px-3 py-3 text-center"><button onClick={() => handleToggleArchiveUser(u)} className={`text-xs font-bold ${u.isArchived ? 'text-teal-600 hover:text-teal-800' : 'text-amber-600 hover:text-amber-800'}`}><i className={`fa-solid ${u.isArchived ? 'fa-rotate-left' : 'fa-box-archive'}`}></i></button></td>
                       <td className="px-3 py-3 text-center"><button onClick={() => { setHistoryUserEmail(u.email); setActiveTab('history'); }} className="text-indigo-600 hover:underline text-xs font-bold"><i className="fa-solid fa-clock-rotate-left mr-1"></i>History</button></td>
                     </tr>
                   ))}
@@ -496,7 +559,7 @@ export default function AdminPanel({
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
               <div className="flex flex-wrap gap-4">
                 <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By User</label><select value={adminFilterUser} onChange={e => setAdminFilterUser(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">All Users</option>{dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}</select></div>
-                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By Type</label><select value={adminFilterType} onChange={e => setAdminFilterType(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">All Types</option><option value="MESSAGE_CREATE">Public</option><option value="MESSAGE_EDIT">Edited</option><option value="MESSAGE_DELETE">Deleted</option><option value="REACTION">Reactions</option><option value="TASK_CREATE">Tasks Created</option><option value="TASK_DELEGATE">Delegated</option><option value="TASK_COMPLETE">Completed</option><option value="TASK_COMMENT">Commented</option></select></div>
+                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By Type</label><select value={adminFilterType} onChange={e => setAdminFilterType(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">All Types</option><option value="MESSAGE_CREATE">Public</option><option value="MESSAGE_EDIT">Edited</option><option value="MESSAGE_DELETE">Deleted</option><option value="TASK_CREATE">Tasks Created</option><option value="TASK_DELEGATE">Delegated</option><option value="TASK_COMPLETE">Completed</option><option value="TASK_COMMENT">Commented</option></select></div>
                 <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By Group</label><select value={adminFilterGroup} onChange={e => setAdminFilterGroup(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">All Groups</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
                 <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By Date</label><input type="date" value={adminFilterDate} onChange={e => setAdminFilterDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" /></div>
               </div>
