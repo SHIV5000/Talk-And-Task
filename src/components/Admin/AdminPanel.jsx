@@ -1,22 +1,28 @@
 import React, { useState, useMemo } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { db } from '../../firebase.js';
-import { collection, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-// 👇 FIX 1: Correctly named function and passed depth prop
+const tagThemes = {
+  teal: { bg: 'bg-teal-50', text: 'text-teal-700' },
+  indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700' },
+  rose: { bg: 'bg-rose-50', text: 'text-rose-700' },
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  amber: { bg: 'bg-amber-50', text: 'text-amber-700' },
+  purple: { bg: 'bg-purple-50', text: 'text-purple-700' },
+  slate: { bg: 'bg-slate-100', text: 'text-slate-600' }
+};
+
 function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive }) {
   const [localExpanded, setLocalExpanded] = useState(node.type === 'org');
   const [showInlineTrail, setShowInlineTrail] = useState(false);
-
   const isExpanded = isFilterActive || localExpanded;
   const toggle = () => setLocalExpanded(prev => !prev);
-
   const hasChildren = node.children && node.children.length > 0;
   const isTask = node.type === 'task';
   const tData = node.task?.taskData;
-
   const indentStyle = node.type !== 'org' ? { marginLeft: '1.25rem', paddingLeft: '1.25rem', borderLeft: '2px solid #e2e8f0' } : {};
 
   return (
@@ -36,34 +42,22 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
 
       {isTask && (
         <div className="my-3 mx-4 w-[320px] bg-white border border-slate-200 rounded-lg shadow-sm text-left flex flex-col transition-all hover:bg-slate-50 relative group overflow-hidden">
-          
           {tData.poked && (
-             <div className="absolute top-0 right-0 bg-rose-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg shadow-sm z-20 animate-pulse border-b border-l border-rose-600 tracking-widest">
-                🚨 POKED
-             </div>
+             <div className="absolute top-0 right-0 bg-rose-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg shadow-sm z-20 animate-pulse border-b border-l border-rose-600 tracking-widest">🚨 POKED</div>
           )}
-
           <div className="p-3.5 cursor-pointer" onClick={() => setShowInlineTrail(!showInlineTrail)}>
             <div className="flex justify-between items-center mb-2.5">
                <div className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5"><i className="fa-solid fa-square-check text-indigo-500"></i> {node.id.slice(-5).toUpperCase()}</div>
-               <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${tData.status === 'Completed' ? 'bg-teal-100 text-teal-700' : tData.status === 'In Progress' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
-                 {tData.status}
-               </span>
+               <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${tData.status === 'Completed' ? 'bg-teal-100 text-teal-700' : tData.status === 'In Progress' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{tData.status}</span>
             </div>
-            
             <h4 className="text-[13.5px] font-semibold text-slate-800 leading-snug mb-4 line-clamp-2">{node.name}</h4>
-            
             <div className="flex items-end justify-between">
                <div className="flex items-center gap-2">
                  <i className={`fa-solid fa-flag text-[12px] ${tData.priority==='High'?'text-rose-500':tData.priority==='Medium'?'text-amber-500':'text-emerald-500'}`} title={tData.priority}></i>
-                 
                  {tData.status !== 'Completed' && (
-                    <button onClick={(e) => handlePoke(node.task, e)} className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-transparent hover:border-indigo-200 px-2 py-1 rounded text-[10px] font-extrabold transition-all shadow-sm">
-                      POKE
-                    </button>
+                    <button onClick={(e) => handlePoke(node.task, e)} className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-transparent hover:border-indigo-200 px-2 py-1 rounded text-[10px] font-extrabold transition-all shadow-sm">POKE</button>
                  )}
                </div>
-
                <div className="flex -space-x-1">
                   {(tData.assignees || []).slice(0, 3).map(email => {
                      const assignee = dbUsers.find(u => u.email === email);
@@ -72,16 +66,13 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
                </div>
             </div>
           </div>
-
           {showInlineTrail && (
             <div className="border-t border-slate-100 bg-slate-50 p-3 max-h-[250px] overflow-y-auto custom-sidebar-scroll">
                <div className="relative pl-3 space-y-3 before:absolute before:inset-y-0 before:left-[5px] before:w-px before:bg-slate-300">
                   {(tData.trail || []).map((t, idx) => (
                      <div key={idx} className="relative z-10 text-left">
                         <div className={`w-2 h-2 rounded-full absolute -left-[11px] top-1 border-2 border-slate-50 ${t.action.includes('Completed') ? 'bg-teal-500' : 'bg-indigo-500'}`}></div>
-                        <div className="font-bold text-[10px] text-slate-700 leading-tight">
-                            {t.action} <span className="font-semibold text-slate-400 ml-1">{t.time?.split(',')[0]}</span>
-                        </div>
+                        <div className="font-bold text-[10px] text-slate-700 leading-tight">{t.action} <span className="font-semibold text-slate-400 ml-1">{t.time?.split(',')[0]}</span></div>
                         {t.comment && <div className="text-[10px] text-slate-500 italic mt-0.5">"{t.comment}"</div>}
                      </div>
                   ))}
@@ -90,7 +81,6 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
           )}
         </div>
       )}
-
       {hasChildren && isExpanded && (
         <div className="mt-1">
           {node.children.map(child => (
@@ -110,7 +100,7 @@ export default function AdminPanel({
   setSelectedMessage, setIsEditingTaskTitle, messages,
   setGroupForm, setEditingGroup, editingGroup, groupForm,
   handleGroupSubmit, handleAdminArchiveGroup, handleAdminRecoverGroup,
-  handleGroupPicUpload, groupPicUploadProgress, playMelody
+  handleGroupPicUpload, groupPicUploadProgress, playMelody, customTags // 👈 NEW
 }) { 
   const [activeTab, setActiveTab] = useState('tasks');
   const [logSubTab, setLogSubTab] = useState('tasks');
@@ -127,6 +117,10 @@ export default function AdminPanel({
   const [taskFilterStatus, setTaskFilterStatus] = useState('All');
   const [taskFilterStart, setTaskFilterStart] = useState('');
   const [taskFilterEnd, setTaskFilterEnd] = useState('');
+  
+  // Tag Studio State
+  const [newTagLabel, setNewTagLabel] = useState('');
+  const [newTagTheme, setNewTagTheme] = useState('teal');
 
   const taskLogs = useMemo(() => filteredAuditLogs.filter(l => l.type.startsWith('TASK_')), [filteredAuditLogs]);
   const messageLogs = useMemo(() => filteredAuditLogs.filter(l => !l.type.startsWith('TASK_')), [filteredAuditLogs]);
@@ -152,29 +146,18 @@ export default function AdminPanel({
   const treeData = useMemo(() => {
     const root = { id: 'org', name: 'Talk & Task Corp', type: 'org', children: [] };
     const groupMap = {};
-    
-    filteredTaskMessages.forEach(task => {
-      const gid = task.groupId || 'direct';
-      if (!groupMap[gid]) groupMap[gid] = [];
-      groupMap[gid].push(task);
-    });
-
+    filteredTaskMessages.forEach(task => { const gid = task.groupId || 'direct'; if (!groupMap[gid]) groupMap[gid] = []; groupMap[gid].push(task); });
     Object.entries(groupMap).forEach(([gid, tasks]) => {
       const group = groups.find(g => g.id === gid);
       let groupName = gid;
       if (group) groupName = group.name;
       else if (gid === 'direct') groupName = 'Direct Tasks';
       else if (gid.includes('_')) {
-        const uids = gid.split('_');
-        const u1 = dbUsers.find(u => u.uid === uids[0]);
-        const u2 = dbUsers.find(u => u.uid === uids[1]);
+        const uids = gid.split('_'); const u1 = dbUsers.find(u => u.uid === uids[0]); const u2 = dbUsers.find(u => u.uid === uids[1]);
         groupName = `DM: ${u1 ? u1.name.split(' ')[0] : 'User'} & ${u2 ? u2.name.split(' ')[0] : 'User'}`;
       }
-
       const teamNode = { id: gid, name: groupName, type: 'team', children: [] };
-      tasks.forEach(task => {
-        teamNode.children.push({ id: task.id, name: task.text || 'Untitled Task', type: 'task', task, children: [] });
-      });
+      tasks.forEach(task => { teamNode.children.push({ id: task.id, name: task.text || 'Untitled Task', type: 'task', task, children: [] }); });
       root.children.push(teamNode);
     });
     return root;
@@ -191,13 +174,21 @@ export default function AdminPanel({
         const uidsToNotify = dbUsers.filter(u => involved.includes(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
             await addDoc(collection(db, "notifications"), {
-                userId: uid, type: "task", 
-                text: `👉 ADMIN POKE: Regarding task "${task.text}". Please complete as early as possible.`,
+                userId: uid, type: "task", text: `👉 ADMIN POKE: Regarding task "${task.text}". Please complete as early as possible.`,
                 messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false
             });
         }
         await updateDoc(doc(db, "messages", task.id), { "taskData.poked": true, "taskData.pokedAt": Date.now() });
     } catch(err) { alert("Failed to poke assignees."); }
+  };
+
+  const handleAddTag = async () => {
+      if(!newTagLabel.trim() || !newTagLabel.startsWith('#')) return alert("Tag label must begin with '#'");
+      const theme = tagThemes[newTagTheme];
+      try {
+          await addDoc(collection(db, "workspace_tags"), { label: newTagLabel.trim(), bgClass: theme.bg, textClass: theme.text, themeName: newTagTheme, createdAt: serverTimestamp() });
+          setNewTagLabel('');
+      } catch(e) { alert("Failed to save tag."); }
   };
 
   const toggleSelectAllUsers = () => { if (selectedUsers.size === filteredUsers.length) setSelectedUsers(new Set()); else setSelectedUsers(new Set(filteredUsers.map(u => u.uid))); };
@@ -208,21 +199,16 @@ export default function AdminPanel({
   const toggleSelectHistory = (id) => { const s = new Set(selectedHistory); s.has(id) ? s.delete(id) : s.add(id); setSelectedHistory(s); };
 
   const printSelectedPDF = () => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-    doc.setFont('Inter'); doc.setFontSize(16); doc.text('Talk & Task – Admin Report', 14, 20); doc.setFontSize(10); doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
+    const doc = new jsPDF('p', 'mm', 'a4'); doc.setFont('Inter'); doc.setFontSize(16); doc.text('Talk & Task – Admin Report', 14, 20); doc.setFontSize(10); doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
     let y = 40;
-
     if (activeTab === 'users') {
-      const data = filteredUsers.filter(u => selectedUsers.has(u.uid));
-      doc.text('Selected Users', 14, y); y += 6;
+      const data = filteredUsers.filter(u => selectedUsers.has(u.uid)); doc.text('Selected Users', 14, y); y += 6;
       doc.autoTable({ startY: y, head: [['#', 'Name', 'Email', 'Status']], body: data.map((u, i) => [i + 1, u.name, u.email, u.isApproved ? 'APPROVED' : 'PENDING']), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
     } else if (activeTab === 'logs') {
-      const data = currentLogs.filter(l => selectedLogs.has(l.id));
-      doc.text(`Logs – ${logSubTab === 'tasks' ? 'Task' : 'Message'}`, 14, y); y += 6;
+      const data = currentLogs.filter(l => selectedLogs.has(l.id)); doc.text(`Logs – ${logSubTab === 'tasks' ? 'Task' : 'Message'}`, 14, y); y += 6;
       doc.autoTable({ startY: y, head: [['#', 'Time', 'Action', 'User', 'Details']], body: data.map((l, i) => [i + 1, l.dateString + ' ' + l.time, l.type, (l.user || '').split('@')[0], l.content]), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
     } else if (activeTab === 'history') {
-      const data = userHistoryLogs.filter(l => selectedHistory.has(l.id));
-      doc.text(`User Activity History – ${historyUserEmail || 'All'}`, 14, y); y += 6;
+      const data = userHistoryLogs.filter(l => selectedHistory.has(l.id)); doc.text(`User Activity History – ${historyUserEmail || 'All'}`, 14, y); y += 6;
       doc.autoTable({ startY: y, head: [['#', 'Time', 'Action', 'Details']], body: data.map((l, i) => [i + 1, l.dateString + ' ' + l.time, l.type, l.content]), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
     }
     doc.save(`admin_report_${activeTab}_${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -250,20 +236,16 @@ export default function AdminPanel({
         </div>
         <div className="flex items-center gap-2">
           {['users', 'logs', 'history'].includes(activeTab) && (
-            <button onClick={printSelectedPDF} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30">
-              <i className="fa-solid fa-file-pdf"></i> Print Selected
-            </button>
+            <button onClick={printSelectedPDF} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30"><i className="fa-solid fa-file-pdf"></i> Print Selected</button>
           )}
-          <button onClick={() => { setActiveModal(null); setViewMode("chat"); }} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30">
-            <i className="fa-solid fa-arrow-left"></i> Back to App
-          </button>
+          <button onClick={() => { setActiveModal(null); setViewMode("chat"); }} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30"><i className="fa-solid fa-arrow-left"></i> Back to App</button>
         </div>
       </div>
 
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap">
-        {['tasks', 'groups', 'users', 'logs', 'history'].map(tab => (
+        {['tasks', 'groups', 'tags', 'users', 'logs', 'history'].map(tab => ( // 👈 TAGS TAB ADDED
           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-t-lg text-sm font-bold transition-colors ${activeTab === tab ? 'bg-slate-50 text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}>
-            {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}{tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}{tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}{tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}{tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}
+            {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}{tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}{tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}{tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}{tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}{tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
@@ -271,6 +253,48 @@ export default function AdminPanel({
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 relative">
         
+        {/* TAGS STUDIO */}
+        {activeTab === 'tags' && (
+           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
+             <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
+                 <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-hashtag text-2xl"></i></div>
+                 <div><h2 className="font-bold text-slate-800 text-xl leading-tight">Universal Tag Studio</h2><span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manage Official Workflow Metadata</span></div>
+             </div>
+             
+             <div className="flex flex-col md:flex-row gap-6 h-full min-h-0">
+                <div className="w-full md:w-1/3 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-inner">
+                   <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Create New Tag</h3>
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Hashtag Label</label>
+                   <input value={newTagLabel} onChange={e=>setNewTagLabel(e.target.value)} placeholder="#Example" className="w-full p-2.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-4 font-bold text-slate-700 shadow-sm"/>
+                   
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Select Theme</label>
+                   <div className="flex flex-wrap gap-2 mb-6">
+                      {Object.entries(tagThemes).map(([name, classes]) => (
+                         <div key={name} onClick={()=>setNewTagTheme(name)} className={`w-8 h-8 rounded-full cursor-pointer flex items-center justify-center shadow-sm border-2 ${newTagTheme === name ? 'border-slate-800 scale-110' : 'border-white'} ${classes.bg} ${classes.text}`}><i className="fa-solid fa-hashtag text-xs"></i></div>
+                      ))}
+                   </div>
+                   
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Live Preview</label>
+                   <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-bold shadow-sm mb-6 ${tagThemes[newTagTheme].bg} ${tagThemes[newTagTheme].text}`}>{newTagLabel || '#Preview'}</div>
+                   
+                   <button onClick={handleAddTag} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 shadow-sm transition-all">Publish Tag</button>
+                </div>
+                
+                <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-5 overflow-y-auto custom-sidebar-scroll">
+                   <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Active Global Tags</h3>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {(customTags || []).map(tag => (
+                         <div key={tag.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-white shadow-sm hover:border-indigo-200 transition-colors">
+                            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm ${tag.bgClass} ${tag.textClass}`}>{tag.label}</span>
+                            <button onClick={()=>deleteDoc(doc(db, "workspace_tags", tag.id))} className="text-slate-400 hover:text-rose-500 w-6 h-6 flex items-center justify-center rounded-full hover:bg-rose-50 transition-colors"><i className="fa-solid fa-trash text-[10px]"></i></button>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+             </div>
+           </div>
+        )}
+
         {/* TASK TREE TAB */}
         {activeTab === 'tasks' && (
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
@@ -322,7 +346,6 @@ export default function AdminPanel({
               <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Team Management</h2>
               <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setLocalOverlay('group_form'); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm"><i className="fa-solid fa-plus mr-2"></i>Create Team</button>
             </div>
-            
             <div className="flex-1 overflow-auto bg-slate-50 custom-sidebar-scroll p-8">
                <div className="flex items-center min-w-max h-full">
                   <div className="flex flex-col items-center justify-center gap-2 w-32 h-32 rounded-full border-4 shadow-md transition-all hover:scale-105 bg-indigo-600 border-indigo-200 text-white z-10 shrink-0">
