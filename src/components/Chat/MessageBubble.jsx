@@ -7,8 +7,6 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢'];
-
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
   hasReplies, isHighlighted, isUnreadHighlight,
@@ -17,10 +15,9 @@ const MessageBubble = React.memo(({
   scrollToMessageDirect, handleReaction, handleToggleBookmark,
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
-  jumpToPrivateSource, handleAddInlineComment
+  jumpToPrivateSource, handleAddInlineComment, customTags // 👈 RECEIVES GLOBAL TAGS
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
   
   const [isAddingUpdate, setIsAddingUpdate] = useState(false);
@@ -33,7 +30,6 @@ const MessageBubble = React.memo(({
   const [trailEditText, setTrailEditText] = useState("");
   
   const menuRef = useRef(null);
-  const emojiRef = useRef(null);
   const inlineFileInputRef = useRef(null);
 
   const isBookmarked = msg.bookmarkedBy?.includes(userEmail);
@@ -62,9 +58,8 @@ const MessageBubble = React.memo(({
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-      if (emojiRef.current && !emojiRef.current.contains(e.target)) setEmojiPickerOpen(false);
     };
-    if (menuOpen || emojiPickerOpen) {
+    if (menuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('touchstart', handleClickOutside);
     }
@@ -72,7 +67,7 @@ const MessageBubble = React.memo(({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [menuOpen, emojiPickerOpen]);
+  }, [menuOpen]);
 
   const notifyTaskChange = async (actionText) => {
     const involved = new Set();
@@ -188,34 +183,45 @@ const MessageBubble = React.memo(({
   };
 
   return (
-    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen || emojiPickerOpen ? 'relative z-50' : 'relative z-[1]'}`}>
+    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} msg-row-spacing transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-50' : 'relative z-[1]'}`}>
       
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
       
       <div className={`w-fit max-w-[85%] md:max-w-[75%] bg-white rounded-xl shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words`}>
         
-        {/* 👇 UNIQUE LEFT-FLOATING EMOJI BUTTON (For Outgoing Messages) */}
-        {msg.isMine && !msg.isTask && (
-          <div className="absolute top-1/2 -translate-y-1/2 -left-[40px] opacity-0 group-hover/msg:opacity-100 transition-all duration-200 z-20">
-            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEmojiPickerOpen(prev => !prev); }} className="w-8 h-8 bg-white text-indigo-400 hover:text-white hover:bg-indigo-600 rounded-full shadow-md border border-slate-100 flex items-center justify-center transform hover:scale-110 transition-all">
-              <i className="fa-regular fa-face-smile text-[14px]"></i>
-            </button>
-          </div>
-        )}
-
         <div className="flex items-baseline mb-1 pr-10">
           <span className="text-xs font-semibold text-indigo-600">{senderName}</span>
         </div>
         
+        {/* 3-DOTS MENU TRIGGER */}
         <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-indigo-600 hover:bg-slate-100 p-1.5 w-6 h-6 rounded-full flex items-center justify-center">
           <i className="fa-solid fa-ellipsis-vertical text-[14px]"></i>
         </button>
         
+        {/* DROPDOWN MENU */}
         {menuOpen && (
           <div ref={menuRef} className="absolute top-8 right-2 z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-56 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
+            
+            {/* 👇 NEW QUICK TAG MENU BLOCK */}
+            {!msg.isTask && toolPreferences?.react !== false && (
+                <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2"><i className="fa-solid fa-hashtag mr-1"></i> Quick Tags</div>
+                   <div className="flex flex-col gap-1.5">
+                     {(toolPreferences?.quickTags || ['#Approved', '#Reviewing', '#ActionRequired', '#Noted']).map(tagLabel => {
+                        const tagObj = customTags.find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
+                        if (!tagLabel) return null;
+                        return (
+                           <button key={tagLabel} onClick={() => { setMenuOpen(false); handleReaction(msg.id, tagLabel); }} className={`text-left text-[11px] font-bold px-2.5 py-1.5 rounded-md transition-colors ${tagObj.bgClass} ${tagObj.textClass} hover:opacity-80`}>
+                             {tagLabel}
+                           </button>
+                        );
+                     })}
+                   </div>
+                </div>
+            )}
+
             {!msg.isTask && <button onClick={() => { setMenuOpen(false); setReplyingTo(msg); setTimeout(() => chatInputRef.current?.focus(), 100); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply</button>}
             {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
-            
             <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
             <button onClick={() => { setMenuOpen(false); handleToggleBookmark(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600"><i className={`fa-solid fa-bookmark w-5 ${isBookmarked ? 'text-indigo-600' : ''}`}></i> {isBookmarked ? 'Unbookmark' : 'Bookmark'}</button>
             {(currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(userEmail)) && <button onClick={() => { setMenuOpen(false); handleTogglePin(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className={`fa-solid fa-thumbtack w-5 ${msg.isPinned ? 'text-indigo-600' : ''}`}></i> {msg.isPinned ? 'Unpin' : 'Pin'}</button>}
@@ -239,7 +245,6 @@ const MessageBubble = React.memo(({
           <>
             {msg.isTask && (
               <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isTaskArchived ? 'bg-slate-50 border-slate-200 opacity-80' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
-                
                 <div className="p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -253,8 +258,7 @@ const MessageBubble = React.memo(({
                       </span>
                     </div>
                     <span className={`text-[11px] font-bold flex items-center gap-1 ${isTaskCompleted || isTaskArchived ? 'text-slate-400' : 'text-slate-500'}`}>
-                      <i className="fa-regular fa-calendar-check"></i>
-                      Due {new Date(msg.taskData.deadline).toLocaleDateString()}
+                      <i className="fa-regular fa-calendar-check"></i> Due {new Date(msg.taskData.deadline).toLocaleDateString()}
                     </span>
                   </div>
                   
@@ -369,30 +373,20 @@ const MessageBubble = React.memo(({
           </>
         )}
 
-        {/* Floating Left Emoji Picker absolute coordinates adjusted to pop out cleanly */}
-        {emojiPickerOpen && (
-          <div ref={emojiRef} className="absolute top-1/2 -translate-y-1/2 right-[100%] mr-12 z-[60] bg-white rounded-full shadow-xl border border-slate-200 p-2 flex gap-2 animate-in fade-in zoom-in-95" onClick={(e) => e.stopPropagation()}>
-            {QUICK_EMOJIS.map(emoji => (<button key={emoji} onClick={() => { setEmojiPickerOpen(false); handleReaction(msg.id, emoji); }} className="text-[20px] hover:scale-125 transition-transform p-1">{emoji}</button>))}
-          </div>
-        )}
-        
+        {/* 👇 HASHTAG REACTIONS DISPLAY (Bottom-Left Alignment) */}
         {Object.keys(msg.reactions || {}).length > 0 && (
-          <div className="absolute -bottom-3.5 right-2 flex gap-1 z-10">
-            {Object.entries(msg.reactions).map(([emoji, users]) => (
-              <div key={emoji} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, emoji); }} className={`text-[13px] bg-white border border-slate-200 rounded-full px-2 py-[1px] shadow-sm flex items-center gap-1 cursor-pointer hover:scale-110 transition-transform ${users.includes(userEmail) ? 'bg-indigo-50 border-indigo-200' : ''}`}>
-                <span>{emoji}</span><span className="font-semibold text-slate-500 text-[10px]">{users.length}</span>
-              </div>
-            ))}
+          <div className="absolute -bottom-3.5 left-2 flex gap-1.5 z-10">
+            {Object.entries(msg.reactions).map(([tagLabel, users]) => {
+              const tagObj = customTags.find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
+              return (
+                <div key={tagLabel} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }} className={`text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 cursor-pointer hover:scale-105 transition-transform ${tagObj.bgClass} ${tagObj.textClass} border border-white`}>
+                  <span>{tagLabel}</span><span className="opacity-70">{users.length}</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
-
-      {/* Standard incoming message right emoji trigger */}
-      {!msg.isMine && (
-        <button onClick={(e) => { e.stopPropagation(); setEmojiPickerOpen(prev => !prev); }} className="ml-2 self-end opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-indigo-600 p-1 rounded-full hover:bg-slate-100 shrink-0">
-          <i className="fa-regular fa-face-smile text-sm"></i>
-        </button>
-      )}
 
     </div>
   );
