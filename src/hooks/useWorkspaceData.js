@@ -11,11 +11,11 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
     const [genericNotifications, setGenericNotifications] = useState([]);
     const [allAdminReminders, setAllAdminReminders] = useState([]);
     const [immutableAuditLogs, setImmutableAuditLogs] = useState([]);
+    const [customTags, setCustomTags] = useState([]); // 👈 NEW GLOBAL TAG STATE
     const [toolPreferences, setToolPreferences] = useState({
         reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
     });
 
-    // 1. Verify Super Admin Status via Custom Claims
     const verifyAdminStatus = useCallback(async () => {
         if (!auth.currentUser) return false;
         try {
@@ -28,7 +28,6 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
         verifyAdminStatus().then(res => setIsVipAdmin(res)); 
     }, [verifyAdminStatus]);
 
-    // 2. Fetch Notifications, Reminders, and Audit Logs
     useEffect(() => {
         if (!user?.uid) return;
 
@@ -39,6 +38,20 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
         const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
             const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
             setGenericNotifications(sorted);
+        });
+
+        // 👇 FETCH GLOBAL WORKSPACE TAGS
+        const unsubTags = onSnapshot(collection(db, "workspace_tags"), (snapshot) => {
+            if (snapshot.empty) {
+                setCustomTags([
+                    { id: '1', label: '#Approved', bgClass: 'bg-teal-50', textClass: 'text-teal-700' },
+                    { id: '2', label: '#Reviewing', bgClass: 'bg-indigo-50', textClass: 'text-indigo-700' },
+                    { id: '3', label: '#ActionRequired', bgClass: 'bg-rose-50', textClass: 'text-rose-700' },
+                    { id: '4', label: '#Noted', bgClass: 'bg-slate-100', textClass: 'text-slate-600' }
+                ]);
+            } else {
+                setCustomTags(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)));
+            }
         });
 
         let unsubAdmin = () => {}; let unsubAudit = () => {};
@@ -58,10 +71,9 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
                 }));
             });
         }
-        return () => { unsubPersonal(); unsubAlerts(); unsubAdmin(); unsubAudit(); };
+        return () => { unsubPersonal(); unsubAlerts(); unsubAdmin(); unsubAudit(); unsubTags(); };
     }, [user?.uid, currentUserData?.isAdmin, isVipAdmin]);
 
-    // 3. User Heartbeat, Active Users List, and Groups Sync
     useEffect(() => {
         if (!user?.uid) return;
 
@@ -89,10 +101,9 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
         return () => { clearInterval(heartbeatInterval); unsubCurrent(); unsubUsers(); unsubGroups(); };
     }, [user, currentUserData?.isAdmin, isVipAdmin, profileForm.name, setProfileForm]);
 
-    // Return the data so ChatApp can use it
     return {
         isVipAdmin, currentUserData, dbUsers, groups,
         activeReminders, genericNotifications, allAdminReminders,
-        immutableAuditLogs, toolPreferences, setToolPreferences
+        immutableAuditLogs, toolPreferences, setToolPreferences, customTags // 👈 PASSED DOWN
     };
 }
