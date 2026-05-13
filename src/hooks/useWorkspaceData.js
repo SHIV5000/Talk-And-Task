@@ -11,7 +11,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
     const [genericNotifications, setGenericNotifications] = useState([]);
     const [allAdminReminders, setAllAdminReminders] = useState([]);
     const [immutableAuditLogs, setImmutableAuditLogs] = useState([]);
-    const [customTags, setCustomTags] = useState([]); // 👈 NEW GLOBAL TAG STATE
+    const [customTags, setCustomTags] = useState([]); 
     const [toolPreferences, setToolPreferences] = useState({
         reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
     });
@@ -40,14 +40,14 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
             setGenericNotifications(sorted);
         });
 
-        // 👇 FETCH GLOBAL WORKSPACE TAGS
+        // 👇 UPDATED WITH SLACK-STYLE SHORT CODES
         const unsubTags = onSnapshot(collection(db, "workspace_tags"), (snapshot) => {
             if (snapshot.empty) {
                 setCustomTags([
-                    { id: '1', label: '#Approved', bgClass: 'bg-teal-50', textClass: 'text-teal-700' },
-                    { id: '2', label: '#Reviewing', bgClass: 'bg-indigo-50', textClass: 'text-indigo-700' },
-                    { id: '3', label: '#ActionRequired', bgClass: 'bg-rose-50', textClass: 'text-rose-700' },
-                    { id: '4', label: '#Noted', bgClass: 'bg-slate-100', textClass: 'text-slate-600' }
+                    { id: '1', label: '#Approved', shortCode: 'APP', bgClass: 'bg-teal-50', textClass: 'text-teal-700' },
+                    { id: '2', label: '#Reviewing', shortCode: 'REV', bgClass: 'bg-indigo-50', textClass: 'text-indigo-700' },
+                    { id: '3', label: '#ActionRequired', shortCode: 'ACT', bgClass: 'bg-rose-50', textClass: 'text-rose-700' },
+                    { id: '4', label: '#Noted', shortCode: 'NOTE', bgClass: 'bg-slate-100', textClass: 'text-slate-600' }
                 ]);
             } else {
                 setCustomTags(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)));
@@ -104,6 +104,6 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
     return {
         isVipAdmin, currentUserData, dbUsers, groups,
         activeReminders, genericNotifications, allAdminReminders,
-        immutableAuditLogs, toolPreferences, setToolPreferences, customTags // 👈 PASSED DOWN
+        immutableAuditLogs, toolPreferences, setToolPreferences, customTags
     };
 }
