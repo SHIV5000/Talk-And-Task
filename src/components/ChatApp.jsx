@@ -12,6 +12,9 @@ import InputArea from './Chat/InputArea.jsx';
 import ModalManager from './Modals/ModalManager.jsx';
 import MessageBubble from './Chat/MessageBubble.jsx'; 
 
+// 👇 HERE IS THE IMPORT FOR THE SEEDER 👇
+import SeedDatabase from './SeedDatabase.jsx';
+
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
 import useChatEngine from '../hooks/useChatEngine.js';
@@ -22,7 +25,6 @@ import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-// 👇 FIX: Passed toolPreferences & chat interaction props safely into the ThreadSidebar 👇
 const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage, chatInputRef }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeThread.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
@@ -43,7 +45,6 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
                 <button onClick={() => setActiveThread(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
-                {/* Fixed Parent Bubble */}
                 <MessageBubble 
                     msg={activeThread} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
                     groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
@@ -57,7 +58,6 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
                     <div className="flex-1 h-px bg-slate-300"></div>
                 </div>
 
-                {/* Fixed Reply Bubbles */}
                 {threadMessages.map(m => (
                     <MessageBubble 
                         key={m.id} msg={m} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
@@ -78,7 +78,6 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
 };
 
 export default function ChatApp({ user, onLogout }) {
-    // ==================== UI STATE ====================
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [viewMode, setViewMode] = useState("chat");
@@ -89,12 +88,10 @@ export default function ChatApp({ user, onLogout }) {
     const MAX_FILE_SIZE_MB = 10;
     const [inputText, setInputText] = useState("");
     
-    // Global Search State
     const [searchQuery, setSearchQuery] = useState(""); 
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchWrapperRef = useRef(null);
 
-    // Slack Thread State 
     const [activeThread, setActiveThread] = useState(null);
 
     const [sidebarSearch, setSidebarSearch] = useState("");
@@ -105,7 +102,6 @@ export default function ChatApp({ user, onLogout }) {
     const [editMessageText, setEditMessageText] = useState("");
     const [activeGroup, setActiveGroup] = useState(null);
     
-    // Task Modals specific states
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
     const [taskPriority, setTaskPriority] = useState("Medium");
@@ -355,7 +351,6 @@ export default function ChatApp({ user, onLogout }) {
         return { users: matchedUsers, tags: matchedTags, messages: matchedMessages };
     }, [searchQuery, dbUsers, customTags, messages, user.email]);
 
-    // Slack Threading Engine
     const messagesToRender = useMemo(() => {
         if(!activeGroup) return [];
         let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
@@ -610,7 +605,7 @@ export default function ChatApp({ user, onLogout }) {
             try {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 const now = new Date();
-                const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
+                const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
@@ -662,7 +657,6 @@ export default function ChatApp({ user, onLogout }) {
         }
     };
 
-    // 👇 RESTORED CRITICAL FUNCTION: handleWipeAllTasks 👇
     const handleWipeAllTasks = async () => {
         if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
         try {
@@ -827,6 +821,10 @@ export default function ChatApp({ user, onLogout }) {
     return (
         <div className="flex h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900">
             
+            {/* 👇 THE SEEDER GOES HERE 👇 */}
+            <SeedDatabase />
+            {/* 👆 THE SEEDER GOES HERE 👆 */}
+
             {activeReminderAlert && (
                 <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white rounded-3xl shadow-2xl z-[100] border border-indigo-100 p-6 animate-in slide-in-from-top-10 duration-700">
                     <div className="flex items-center gap-4 mb-4">
