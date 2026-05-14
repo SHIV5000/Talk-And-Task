@@ -12,17 +12,14 @@ export default function InputArea({
   handleSendPendingFiles
 }) {
   
-  // 👇 FIX 1: Better detection logic for the mention query
   const lastWord = inputText.split(/\s/).pop();
   const mentionQuery = lastWord.startsWith('@') ? lastWord.substring(1).toLowerCase() : null;
 
-  // 👇 FIX 2: Helper to handle clicking a mention
   const handleSelectMention = (name, isGroup = false) => {
     const words = inputText.split(/\s/);
     const mentionName = isGroup ? name.replace(/\s+/g, '') : name;
     words[words.length - 1] = `@${mentionName} `;
     setInputText(words.join(' '));
-    // Keep focus on input
     chatInputRef.current?.focus();
   };
 
@@ -39,7 +36,6 @@ export default function InputArea({
         </div>
       )}
 
-      {/* 👇 FIX 3: Robust Mention Dropdown UI */}
       {mentionQuery !== null && (
         <div className="absolute bottom-[100%] left-4 bg-white shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto z-50 py-2 mb-2 border border-slate-200 animate-in fade-in zoom-in-95">
           <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Peers</div>
@@ -139,11 +135,29 @@ export default function InputArea({
               e.target.style.height = 'auto'; 
               e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; 
             }} 
+            // 👇 FIX 18: Precision Input Keybindings
             onKeyDown={(e) => { 
-              if (e.key === 'Enter' && !e.shiftKey) { 
-                e.preventDefault(); 
-                handleSendOfflineAware(); 
-              } 
+              if (e.key === 'Enter') {
+                if (e.ctrlKey || e.metaKey) {
+                  // Ctrl+Enter or Cmd+Enter -> Insert Newline
+                  e.preventDefault();
+                  const cursorPosition = e.target.selectionStart;
+                  const textBefore = inputText.substring(0, cursorPosition);
+                  const textAfter = inputText.substring(cursorPosition, inputText.length);
+                  setInputText(textBefore + '\n' + textAfter);
+                  // Push cursor after newline
+                  setTimeout(() => {
+                    if (chatInputRef.current) {
+                      chatInputRef.current.selectionStart = cursorPosition + 1;
+                      chatInputRef.current.selectionEnd = cursorPosition + 1;
+                    }
+                  }, 0);
+                } else {
+                  // Standalone Enter -> Submit
+                  e.preventDefault(); 
+                  handleSendOfflineAware(); 
+                }
+              }
             }} 
           />
         </div>
