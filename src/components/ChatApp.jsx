@@ -250,7 +250,6 @@ export default function ChatApp({ user, onLogout }) {
 
     const pinnedMessages = useMemo(() => activeGroup ? messages.filter(m => m.groupId === activeGroup.id && m.isPinned) : [], [messages, activeGroup]);
 
-    // 👇 FIX 1: INLINE THREADING ENGINE 👇
     const messagesToRender = useMemo(() => {
         if(!activeGroup) return [];
         let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
@@ -271,7 +270,6 @@ export default function ChatApp({ user, onLogout }) {
         else if (chatFilter === 'today') filtered = filtered.filter(m => m.dateString === new Date().toISOString().split('T')[0]);
         else if (chatFilter === 'bookmarked') filtered = filtered.filter(m => m.bookmarkedBy?.includes(user.email));
 
-        // Thread Algorithm
         if (!searchQuery.trim() && (chatFilter === 'all' || chatFilter === 'messages')) {
             const threaded = [];
             const topLevel = filtered.filter(m => !m.replyToId).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
@@ -285,7 +283,6 @@ export default function ChatApp({ user, onLogout }) {
                 });
             });
             
-            // Orphans
             const handledIds = new Set(threaded.map(m => m.id));
             const orphans = filtered.filter(m => !handledIds.has(m.id)).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
             
@@ -364,7 +361,6 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [triggerTypingEvent, currentUserData?.name]);
 
-    // 👇 FIX 2: GLOBAL NOTIFICATION INJECTION FOR MESSAGES 👇
     const handleSendMessage = async () => {
         if (!inputText.trim() || !activeGroup) return;
         const msgText = inputText.trim();
@@ -372,7 +368,6 @@ export default function ChatApp({ user, onLogout }) {
         playMelody('messageSent'); 
         setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
         
-        // Push notification to group members
         const otherMembers = (activeGroup.members || []).filter(email => email !== user.email);
         const uidsToNotify = dbUsers.filter(u => otherMembers.includes(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
@@ -582,7 +577,6 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) {}
     };
 
-    // 👇 FIX 2: GLOBAL NOTIFICATION INJECTION FOR REACTIONS 👇
     const handleReactionIntercept = async (msgId, tagLabel) => {
         await reactToMessageDB(msgId, tagLabel);
         const msg = messages.find(m => m.id === msgId);
@@ -672,7 +666,7 @@ export default function ChatApp({ user, onLogout }) {
         e.preventDefault();
         const file = profilePicInputRef.current?.files[0];
         try {
-            let updateData = { name: profileForm.name, fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily, toolPreferences };
+            let updateData = { name: profileForm.name, fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily };
             if (file) {
                 setProfileUploadProgress(10);
                 const uniqueFileName = `${user.uid}_${Date.now()}_avatar`;
@@ -786,7 +780,7 @@ export default function ChatApp({ user, onLogout }) {
 
             {viewMode === "admin" ? (
            <AdminPanel
-              setViewMode={setViewMode} setActiveModal={setActiveModal} dbUsers={dbUsers} groups={groups} filteredAuditLogs={immutableAuditLogs} // 👈 Passed complete logs for unhindered filtering
+              setViewMode={setViewMode} setActiveModal={setActiveModal} dbUsers={dbUsers} groups={groups} filteredAuditLogs={immutableAuditLogs} 
               adminFilterUser={adminFilterUser} setAdminFilterUser={setAdminFilterUser} adminFilterDate={adminFilterDate} setAdminFilterDate={setAdminFilterDate}
               adminFilterType={adminFilterType} setAdminFilterType={setAdminFilterType} adminFilterGroup={adminFilterGroup} setAdminFilterGroup={setAdminFilterGroup}
               handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
@@ -901,16 +895,13 @@ export default function ChatApp({ user, onLogout }) {
                                                   {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
                                                   <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
                                                   <div className="space-y-2">
-                                                    {/* SORTED LATEST AT TOP */}
                                                     {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => {
                                                       const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
                                                       return (
-                                                        <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-all flex items-start gap-3 relative pr-8">
-                                                          
+                                                        <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow transition-all flex items-start gap-3 relative pr-8">
                                                           <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "notifications", n.id)); }} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
                                                             <i className="fa-solid fa-xmark text-[11px]"></i>
                                                           </button>
-
                                                           <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5"><i className={n.type === 'reply' ? 'fa-solid fa-reply text-xs' : n.type === 'mention' ? 'fa-solid fa-at text-xs' : n.type === 'reminder' ? 'fa-solid fa-clock text-xs' : n.type === 'reaction' ? 'fa-solid fa-face-smile text-xs' : 'fa-solid fa-bolt text-xs'}></i></div>
                                                           <div className="flex-1 overflow-hidden pb-4">
                                                             <div className="text-[13px] font-bold text-slate-800">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : n.type === 'reminder' ? 'Reminder Alert' : n.type === 'task' ? 'Task Update' : n.type === 'reaction' ? 'New Reaction' : 'Notification'}</div>
@@ -933,15 +924,25 @@ export default function ChatApp({ user, onLogout }) {
                                   <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
                                   
                                   {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
+                                    
                                 </div>
                             </div>
+
+                            {/* TASK 2: INVERTED SCROLL BUTTONS */}
+                            <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[80px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
+                                <i className="fa-solid fa-arrow-down"></i>
+                            </button>
+
+                            <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[90px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
+                                <i className="fa-solid fa-arrow-up"></i>
+                            </button>
                             
                             <ChatView
                                 messagesToRender={messagesToRender} messages={messages} activeGroup={activeGroup} user={user} currentUserData={currentUserData}
                                 isVipAdmin={isVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo} setReplyingTo={setReplyingTo} 
                                 toolPreferences={toolPreferences} dbUsers={dbUsers} groups={groups} setActiveGroup={setActiveGroup} setShowRightSidebar={setShowRightSidebar} 
                                 setMobileSidebarOpen={setMobileSidebarOpen} pendingScrollTarget={pendingScrollTarget} setPendingScrollTarget={setPendingScrollTarget}
-                                setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReactionIntercept} // 👈 Passed Intercept
+                                setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReactionIntercept} 
                                 handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} handleDeleteMessage={deleteMessageDB}
                                 chatInputRef={chatInputRef} editingMessageId={editingMessageId} editMessageText={editMessageText} setEditingMessageId={setEditingMessageId} 
                                 setEditMessageText={setEditMessageText} handleSaveEdit={handleSaveEdit} setSelectedMessage={setSelectedMessage} 
@@ -976,7 +977,7 @@ export default function ChatApp({ user, onLogout }) {
                       <RightSidebar
                         showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                         tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                        navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
+                        navigateToMessageFromNotification={navigateToMessageFromNotification} 
                       />
                     )}
                     <ModalManager {...modalProps} />
