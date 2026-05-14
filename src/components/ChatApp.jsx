@@ -21,6 +21,7 @@ import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, ref, uploadBytesResumable, getDownloadURL, deleteDoc } from '../firebase.js';
 
 export default function ChatApp({ user, onLogout }) {
+    // ==================== UI STATE ====================
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [viewMode, setViewMode] = useState("chat");
@@ -30,7 +31,12 @@ export default function ChatApp({ user, onLogout }) {
     const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
     const MAX_FILE_SIZE_MB = 10;
     const [inputText, setInputText] = useState("");
-    const [searchQuery, setSearchQuery] = useState("");
+    
+    // 👇 TASK 17: Global Search State 👇
+    const [searchQuery, setSearchQuery] = useState(""); 
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
+    const searchWrapperRef = useRef(null);
+
     const [sidebarSearch, setSidebarSearch] = useState("");
     const [chatFilter, setChatFilter] = useState("all");
     const [selectedMessage, setSelectedMessage] = useState(null);
@@ -39,6 +45,7 @@ export default function ChatApp({ user, onLogout }) {
     const [editMessageText, setEditMessageText] = useState("");
     const [activeGroup, setActiveGroup] = useState(null);
     
+    // Task Modals specific states
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
     const [taskPriority, setTaskPriority] = useState("Medium");
@@ -110,6 +117,25 @@ export default function ChatApp({ user, onLogout }) {
     } = useChatEngine({ 
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
+
+    useEffect(() => {
+        if (toolPreferences?.darkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [toolPreferences?.darkMode]);
+
+    // 👇 TASK 17: Close Search Dropdown on Outside Click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target)) {
+                setIsSearchFocused(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const playMelody = useCallback((type) => {
         try {
@@ -250,19 +276,36 @@ export default function ChatApp({ user, onLogout }) {
 
     const pinnedMessages = useMemo(() => activeGroup ? messages.filter(m => m.groupId === activeGroup.id && m.isPinned) : [], [messages, activeGroup]);
 
+    // 👇 TASK 17: Universal Search Engine Core Logic 👇
+    const globalSearchResults = useMemo(() => {
+        if (!searchQuery.trim()) return null;
+        const q = searchQuery.toLowerCase();
+        
+        // 1. Search Users
+        const matchedUsers = dbUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q));
+        
+        // 2. Search Workflow Tags
+        const matchedTags = (customTags || []).filter(t => (t.label||'').toLowerCase().includes(q) || (t.shortCode||'').toLowerCase().includes(q));
+        
+        // 3. Search All Messages & Trail Comments (Where user has access)
+        const matchedMessages = messages.filter(m => {
+            if (m.isPrivateMention && !m.allowedUsers?.includes(user.email) && m.senderEmail !== user.email) return false;
+            
+            const textMatch = (m.text || '').toLowerCase().includes(q);
+            const fileMatch = (m.fileName || '').toLowerCase().includes(q);
+            const trailMatch = m.isTask && (m.taskData?.trail || []).some(t => (t.comment || '').toLowerCase().includes(q));
+            
+            return textMatch || fileMatch || trailMatch;
+        }).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).slice(0, 50); // Cap at top 50 to prevent UI lag
+
+        return { users: matchedUsers, tags: matchedTags, messages: matchedMessages };
+    }, [searchQuery, dbUsers, customTags, messages, user.email]);
+
+
+    // Chat View Engine (Stripped of local search dependency)
     const messagesToRender = useMemo(() => {
         if(!activeGroup) return [];
         let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
-        
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(m => 
-                (m.text || '').toLowerCase().includes(q) || 
-                (m.fileName || '').toLowerCase().includes(q) || 
-                (m.sender || '').toLowerCase().includes(q) ||
-                Object.keys(m.reactions || {}).some(tag => tag.toLowerCase().includes(q))
-            );
-        }
 
         if (chatFilter === 'tasks-pending') filtered = filtered.filter(m => m.isTask && m.taskData?.status !== "Completed");
         else if (chatFilter === 'tasks-completed') filtered = filtered.filter(m => m.isTask && m.taskData?.status === "Completed");
@@ -270,7 +313,8 @@ export default function ChatApp({ user, onLogout }) {
         else if (chatFilter === 'today') filtered = filtered.filter(m => m.dateString === new Date().toISOString().split('T')[0]);
         else if (chatFilter === 'bookmarked') filtered = filtered.filter(m => m.bookmarkedBy?.includes(user.email));
 
-        if (!searchQuery.trim() && (chatFilter === 'all' || chatFilter === 'messages')) {
+        // Thread Algorithm
+        if (chatFilter === 'all' || chatFilter === 'messages') {
             const threaded = [];
             const topLevel = filtered.filter(m => !m.replyToId).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
             const allReplies = filtered.filter(m => m.replyToId);
@@ -290,24 +334,10 @@ export default function ChatApp({ user, onLogout }) {
         }
 
         return filtered;
-    }, [messages, activeGroup, user.email, chatFilter, searchQuery]);
+    }, [messages, activeGroup, user.email, chatFilter]);
 
     const tasksAssignedToMe = useMemo(() => messages.filter(m => m.isTask && m.taskData?.assignees?.includes(user.email)).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
     const tasksAssignedByMe = useMemo(() => messages.filter(m => m.isTask && m.senderEmail === user.email).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
-
-    const filteredAuditLogs = useMemo(() => {
-        let logs = immutableAuditLogs;
-        if (adminFilterUser) logs = logs.filter(l => l.user === adminFilterUser);
-        if (adminFilterDate) logs = logs.filter(l => l.dateString === adminFilterDate);
-        if (adminFilterType) {
-            if (adminFilterType === 'task-all') logs = logs.filter(l => l.type.startsWith("TASK_"));
-            else if (adminFilterType === 'task-pending') logs = logs.filter(l => l.type === "TASK_CREATE" || l.type === "TASK_DELEGATE");
-            else if (adminFilterType === 'task-completed') logs = logs.filter(l => l.type === "TASK_COMPLETE");
-            else logs = logs.filter(l => l.type === adminFilterType);
-        }
-        if (adminFilterGroup) logs = logs.filter(l => l.groupId === adminFilterGroup);
-        return logs;
-    }, [immutableAuditLogs, adminFilterUser, adminFilterDate, adminFilterType, adminFilterGroup]);
 
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
@@ -592,17 +622,6 @@ export default function ChatApp({ user, onLogout }) {
         }
     };
 
-    const handleWipeAllTasks = async () => {
-        if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
-        try {
-            const q = query(collection(db, "messages"), where("isTask", "==", true));
-            const snapshot = await getDocs(q);
-            if (snapshot.empty) return alert("No tasks found! You are already clean.");
-            await Promise.all(snapshot.docs.map(document => deleteDoc(doc(db, "messages", document.id))));
-            alert(`🧹 Successfully wiped ${snapshot.docs.length} tasks! Clean slate ready.`);
-        } catch (error) { alert("Failed to clean database."); }
-    };
-
     const handleGroupPicUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -754,7 +773,7 @@ export default function ChatApp({ user, onLogout }) {
     }
     
     return (
-        <div className="flex h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100">
+        <div className="flex h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900">
             
             {activeReminderAlert && (
                 <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white rounded-3xl shadow-2xl z-[100] border border-indigo-100 p-6 animate-in slide-in-from-top-10 duration-700">
@@ -780,18 +799,32 @@ export default function ChatApp({ user, onLogout }) {
 
             {viewMode === "admin" ? (
            <AdminPanel
-              setViewMode={setViewMode} setActiveModal={setActiveModal} dbUsers={dbUsers} groups={groups} filteredAuditLogs={immutableAuditLogs} 
-              adminFilterUser={adminFilterUser} setAdminFilterUser={setAdminFilterUser} adminFilterDate={adminFilterDate} setAdminFilterDate={setAdminFilterDate}
-              adminFilterType={adminFilterType} setAdminFilterType={setAdminFilterType} adminFilterGroup={adminFilterGroup} setAdminFilterGroup={setAdminFilterGroup}
+              setViewMode={setViewMode}
+              setActiveModal={setActiveModal}
+              dbUsers={dbUsers}
+              groups={groups}
+              filteredAuditLogs={filteredAuditLogs}
+              adminFilterUser={adminFilterUser}
+              setAdminFilterUser={setAdminFilterUser}
+              adminFilterDate={adminFilterDate}
+              setAdminFilterDate={setAdminFilterDate}
+              adminFilterType={adminFilterType}
+              setAdminFilterType={setAdminFilterType}
+              adminFilterGroup={adminFilterGroup}
+              setAdminFilterGroup={setAdminFilterGroup}
               handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
               handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
               handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
-              setSelectedMessage={setSelectedMessage} setIsEditingTaskTitle={setIsEditingTaskTitle} messages={messages}
-              setGroupForm={setGroupForm} setEditingGroup={setEditingGroup} groupForm={groupForm} editingGroup={editingGroup} handleGroupSubmit={handleGroupSubmit}
-              handleAdminArchiveGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: true })}
-              handleAdminRecoverGroup={(id, name) => updateDoc(doc(db, "groups", id), { isArchived: false })}
-              handleGroupPicUpload={handleGroupPicUpload} groupPicUploadProgress={groupPicUploadProgress}
-              playMelody={playMelody} customTags={customTags} 
+              setSelectedMessage={setSelectedMessage}
+              setIsEditingTaskTitle={setIsEditingTaskTitle}
+              messages={messages}
+              setGroupForm={setGroupForm}
+              setEditingGroup={setEditingGroup}
+              groupForm={groupForm}
+              editingGroup={editingGroup}
+              handleGroupSubmit={handleGroupSubmit}
+              handleGroupPicUpload={handleGroupPicUpload}
+              groupPicUploadProgress={groupPicUploadProgress}
             />
             ) : (
                 <div className="flex h-full w-full relative">
@@ -834,12 +867,87 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                 </div>
 
-                                <div className="hidden md:flex flex-1 max-w-md mx-4">
+                                {/* 👇 TASK 17: UNIVERSAL GLOBAL SEARCH BAR 👇 */}
+                                <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
                                     <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
                                         <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
-                                        <input type="text" placeholder="Search messages..." className="bg-transparent outline-none flex-1 text-[13px] text-slate-800 placeholder-slate-400" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                                        <input 
+                                           type="text" 
+                                           placeholder="Global Search (Users, Tags, Tasks, Messages)..." 
+                                           className="bg-transparent outline-none flex-1 text-[13px] text-slate-800 placeholder-slate-400 font-medium" 
+                                           value={searchQuery} 
+                                           onChange={(e) => setSearchQuery(e.target.value)} 
+                                           onFocus={() => setIsSearchFocused(true)} 
+                                        />
                                         {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
                                     </div>
+                                    
+                                    {/* Universal Search Dropdown Engine */}
+                                    {isSearchFocused && globalSearchResults && (
+                                        <div className="absolute top-[110%] left-0 w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                            <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
+                                                <span>Global Search Engine</span>
+                                                <span>{globalSearchResults.users.length + globalSearchResults.tags.length + globalSearchResults.messages.length} Found</span>
+                                            </div>
+                                            <div className="overflow-y-auto p-2 custom-sidebar-scroll">
+                                                
+                                                {globalSearchResults.users.length > 0 && (
+                                                    <div className="mb-4">
+                                                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-users mr-1"></i> Directory Users</div>
+                                                        {globalSearchResults.users.map(u => (
+                                                            <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-100">
+                                                                <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
+                                                                <div>
+                                                                    <div className="font-bold text-slate-800 text-sm leading-tight">{u.name}</div>
+                                                                    <div className="text-[11px] text-slate-400 font-medium">{u.email}</div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                
+                                                {globalSearchResults.tags.length > 0 && (
+                                                    <div className="mb-4">
+                                                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-hashtag mr-1"></i> Workflow Tags</div>
+                                                        <div className="flex flex-wrap gap-2 px-3 pt-1">
+                                                            {globalSearchResults.tags.map(t => (
+                                                                <span key={t.id} className={`px-2.5 py-1 rounded-md text-xs font-bold shadow-sm ${t.bgClass} ${t.textClass}`}>{t.label}</span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {globalSearchResults.messages.length > 0 && (
+                                                    <div className="mb-2">
+                                                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
+                                                        {globalSearchResults.messages.map(m => (
+                                                            <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
+                                                                <div className="flex justify-between items-center">
+                                                                    <div className="text-[11px] font-extrabold text-indigo-600">{(m.sender||'').split('@')[0]}</div>
+                                                                    <div className="text-[10px] text-slate-400 font-semibold">{m.dateString}</div>
+                                                                </div>
+                                                                <div className="text-[13px] text-slate-700 line-clamp-2 leading-snug font-medium">
+                                                                    {m.text || m.fileName || 'Attached File'}
+                                                                </div>
+                                                                {m.isTask && (
+                                                                    <div className="text-[9px] mt-1.5 font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded w-fit border border-amber-200 uppercase tracking-wider">
+                                                                        <i className="fa-solid fa-square-check mr-1"></i> Task Card
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                
+                                                {globalSearchResults.users.length === 0 && globalSearchResults.tags.length === 0 && globalSearchResults.messages.length === 0 && (
+                                                    <div className="text-center p-8 text-slate-400 font-medium text-sm flex flex-col items-center">
+                                                        <i className="fa-solid fa-magnifying-glass text-3xl mb-3 text-slate-300"></i>
+                                                        No matching results found across the workspace.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 <div className="flex items-center gap-1 shrink-0 relative">
@@ -895,6 +1003,7 @@ export default function ChatApp({ user, onLogout }) {
                                                   {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
                                                   <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
                                                   <div className="space-y-2">
+                                                    {/* SORTED LATEST AT TOP */}
                                                     {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => {
                                                       const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
                                                       return (
@@ -928,7 +1037,6 @@ export default function ChatApp({ user, onLogout }) {
                                 </div>
                             </div>
 
-                            {/* TASK 2: INVERTED SCROLL BUTTONS */}
                             <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[80px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
                                 <i className="fa-solid fa-arrow-down"></i>
                             </button>
@@ -977,7 +1085,7 @@ export default function ChatApp({ user, onLogout }) {
                       <RightSidebar
                         showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                         tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                        navigateToMessageFromNotification={navigateToMessageFromNotification} 
+                        navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
                       />
                     )}
                     <ModalManager {...modalProps} />
