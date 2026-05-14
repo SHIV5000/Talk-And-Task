@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { db } from './firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase.js'; // Adjust path if your firebase file is elsewhere
+import { collection, getDocs, doc, deleteDoc, setDoc, addDoc } from 'firebase/firestore';
 
 export default function SeedDatabase() {
     const [status, setStatus] = useState('Idle');
@@ -168,10 +168,10 @@ export default function SeedDatabase() {
                 userId: adminUid, userEmail: adminEmail, messageId: 'dummy_id_1', messageText: 'Grievance Counseling Session Preparation', remindAt: generateTimestamp(-1).toISOString(), isTriggered: false
             });
 
-            setStatus('Seeding Complete! You may now remove this script component.');
+            setStatus('Seeding Complete! Refreshing app...');
             setProgress(100);
             
-            setTimeout(() => { window.location.reload(); }, 3000);
+            setTimeout(() => { window.location.reload(); }, 2000);
 
         } catch (error) {
             console.error(error);
@@ -179,27 +179,33 @@ export default function SeedDatabase() {
         }
     };
 
+    if (progress === 100) return null; // Hide when done to allow reload
+
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="bg-white rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl">
-                <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <i className="fa-solid fa-seedling text-4xl text-indigo-600"></i>
+        <div className="fixed top-0 left-0 w-full z-[99999] bg-rose-600 shadow-2xl flex flex-col items-center justify-center p-4 border-b-4 border-rose-800">
+            <div className="max-w-4xl w-full flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="text-white text-left">
+                    <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-2">
+                        <i className="fa-solid fa-triangle-exclamation animate-pulse"></i> MPGS Database Seeder
+                    </h2>
+                    <p className="text-rose-100 text-xs font-medium mt-1">This will wipe your old data and instantly inject the 100+ MPGS Ecosystem records.</p>
                 </div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">MPGS Database Seeder</h2>
-                <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-                    This script will wipe all existing messages and inject 100+ heavily structured, highly realistic messages, tasks, and slack-threads mapped directly to your Academic Coordinators.
-                </p>
-                
+
                 {progress === 0 ? (
-                    <button onClick={runSeeder} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 shadow-lg transition-transform hover:scale-[1.02]">
-                        <i className="fa-solid fa-power-off mr-2"></i> Start Injection Sequence
+                    <button 
+                        onClick={runSeeder} 
+                        className="bg-white text-rose-700 font-black px-8 py-3 rounded-full shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:bg-rose-50 hover:scale-105 transition-all uppercase tracking-widest whitespace-nowrap"
+                    >
+                        🚀 Click Here to Generate
                     </button>
                 ) : (
-                    <div className="space-y-4">
-                        <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-indigo-600 transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                    <div className="flex-1 max-w-sm w-full bg-rose-900 rounded-full h-8 overflow-hidden relative border-2 border-rose-500 shadow-inner">
+                        <div className="h-full bg-emerald-400 transition-all duration-300 flex items-center justify-end pr-2" style={{ width: `${progress}%` }}>
+                            <span className="text-[10px] font-black text-emerald-900">{progress}%</span>
                         </div>
-                        <p className="text-sm font-bold text-indigo-600">{status}</p>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                             <span className="text-white text-xs font-bold drop-shadow-md">{status}</span>
+                        </div>
                     </div>
                 )}
             </div>
