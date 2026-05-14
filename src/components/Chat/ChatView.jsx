@@ -55,7 +55,7 @@ export default function ChatView({
     <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] bg-slate-50 relative">
       <div className="flex flex-col min-h-full justify-end py-4 pb-10">
         
-        {toolPreferences.showWatermark !== false && (
+        {toolPreferences?.showWatermark !== false && (
           <div className="doodle-watermark">
             {Array.from({ length: 15 }).map((_, rowIdx) => (
               <div key={rowIdx} className="doodle-row">
@@ -115,7 +115,7 @@ export default function ChatView({
               dbUsers={dbUsers}
               jumpToPrivateSource={jumpToPrivateSource} 
               handleAddInlineComment={handleAddInlineComment} 
-              customTags={customTags || []}
+              customTags={customTags || []} 
             />
           ))}
         </div>
@@ -137,7 +137,7 @@ export default function ChatView({
         
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
-      {/* 🛑 TASK 2 FIX: Redundant scroll buttons removed from here. They are safely rendering in ChatApp.jsx */}
+      
     </div>
   );
 }
