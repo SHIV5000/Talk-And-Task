@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { db } from '../../firebase.js';
-import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore'; // Added setDoc
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
+// ... (KEEP ALL EXISTING TAG THEMES AND VERTICAL TREE NODE EXACTLY THE SAME) ...
 const tagThemes = {
   teal: { bg: 'bg-teal-50', text: 'text-teal-700' },
   indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700' },
@@ -104,10 +105,16 @@ export default function AdminPanel({
   handleToggleApprove, handleToggleAdmin, handleToggleCanCreateGroups,
   setSelectedMessage, setIsEditingTaskTitle, messages,
   setGroupForm, setEditingGroup, editingGroup, groupForm,
-  handleGroupSubmit, handleGroupPicUpload, groupPicUploadProgress, customTags 
+  handleGroupSubmit, handleGroupPicUpload, groupPicUploadProgress, customTags,
+  globalAnnouncement, currentUserData // 👈 Passed down
 }) { 
   const [activeTab, setActiveTab] = useState('tasks');
   const [logSubTab, setLogSubTab] = useState('tasks');
+  
+  // Broadcast Form State
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastType, setBroadcastType] = useState('info'); // info, warning, emergency
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
   
   const [historyUserEmail, setHistoryUserEmail] = useState('');
   const [historyStartDate, setHistoryStartDate] = useState('');
@@ -220,6 +227,34 @@ export default function AdminPanel({
       } catch(e) { alert("Failed to save tag."); }
   };
 
+  // 👇 NEW: BROADCAST CONTROL FUNCTIONS 👇
+  const publishBroadcast = async () => {
+      if (!broadcastMessage.trim()) return alert('Please enter a message to broadcast.');
+      setIsBroadcasting(true);
+      try {
+          await setDoc(doc(db, "workspace", "announcement"), {
+              message: broadcastMessage.trim(),
+              type: broadcastType,
+              isActive: true,
+              timestamp: serverTimestamp(),
+              author: currentUserData?.name || 'Administrator'
+          });
+          setBroadcastMessage('');
+          alert('Global Broadcast is LIVE!');
+      } catch (error) {
+          alert('Failed to broadcast.');
+      }
+      setIsBroadcasting(false);
+  };
+
+  const revokeBroadcast = async () => {
+      if (!window.confirm("Are you sure you want to pull down the active global broadcast?")) return;
+      try {
+          await updateDoc(doc(db, "workspace", "announcement"), { isActive: false });
+      } catch (error) {}
+  };
+
+
   const sendersWithReactions = useMemo(() => {
       const senders = new Set();
       messages.forEach(m => { if (Object.keys(m.reactions||{}).length > 0) senders.add(m.senderEmail); });
@@ -317,10 +352,11 @@ export default function AdminPanel({
         </div>
       </div>
 
-      <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll">
-        {['tasks', 'groups', 'tags', 'users', 'logs', 'reactions', 'history'].map(tab => ( 
+      <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll shrink-0">
+        {/* Added Broadcast Tab */}
+        {['tasks', 'groups', 'broadcast', 'tags', 'users', 'logs', 'reactions', 'history'].map(tab => ( 
           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-t-lg text-sm font-bold transition-colors whitespace-nowrap ${activeTab === tab ? 'bg-slate-50 text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}>
-            {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}{tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}{tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}{tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}{tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}{tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}{tab === 'reactions' && <i className="fa-solid fa-face-smile mr-2"></i>}
+            {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}{tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}{tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}{tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}{tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}{tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}{tab === 'reactions' && <i className="fa-solid fa-face-smile mr-2"></i>}{tab === 'broadcast' && <i className="fa-solid fa-bullhorn mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
@@ -328,6 +364,64 @@ export default function AdminPanel({
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 relative">
         
+        {/* 👇 NEW BROADCAST TAB 👇 */}
+        {activeTab === 'broadcast' && (
+           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden max-w-4xl mx-auto">
+             <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
+                 <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-tower-broadcast text-2xl"></i></div>
+                 <div><h2 className="font-bold text-slate-800 text-xl leading-tight">Global Broadcast System</h2><span className="text-[11px] font-bold text-rose-500 uppercase tracking-wider">Push alerts to all active screens</span></div>
+             </div>
+             
+             <div className="flex-1 flex flex-col gap-6 overflow-y-auto custom-sidebar-scroll">
+                
+                {/* Active Broadcast Monitor */}
+                {globalAnnouncement?.isActive ? (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500"></div>
+                        <h3 className="font-bold text-slate-700 mb-2 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> LIVE BROADCAST ACTIVE</h3>
+                        <div className={`p-4 rounded-xl text-sm font-bold shadow-sm mb-4 ${globalAnnouncement.type === 'emergency' ? 'bg-rose-600 text-white' : globalAnnouncement.type === 'warning' ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'}`}>
+                            <i className="fa-solid fa-bullhorn mr-2"></i> {globalAnnouncement.message}
+                        </div>
+                        <button onClick={revokeBroadcast} className="px-5 py-2.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold text-sm hover:bg-rose-100 transition-colors shadow-sm">
+                            <i className="fa-solid fa-power-off mr-2"></i> Revoke & Remove Broadcast
+                        </button>
+                    </div>
+                ) : (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
+                       <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Draft New Broadcast</h3>
+                       
+                       <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Message Content</label>
+                       <textarea value={broadcastMessage} onChange={e=>setBroadcastMessage(e.target.value)} placeholder="Type the alert message to display to all users..." rows={3} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-5 font-bold text-slate-700 shadow-sm resize-none"/>
+
+                       <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Urgency Level (Color)</label>
+                       <div className="flex flex-wrap gap-3 mb-6">
+                           <label className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${broadcastType === 'emergency' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'}`}>
+                               <input type="radio" name="urgency" value="emergency" checked={broadcastType === 'emergency'} onChange={()=>setBroadcastType('emergency')} className="hidden" />
+                               <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm"><i className="fa-solid fa-triangle-exclamation"></i></div>
+                               <div className="flex flex-col"><span className="font-bold text-sm">Emergency (Red)</span><span className="text-[10px] font-semibold opacity-70">Highest visibility</span></div>
+                           </label>
+                           <label className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${broadcastType === 'warning' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'}`}>
+                               <input type="radio" name="urgency" value="warning" checked={broadcastType === 'warning'} onChange={()=>setBroadcastType('warning')} className="hidden" />
+                               <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm"><i className="fa-solid fa-circle-exclamation"></i></div>
+                               <div className="flex flex-col"><span className="font-bold text-sm">Warning (Amber)</span><span className="text-[10px] font-semibold opacity-70">Important updates</span></div>
+                           </label>
+                           <label className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${broadcastType === 'info' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'}`}>
+                               <input type="radio" name="urgency" value="info" checked={broadcastType === 'info'} onChange={()=>setBroadcastType('info')} className="hidden" />
+                               <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm"><i className="fa-solid fa-circle-info"></i></div>
+                               <div className="flex flex-col"><span className="font-bold text-sm">Standard Info (Blue)</span><span className="text-[10px] font-semibold opacity-70">General announcements</span></div>
+                           </label>
+                       </div>
+                       
+                       <button onClick={publishBroadcast} disabled={isBroadcasting} className="w-full bg-rose-600 text-white font-black py-4 rounded-xl hover:bg-rose-700 shadow-lg shadow-rose-600/30 transition-transform hover:scale-[1.01] uppercase tracking-widest">
+                           <i className="fa-solid fa-satellite-dish mr-2"></i> Publish Global Broadcast
+                       </button>
+                    </div>
+                )}
+             </div>
+           </div>
+        )}
+
+        {/* ... (ALL OTHER TABS REMAIN EXACTLY THE SAME) ... */}
         {/* TAGS STUDIO */}
         {activeTab === 'tags' && (
            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
