@@ -10,7 +10,7 @@ import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
 import ChatView from './Chat/ChatView.jsx';
 import InputArea from './Chat/InputArea.jsx';
 import ModalManager from './Modals/ModalManager.jsx';
-import MessageBubble from './Chat/MessageBubble.jsx'; // 👈 Imported for ThreadSidebar
+import MessageBubble from './Chat/MessageBubble.jsx'; 
 
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
@@ -22,15 +22,17 @@ import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-// 👇 SLACK THREAD SIDEBAR COMPONENT 👇
-const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags }) => {
+// 👇 FIX: Passed toolPreferences & chat interaction props safely into the ThreadSidebar 👇
+const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage, chatInputRef }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeThread.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
+    
     const handleSend = async () => {
         if(!text.trim()) return;
         await sendMessageToDB(text.trim(), { id: activeThread.id, sender: activeThread.sender, text: activeThread.text || activeThread.fileName });
         setText('');
     }
+
     return (
         <div className="w-80 md:w-96 bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative">
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
@@ -41,7 +43,13 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
                 <button onClick={() => setActiveThread(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
-                <MessageBubble msg={activeThread} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} customTags={customTags} />
+                {/* Fixed Parent Bubble */}
+                <MessageBubble 
+                    msg={activeThread} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
+                    groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
+                    customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
+                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} isThreadView={true} 
+                />
                 
                 <div className="flex items-center gap-3 my-4 opacity-80">
                     <div className="flex-1 h-px bg-slate-300"></div>
@@ -49,8 +57,14 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
                     <div className="flex-1 h-px bg-slate-300"></div>
                 </div>
 
+                {/* Fixed Reply Bubbles */}
                 {threadMessages.map(m => (
-                    <MessageBubble key={m.id} msg={m} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} customTags={customTags} />
+                    <MessageBubble 
+                        key={m.id} msg={m} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
+                        groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
+                        customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
+                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} isThreadView={true} 
+                    />
                 ))}
             </div>
             <div className="p-3 border-t border-slate-200 bg-white shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
@@ -80,7 +94,7 @@ export default function ChatApp({ user, onLogout }) {
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchWrapperRef = useRef(null);
 
-    // 👇 SLACK THREAD STATE 👇
+    // Slack Thread State 
     const [activeThread, setActiveThread] = useState(null);
 
     const [sidebarSearch, setSidebarSearch] = useState("");
@@ -341,7 +355,7 @@ export default function ChatApp({ user, onLogout }) {
         return { users: matchedUsers, tags: matchedTags, messages: matchedMessages };
     }, [searchQuery, dbUsers, customTags, messages, user.email]);
 
-    // 👇 SLACK THREADING ENGINE 👇
+    // Slack Threading Engine
     const messagesToRender = useMemo(() => {
         if(!activeGroup) return [];
         let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
@@ -352,7 +366,6 @@ export default function ChatApp({ user, onLogout }) {
         else if (chatFilter === 'today') filtered = filtered.filter(m => m.dateString === new Date().toISOString().split('T')[0]);
         else if (chatFilter === 'bookmarked') filtered = filtered.filter(m => m.bookmarkedBy?.includes(user.email));
 
-        // The Slack Magic: If no active search, strictly exclude replies from main view.
         if (!searchQuery.trim() && (chatFilter === 'all' || chatFilter === 'messages')) {
             return filtered.filter(m => !m.replyToId).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
         }
@@ -455,7 +468,6 @@ export default function ChatApp({ user, onLogout }) {
             if (i === 0 && currentText) finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText;
             pf.caption = finalCaption; pf.text = finalCaption; 
             
-            // Inject Secure Flag for Downloads
             if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
             
             try { await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); }
@@ -650,7 +662,7 @@ export default function ChatApp({ user, onLogout }) {
         }
     };
 
-    // 👇 RESTORED CRITICAL FUNCTION 👇
+    // 👇 RESTORED CRITICAL FUNCTION: handleWipeAllTasks 👇
     const handleWipeAllTasks = async () => {
         if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
         try {
@@ -865,8 +877,6 @@ export default function ChatApp({ user, onLogout }) {
               handleGroupSubmit={handleGroupSubmit}
               handleGroupPicUpload={handleGroupPicUpload}
               groupPicUploadProgress={groupPicUploadProgress}
-              playMelody={playMelody}
-              customTags={customTags} 
             />
             ) : (
                 <div className="flex h-full w-full relative">
@@ -1126,6 +1136,7 @@ export default function ChatApp({ user, onLogout }) {
                             activeThread={activeThread} setActiveThread={setActiveThread} messages={messages} user={user} 
                             currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} handleReactionIntercept={handleReactionIntercept} 
                             deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} customTags={customTags} 
+                            toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
                         />
                     ) : showRightSidebar ? (
                       <RightSidebar
