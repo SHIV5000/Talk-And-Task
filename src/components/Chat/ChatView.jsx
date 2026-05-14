@@ -13,7 +13,7 @@ export default function ChatView({
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
   unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
-  customTags // 👈 RECEIVED FROM CHAT APP
+  customTags 
 }) {
   
   const handleChatScroll = (e) => {
@@ -115,7 +115,7 @@ export default function ChatView({
               dbUsers={dbUsers}
               jumpToPrivateSource={jumpToPrivateSource} 
               handleAddInlineComment={handleAddInlineComment} 
-              customTags={customTags || []} // 👈 FORWARDED TO MESSAGE BUBBLE SAFELY
+              customTags={customTags || []}
             />
           ))}
         </div>
@@ -137,23 +137,7 @@ export default function ChatView({
         
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
-
-      <div className="absolute bottom-[80px] right-4 flex flex-col gap-2 z-30">
-        <button
-          onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="bg-white/80 backdrop-blur text-slate-500 shadow-md border border-slate-200 rounded-full w-10 h-10 flex items-center justify-center transition-transform hover:scale-105"
-          title="Scroll to top"
-        >
-          <i className="fa-solid fa-arrow-up text-lg"></i>
-        </button>
-        <button
-          onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })}
-          className="bg-indigo-600/90 backdrop-blur text-white shadow-md border border-indigo-500/50 rounded-full w-10 h-10 flex items-center justify-center transition-transform hover:scale-105"
-          title="Scroll to latest"
-        >
-          <i className="fa-solid fa-arrow-down text-lg"></i>
-        </button>
-      </div>
+      {/* 🛑 TASK 2 FIX: Redundant scroll buttons removed from here. They are safely rendering in ChatApp.jsx */}
     </div>
   );
 }
