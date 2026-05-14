@@ -104,8 +104,7 @@ export default function AdminPanel({
   handleToggleApprove, handleToggleAdmin, handleToggleCanCreateGroups,
   setSelectedMessage, setIsEditingTaskTitle, messages,
   setGroupForm, setEditingGroup, editingGroup, groupForm,
-  handleGroupSubmit, handleAdminArchiveGroup, handleAdminRecoverGroup,
-  handleGroupPicUpload, groupPicUploadProgress, playMelody, customTags 
+  handleGroupSubmit, handleGroupPicUpload, groupPicUploadProgress, customTags 
 }) { 
   const [activeTab, setActiveTab] = useState('tasks');
   const [logSubTab, setLogSubTab] = useState('tasks');
@@ -134,7 +133,6 @@ export default function AdminPanel({
   const [reactionFilterMsgId, setReactionFilterMsgId] = useState("");
   const [reactionFilterDate, setReactionFilterDate] = useState("");
 
-  // 👇 FIX 11: DYNAMIC & ISOLATED LOGS FILTERING 👇
   const taskLogs = useMemo(() => {
     let logs = filteredAuditLogs.filter(l => l.type?.startsWith('TASK_'));
     if (adminFilterUser) logs = logs.filter(l => l.user === adminFilterUser);
@@ -199,7 +197,6 @@ export default function AdminPanel({
     e.stopPropagation();
     if(!window.confirm(`Issue an urgent Poke to assignees for "${task.text}"?`)) return;
     try {
-        if(playMelody) playMelody('taskCreated'); 
         const involved = [...new Set(task.taskData.assignees || [])];
         const uidsToNotify = dbUsers.filter(u => involved.includes(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
@@ -284,7 +281,6 @@ export default function AdminPanel({
     } catch (e) { alert('Failed to add user.'); }
   };
 
-  // 👇 FIX 13: 30-Day CSV Logins Export Logic 👇
   const download30DayLogins = () => {
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
       const logins = filteredAuditLogs.filter(l => (l.type === 'LOGIN' || l.type === 'LOGOUT') && (l.timestamp?.toMillis?.() || 0) >= thirtyDaysAgo);
@@ -528,7 +524,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* LOGS TAB - 👇 FIX 11: Dynamic Filter Options 👇 */}
+        {/* LOGS TAB */}
         {activeTab === 'logs' && (
           <div className="flex flex-col gap-6">
             <div className="flex gap-2">
@@ -609,7 +605,7 @@ export default function AdminPanel({
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-                  <tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllUsers} checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">User</th><th className="px-3 py-3">Status</th><th className="px-2 py-3 text-center">Admin</th><th className="px-2 py-3 text-center">Groups</th><th className="px-3 py-3 text-center">Login</th><th className="px-3 py-3 text-center">History</th></tr>
+                  <tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllUsers} checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">User</th><th className="px-3 py-3">Email</th><th className="px-3 py-3">Status</th><th className="px-2 py-3 text-center">Admin</th><th className="px-2 py-3 text-center">Groups</th><th className="px-3 py-3 text-center">Login</th><th className="px-3 py-3 text-center">History</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredUsers.map((u, idx) => (
@@ -617,49 +613,12 @@ export default function AdminPanel({
                       <td className="px-3 py-3"><input type="checkbox" checked={selectedUsers.has(u.uid)} onChange={() => toggleSelectUser(u.uid)} className="w-4 h-4 accent-indigo-600" /></td>
                       <td className="px-3 py-3 text-slate-500">{idx + 1}</td>
                       <td className="px-3 py-3"><div className="flex items-center gap-2"><MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-7 h-7" /><span className="font-medium text-slate-800">{u.name}</span>{u.isAdmin && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">ADMIN</span>}</div></td>
+                      <td className="px-3 py-3 text-slate-500">{u.email}</td>
                       <td className="px-3 py-3"><button onClick={() => handleToggleApprove(u)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${u.isApproved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>{u.isApproved ? 'APPROVED' : 'PENDING'}</button></td>
                       <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.isAdmin || false} onChange={() => handleToggleAdmin(u)} className="w-4 h-4 accent-indigo-600" /></td>
                       <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-4 h-4 accent-indigo-600" /></td>
                       <td className="px-3 py-3 text-center text-[11px] text-slate-500">{u.lastLogin?.toDate ? new Date(u.lastLogin.toDate()).toLocaleString() : '—'}</td>
                       <td className="px-3 py-3 text-center"><button onClick={() => { setHistoryUserEmail(u.email); setActiveTab('history'); }} className="text-indigo-600 hover:underline text-xs font-bold"><i className="fa-solid fa-clock-rotate-left mr-1"></i>History</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* 👇 FIX 13: HISTORY TAB WITH 30-DAY LOGINS DOWNLOAD BUTTON 👇 */}
-        {activeTab === 'history' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-4">
-               <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-clock-rotate-left text-indigo-600 mr-2"></i>User Activity History</h2>
-               <button onClick={download30DayLogins} className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-emerald-100 flex items-center gap-2">
-                  <i className="fa-solid fa-file-csv"></i> Download 30-Day Logins
-               </button>
-            </div>
-            <div className="p-5 bg-slate-50 border-b border-slate-200">
-              <div className="flex flex-wrap gap-4 items-end">
-                <div className="flex-1 min-w-[200px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Select User</label><select value={historyUserEmail} onChange={e => setHistoryUserEmail(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">Select a user...</option>{dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}</select></div>
-                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">From Date</label><input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" /></div>
-                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">To Date</label><input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" /></div>
-                <button onClick={() => { setHistoryUserEmail(''); setHistoryStartDate(''); setHistoryEndDate(''); }} className="bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-300">Clear Filters</button>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500 text-xs uppercase"><tr><th className="px-5 py-3"><input type="checkbox" onChange={toggleSelectAllHistory} checked={selectedHistory.size === userHistoryLogs.length && userHistoryLogs.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-5 py-3">#</th><th className="px-5 py-3">Time</th><th className="px-5 py-3">User</th><th className="px-5 py-3">Action</th><th className="px-5 py-3">Details</th></tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                  {userHistoryLogs.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400 italic font-medium">No records found. Adjust filters to search.</td></tr>}
-                  {userHistoryLogs.map((log, idx) => (
-                    <tr key={log.id} className="hover:bg-slate-50">
-                       <td className="px-5 py-3"><input type="checkbox" checked={selectedHistory.has(log.id)} onChange={() => toggleSelectHistory(log.id)} className="w-4 h-4 accent-indigo-600" /></td>
-                       <td className="px-5 py-3 text-slate-500 font-bold">{idx + 1}</td>
-                       <td className="px-5 py-3"><div className="text-xs font-bold text-slate-600">{log.dateString}</div><div className="text-[11px] text-slate-400 font-medium">{log.time}</div></td>
-                       <td className="px-5 py-3 font-bold text-indigo-600">{dbUsers.find(u => u.email === log.user)?.name || 'Unknown'}</td>
-                       <td className="px-5 py-3"><span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm ${log.type === 'LOGIN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : log.type === 'LOGOUT' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-white text-slate-600 border border-slate-200'}`}>{log.type}</span></td>
-                       <td className="px-5 py-3 text-slate-700 font-medium">{log.content}</td>
                     </tr>
                   ))}
                 </tbody>
