@@ -288,4 +288,440 @@ export default function AdminPanel({
       
       const csvContent = "data:text/csv;charset=utf-8,User,Time,Action,Details\n" +
           logins.map(l => {
-             const uname = dbUsers.find(u=>u.email===
+             const uname = dbUsers.find(u=>u.email===l.user)?.name || l.user;
+             return `"${uname}","${l.dateString} ${l.time}","${l.type}","${l.content}"`
+          }).join("\n");
+          
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "30_Day_Login_Activity.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
+
+  return (
+    <div className="flex flex-col h-full w-full bg-slate-50 overflow-hidden animate-in fade-in z-40 relative">
+
+      <div className="bg-indigo-600 px-4 py-3 flex items-center justify-between shadow-md shrink-0 safe-top">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur shadow-inner"><i className="fa-solid fa-shield-halved text-xl text-white"></i></div>
+          <h1 className="font-bold text-lg text-white tracking-wide">Admin Workspace</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {['users', 'logs', 'history', 'reactions'].includes(activeTab) && (
+            <button onClick={printSelectedPDF} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30"><i className="fa-solid fa-file-pdf"></i> Print Selected</button>
+          )}
+          <button onClick={() => { setActiveModal(null); setViewMode("chat"); }} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30"><i className="fa-solid fa-arrow-left"></i> Back to App</button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll">
+        {['tasks', 'groups', 'tags', 'users', 'logs', 'reactions', 'history'].map(tab => ( 
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-t-lg text-sm font-bold transition-colors whitespace-nowrap ${activeTab === tab ? 'bg-slate-50 text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}>
+            {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}{tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}{tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}{tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}{tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}{tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}{tab === 'reactions' && <i className="fa-solid fa-face-smile mr-2"></i>}
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 relative">
+        
+        {/* TAGS STUDIO */}
+        {activeTab === 'tags' && (
+           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
+             <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
+                 <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-hashtag text-2xl"></i></div>
+                 <div><h2 className="font-bold text-slate-800 text-xl leading-tight">Universal Tag Studio</h2><span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manage Official Workflow Metadata</span></div>
+             </div>
+             
+             <div className="flex flex-col md:flex-row gap-6 h-full min-h-0">
+                <div className="w-full md:w-1/3 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-inner overflow-y-auto">
+                   <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Create New Tag</h3>
+                   
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Hashtag Label</label>
+                   <input value={newTagLabel} onChange={e=>setNewTagLabel(e.target.value)} placeholder="#Example" className="w-full p-2.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-4 font-bold text-slate-700 shadow-sm"/>
+
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Select Theme</label>
+                   <div className="flex flex-wrap gap-2 mb-6">
+                      {Object.entries(tagThemes).map(([name, classes]) => (
+                         <div key={name} onClick={()=>setNewTagTheme(name)} className={`w-8 h-8 rounded-full cursor-pointer flex items-center justify-center shadow-sm border-2 ${newTagTheme === name ? 'border-slate-800 scale-110' : 'border-white'} ${classes.bg} ${classes.text}`}><i className="fa-solid fa-hashtag text-xs"></i></div>
+                      ))}
+                   </div>
+                   
+                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Live Preview</label>
+                   <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white w-fit mb-6 shadow-sm">
+                      <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wide ${tagThemes[newTagTheme].bg} ${tagThemes[newTagTheme].text}`}>{newTagLabel || '#Preview'}</span>
+                      <span className="text-[11px] font-bold pr-1 text-slate-500">1</span>
+                   </div>
+                   
+                   <button onClick={handleAddTag} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 shadow-sm transition-all">Publish Tag</button>
+                </div>
+                
+                <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-5 overflow-y-auto custom-sidebar-scroll">
+                   <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Active Global Tags</h3>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {(customTags || []).map(tag => (
+                         <div key={tag.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-white shadow-sm hover:border-indigo-200 transition-colors">
+                            <span className={`px-2 py-1 rounded-md font-bold text-[11px] shadow-sm tracking-wide ${tag.bgClass} ${tag.textClass}`}>{tag.label}</span>
+                            <button onClick={()=>deleteDoc(doc(db, "workspace_tags", tag.id))} className="text-slate-400 hover:text-rose-500 w-6 h-6 flex items-center justify-center rounded-full hover:bg-rose-50 transition-colors"><i className="fa-solid fa-trash text-[10px]"></i></button>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+             </div>
+           </div>
+        )}
+
+        {/* REACTIONS TAB */}
+        {activeTab === 'reactions' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100"><h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-face-smile text-indigo-600 mr-2"></i>Tags & Emojis Log</h2></div>
+            <div className="p-5 bg-slate-50 border-b border-slate-200">
+              <div className="flex flex-wrap gap-4 items-end">
+                
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">1. Filter By Sender</label>
+                  <select value={reactionFilterSender} onChange={e => { setReactionFilterSender(e.target.value); setReactionFilterMsgId(""); }} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium">
+                    <option value="">All Senders...</option>
+                    {sendersWithReactions.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
+                  </select>
+                </div>
+                
+                <div className="flex-[2] min-w-[300px]">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">2. Filter By Message</label>
+                  <select value={reactionFilterMsgId} onChange={e => setReactionFilterMsgId(e.target.value)} disabled={!reactionFilterSender} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium disabled:opacity-50">
+                    <option value="">{reactionFilterSender ? "All Messages from Sender..." : "Select Sender First..."}</option>
+                    {messagesBySender.map(m => (
+                        <option key={m.id} value={m.id}>{m.text ? m.text.substring(0,60) + '...' : m.fileName || 'Attached File'}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex-1 min-w-[150px]">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">3. By Date</label>
+                  <input type="date" value={reactionFilterDate} onChange={e => setReactionFilterDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" />
+                </div>
+
+                <button onClick={() => { setReactionFilterSender(''); setReactionFilterMsgId(''); setReactionFilterDate(''); }} className="bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-300">Clear</button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                  <tr>
+                     <th className="px-5 py-3"><input type="checkbox" onChange={toggleSelectAllReactions} checked={selectedReactions.size === reactionLogs.length && reactionLogs.length > 0} className="w-4 h-4 accent-indigo-600" /></th>
+                     <th className="px-5 py-3">#</th>
+                     <th className="px-5 py-3">Time</th>
+                     <th className="px-5 py-3">Reacted By</th>
+                     <th className="px-5 py-3">Tag/Emoji</th>
+                     <th className="px-5 py-3">Message Snippet</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {reactionLogs.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400 italic font-medium">No reactions found matching filters.</td></tr>}
+                  {reactionLogs.map((log, idx) => {
+                     const msgText = log.msgObj?.text || log.msgObj?.fileName || log.target || 'Unknown Message';
+                     const reactorName = dbUsers.find(u => u.email === log.user)?.name || 'System';
+                     return (
+                    <tr key={log.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-3"><input type="checkbox" checked={selectedReactions.has(log.id)} onChange={() => toggleSelectReaction(log.id)} className="w-4 h-4 accent-indigo-600" /></td>
+                      <td className="px-5 py-3 text-slate-500 font-bold">{idx + 1}</td>
+                      <td className="px-5 py-3"><div className="text-xs font-bold text-slate-600">{log.dateString}</div><div className="text-[11px] text-slate-400 font-medium">{log.time}</div></td>
+                      <td className="px-5 py-3 font-bold text-indigo-600">{reactorName}</td>
+                      <td className="px-5 py-3"><span className="text-[12px] font-bold bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">{log.content.replace('Reacted with ', '')}</span></td>
+                      <td className="px-5 py-3 text-[11px] text-slate-500 truncate max-w-xs">{msgText.substring(0, 50)}...</td>
+                    </tr>
+                  )})}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TASK TREE TAB */}
+        {activeTab === 'tasks' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between mb-6 gap-4 border-b border-slate-100 pb-4 shrink-0">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-network-wired text-2xl"></i></div>
+                 <div>
+                    <h2 className="font-bold text-slate-800 text-xl leading-tight">Organisation Task Tree</h2>
+                    <span className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider">{filteredTaskMessages.length} tasks rendered</span>
+                 </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                  <select value={taskFilterStatus} onChange={e=>setTaskFilterStatus(e.target.value)} className="text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 outline-none cursor-pointer">
+                      <option value="All">All Statuses</option>
+                      <option value="Pending">Pending</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Completed">Completed</option>
+                  </select>
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5">
+                      <i className="fa-regular fa-calendar text-indigo-400 text-xs"></i>
+                      <input type="date" value={taskFilterStart} onChange={e=>setTaskFilterStart(e.target.value)} className="text-[11px] font-bold text-slate-600 uppercase outline-none cursor-pointer w-[110px]" title="Start Date" />
+                      <span className="text-slate-300 font-bold">-</span>
+                      <input type="date" value={taskFilterEnd} onChange={e=>setTaskFilterEnd(e.target.value)} className="text-[11px] font-bold text-slate-600 uppercase outline-none cursor-pointer w-[110px]" title="End Date" />
+                  </div>
+                  {isFilterActive && (
+                      <button onClick={()=>{setTaskFilterStatus('All'); setTaskFilterStart(''); setTaskFilterEnd('');}} className="w-8 h-8 bg-white border border-rose-100 text-rose-500 rounded-lg hover:bg-rose-50 flex items-center justify-center transition-colors shadow-sm" title="Clear Filters"><i className="fa-solid fa-xmark"></i></button>
+                  )}
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-auto custom-sidebar-scroll pb-12 w-full">
+               {treeData.children.length === 0 ? (
+                 <div className="flex flex-col items-center justify-center mt-20 opacity-50">
+                    <i className="fa-solid fa-folder-open text-6xl text-slate-300 mb-4"></i>
+                    <p className="text-sm text-slate-500 font-bold">No tasks match your filters.</p>
+                 </div>
+               ) : (
+                 <div className="org-tree w-full">
+                    <ul><VerticalTreeNode node={treeData} depth={0} dbUsers={dbUsers} handlePoke={handlePoke} isFilterActive={isFilterActive} /></ul>
+                 </div>
+               )}
+            </div>
+          </div>
+        )}
+
+        {/* TEAM MANAGEMENT */}
+        {activeTab === 'groups' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
+              <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Team Management</h2>
+              <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setLocalOverlay('group_form'); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm"><i className="fa-solid fa-plus mr-2"></i>Create Team</button>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-50 custom-sidebar-scroll p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                     {groups.map((g, idx) => (
+                         <div key={g.id} className="w-full bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group flex flex-col">
+                           <div className="flex items-center gap-3 mb-4">
+                             <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-10 h-10 shadow-sm" isGroup={true} />
+                             <div className="flex-1 min-w-0">
+                                <h3 className="font-bold text-slate-800 text-[14px] truncate group-hover:text-indigo-600 transition-colors">{g.name}</h3>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{g.members?.length || 0} Members</p>
+                             </div>
+                           </div>
+                           <div className="flex -space-x-1.5 mb-4 px-1">
+                              {(g.members || []).slice(0, 8).map(email => {
+                                 const u = dbUsers.find(u => u.email === email);
+                                 return <MemoizedAvatar key={email} uid={u?.uid||email} url={u?.profilePicUrl} name={u?.name||'User'} sizeClass="w-6 h-6 border-2 border-white shadow-sm" />
+                              })}
+                              {(g.members || []).length > 8 && (
+                                 <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-600 border-2 border-white shadow-sm relative z-10">
+                                    +{(g.members || []).length - 8}
+                                 </div>
+                              )}
+                           </div>
+                           <div className="mt-auto pt-3 border-t border-slate-100">
+                             <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); setLocalOverlay('group_form'); }} className="w-full bg-slate-50 text-slate-600 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-all"><i className="fa-solid fa-pen mr-1"></i>Edit Team</button>
+                           </div>
+                         </div>
+                     ))}
+                </div>
+            </div>
+          </div>
+        )}
+
+        {/* LOGS TAB */}
+        {activeTab === 'logs' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex gap-2">
+              {['tasks', 'messages'].map(sub => (
+                <button key={sub} onClick={() => { setLogSubTab(sub); setAdminFilterType(''); }} className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors ${logSubTab === sub ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}><i className={`fa-solid ${sub === 'tasks' ? 'fa-check-square' : 'fa-comment'} mr-2`}></i>{sub === 'tasks' ? 'Task Logs' : 'Message Logs'}</button>
+              ))}
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+              <div className="flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By User</label><select value={adminFilterUser} onChange={e => setAdminFilterUser(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">All Users</option>{dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}</select></div>
+                
+                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By Type</label>
+                    <select value={adminFilterType} onChange={e => setAdminFilterType(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium">
+                        <option value="">All Types</option>
+                        {logSubTab === 'tasks' ? (
+                            <>
+                                <option value="TASK_CREATE">Tasks Created</option>
+                                <option value="TASK_DELEGATE">Delegated</option>
+                                <option value="TASK_COMPLETE">Completed</option>
+                                <option value="TASK_COMMENT">Commented</option>
+                            </>
+                        ) : (
+                            <>
+                                <option value="MESSAGE_CREATE">Public Message</option>
+                                <option value="MESSAGE_EDIT">Edited Message</option>
+                                <option value="MESSAGE_DELETE">Deleted Message</option>
+                            </>
+                        )}
+                    </select>
+                </div>
+                
+                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By Group</label><select value={adminFilterGroup} onChange={e => setAdminFilterGroup(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">All Groups</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">By Date</label><input type="date" value={adminFilterDate} onChange={e => setAdminFilterDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" /></div>
+              </div>
+              <button onClick={() => { setAdminFilterUser(""); setAdminFilterDate(""); setAdminFilterType(""); setAdminFilterGroup(""); }} className="mt-4 bg-slate-100 text-slate-500 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-200">Clear Filters</button>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase"><tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllLogs} checked={selectedLogs.size === currentLogs.length && currentLogs.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">Time</th><th className="px-3 py-3">Action</th><th className="px-3 py-3">Initiated By</th><th className="px-3 py-3">Details</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {currentLogs.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400 italic font-medium">No records found.</td></tr>}
+                    {currentLogs.map((log, idx) => (
+                      <tr key={log.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-3"><input type="checkbox" checked={selectedLogs.has(log.id)} onChange={() => toggleSelectLog(log.id)} className="w-4 h-4 accent-indigo-600" /></td>
+                        <td className="px-3 py-3 text-slate-500 font-bold">{idx + 1}</td>
+                        <td className="px-3 py-3"><div className="text-xs font-bold text-slate-600">{log.dateString}</div><div className="text-[11px] text-slate-400 font-medium">{log.time}</div></td>
+                        <td className="px-3 py-3"><span className="text-[11px] font-bold bg-white text-slate-600 px-2.5 py-1 rounded-full border border-slate-200 shadow-sm">{log.type}</span></td>
+                        <td className="px-3 py-3 font-bold text-indigo-600">{dbUsers.find(u => u.email === log.user)?.name || 'Unknown'}</td>
+                        <td className="px-3 py-3"><div className="text-slate-700 whitespace-pre-wrap leading-relaxed font-medium">{log.content}</div>{log.target && <div className="text-[10px] font-bold text-indigo-500 mt-1 uppercase tracking-wider">{log.target}</div>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* OTHER TABS */}
+        {activeTab === 'users' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
+              <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
+              <div className="flex gap-2">
+                <button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button>
+              </div>
+            </div>
+            {showAddUser && (
+              <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-end">
+                <div><label className="text-xs font-bold text-slate-500 block mb-1">Email</label><input type="email" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="user@example.com" /></div>
+                <div><label className="text-xs font-bold text-slate-500 block mb-1">Name</label><input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Full Name" /></div>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newUserApprove} onChange={e => setNewUserApprove(e.target.checked)} className="w-4 h-4 accent-indigo-600" />Approve immediately</label>
+                <button onClick={handleAddUser} className="bg-teal-500 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-teal-600">Save</button>
+                <button onClick={() => setShowAddUser(false)} className="bg-slate-200 text-slate-600 px-5 py-2 rounded-lg text-sm font-bold hover:bg-slate-300">Cancel</button>
+              </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                  <tr><th className="px-3 py-3"><input type="checkbox" onChange={toggleSelectAllUsers} checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-3 py-3">#</th><th className="px-3 py-3">User</th><th className="px-3 py-3">Email</th><th className="px-3 py-3">Status</th><th className="px-2 py-3 text-center">Admin</th><th className="px-2 py-3 text-center">Groups</th><th className="px-3 py-3 text-center">Login</th><th className="px-3 py-3 text-center">History</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredUsers.map((u, idx) => (
+                    <tr key={u.uid} className={`hover:bg-slate-50 ${u.isArchived ? 'opacity-60' : ''}`}>
+                      <td className="px-3 py-3"><input type="checkbox" checked={selectedUsers.has(u.uid)} onChange={() => toggleSelectUser(u.uid)} className="w-4 h-4 accent-indigo-600" /></td>
+                      <td className="px-3 py-3 text-slate-500">{idx + 1}</td>
+                      <td className="px-3 py-3"><div className="flex items-center gap-2"><MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-7 h-7" /><span className="font-medium text-slate-800">{u.name}</span>{u.isAdmin && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">ADMIN</span>}</div></td>
+                      <td className="px-3 py-3 text-slate-500">{u.email}</td>
+                      <td className="px-3 py-3"><button onClick={() => handleToggleApprove(u)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${u.isApproved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>{u.isApproved ? 'APPROVED' : 'PENDING'}</button></td>
+                      <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.isAdmin || false} onChange={() => handleToggleAdmin(u)} className="w-4 h-4 accent-indigo-600" /></td>
+                      <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-4 h-4 accent-indigo-600" /></td>
+                      <td className="px-3 py-3 text-center text-[11px] text-slate-500">{u.lastLogin?.toDate ? new Date(u.lastLogin.toDate()).toLocaleString() : '—'}</td>
+                      <td className="px-3 py-3 text-center"><button onClick={() => { setHistoryUserEmail(u.email); setActiveTab('history'); }} className="text-indigo-600 hover:underline text-xs font-bold"><i className="fa-solid fa-clock-rotate-left mr-1"></i>History</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* HISTORY TAB WITH 30-DAY LOGINS DOWNLOAD BUTTON */}
+        {activeTab === 'history' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-4">
+               <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-clock-rotate-left text-indigo-600 mr-2"></i>User Activity History</h2>
+               <button onClick={download30DayLogins} className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-emerald-100 flex items-center gap-2">
+                  <i className="fa-solid fa-file-csv"></i> Download 30-Day Logins
+               </button>
+            </div>
+            <div className="p-5 bg-slate-50 border-b border-slate-200">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[200px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Select User</label><select value={historyUserEmail} onChange={e => setHistoryUserEmail(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"><option value="">Select a user...</option>{dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}</select></div>
+                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">From Date</label><input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" /></div>
+                <div className="flex-1 min-w-[150px]"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">To Date</label><input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium" /></div>
+                <button onClick={() => { setHistoryUserEmail(''); setHistoryStartDate(''); setHistoryEndDate(''); }} className="bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-300">Clear Filters</button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500 text-xs uppercase"><tr><th className="px-5 py-3"><input type="checkbox" onChange={toggleSelectAllHistory} checked={selectedHistory.size === userHistoryLogs.length && userHistoryLogs.length > 0} className="w-4 h-4 accent-indigo-600" /></th><th className="px-5 py-3">#</th><th className="px-5 py-3">Time</th><th className="px-5 py-3">User</th><th className="px-5 py-3">Action</th><th className="px-5 py-3">Details</th></tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {userHistoryLogs.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400 italic font-medium">No records found. Adjust filters to search.</td></tr>}
+                  {userHistoryLogs.map((log, idx) => (
+                    <tr key={log.id} className="hover:bg-slate-50">
+                       <td className="px-5 py-3"><input type="checkbox" checked={selectedHistory.has(log.id)} onChange={() => toggleSelectHistory(log.id)} className="w-4 h-4 accent-indigo-600" /></td>
+                       <td className="px-5 py-3 text-slate-500 font-bold">{idx + 1}</td>
+                       <td className="px-5 py-3"><div className="text-xs font-bold text-slate-600">{log.dateString}</div><div className="text-[11px] text-slate-400 font-medium">{log.time}</div></td>
+                       <td className="px-5 py-3 font-bold text-indigo-600">{dbUsers.find(u => u.email === log.user)?.name || 'Unknown'}</td>
+                       <td className="px-5 py-3"><span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm ${log.type === 'LOGIN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : log.type === 'LOGOUT' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-white text-slate-600 border border-slate-200'}`}>{log.type}</span></td>
+                       <td className="px-5 py-3 text-slate-700 font-medium">{log.content}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* GROUP EDIT OVERLAY */}
+        {localOverlay === 'group_form' && (
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in zoom-in-[0.98] duration-200">
+             <div className="max-w-2xl w-full bg-white border border-slate-100 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
+                <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                   <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">{editingGroup ? 'Edit Team Details' : 'Create New Team'}</h3>
+                   <button onClick={() => setLocalOverlay(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors">
+                     <i className="fa-solid fa-xmark"></i>
+                   </button>
+                </div>
+                <div className="p-5 md:p-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 hover:scrollbar-thumb-slate-300 scrollbar-track-transparent custom-sidebar-scroll">
+                   <form onSubmit={(e) => { handleGroupSubmit(e); setLocalOverlay(null); }} className="space-y-6">
+                      <div>
+                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Name</label>
+                         <input value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-slate-800 font-medium" placeholder="e.g. Marketing Team" required />
+                      </div>
+                      <div>
+                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Avatar</label>
+                         <div className="flex items-center gap-4 bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
+                           <input type="file" onChange={handleGroupPicUpload} className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-all cursor-pointer" />
+                           {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-indigo-600 animate-pulse">{Math.round(groupPicUploadProgress)}%</span>}
+                         </div>
+                      </div>
+                      
+                      <div>
+                         <div className="flex justify-between items-center mb-3">
+                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Select Members</label>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setGroupForm({...groupForm, members: dbUsers.map(u => u.email)})} className="text-[10px] font-extrabold text-indigo-600 hover:text-indigo-800 hover:underline">Select All</button>
+                                <button type="button" onClick={() => setGroupForm({...groupForm, members: []})} className="text-[10px] font-extrabold text-rose-500 hover:text-rose-700 hover:underline">Clear All</button>
+                            </div>
+                         </div>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-slate-200 p-4 rounded-xl max-h-56 overflow-y-auto bg-slate-50 scrollbar-thin scrollbar-thumb-slate-200 custom-sidebar-scroll">
+                            {dbUsers.map(u => (
+                               <label key={u.uid} className="flex items-center gap-3 text-sm bg-white p-3 border border-slate-100 rounded-xl shadow-sm cursor-pointer hover:border-indigo-200 hover:shadow transition-all group">
+                                  <div className="relative flex items-center justify-center">
+                                    <input type="checkbox" checked={groupForm.members.includes(u.email)} onChange={(e) => {
+                                        const m = new Set(groupForm.members); e.target.checked ? m.add(u.email) : m.delete(u.email); setGroupForm({...groupForm, members: Array.from(m)});
+                                    }} className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:border-indigo-600 checked:bg-indigo-600 transition-all cursor-pointer" />
+                                    <i className="fa-solid fa-check absolute text-white text-[10px] opacity-0 peer-checked:opacity-100 pointer-events-none"></i>
+                                  </div>
+                                  <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" extraClasses="group-hover:scale-105 transition-transform" />
+                                  <span className="font-semibold text-slate-700 truncate">{u.name}</span>
+                               </label>
+                            ))}
+                         </div>
+                      </div>
+                      <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                         <button type="button" onClick={() => setLocalOverlay(null)} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
+                         <button type="submit" className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition-all hover:-translate-y-0.5">Save Team</button>
+                      </div>
+                   </form>
+                </div>
+             </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
