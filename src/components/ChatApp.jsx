@@ -12,8 +12,7 @@ import InputArea from './Chat/InputArea.jsx';
 import ModalManager from './Modals/ModalManager.jsx';
 import MessageBubble from './Chat/MessageBubble.jsx'; 
 
-// 👇 HERE IS THE IMPORT FOR THE SEEDER 👇
-import SeedDatabase from './SeedDatabase.jsx';
+
 
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
@@ -821,10 +820,7 @@ export default function ChatApp({ user, onLogout }) {
     return (
         <div className="flex h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900">
             
-            {/* 👇 THE SEEDER GOES HERE 👇 */}
-            <SeedDatabase />
-            {/* 👆 THE SEEDER GOES HERE 👆 */}
-
+            
             {activeReminderAlert && (
                 <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white rounded-3xl shadow-2xl z-[100] border border-indigo-100 p-6 animate-in slide-in-from-top-10 duration-700">
                     <div className="flex items-center gap-4 mb-4">
