@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // 👈 FIXED IMPORT
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { EMOJI_LIST, lockExtension } from '../../utils/helpers.js';
 
@@ -157,7 +157,6 @@ export default function InputArea({
           ))}
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => { setPendingFiles([]); setShowFileRename(false); }} className="text-slate-500 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-slate-100 transition-colors">Cancel</button>
-            
             <button onClick={handleSendPendingFiles} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-600/30 transition-all">
               <i className="fa-solid fa-paper-plane"></i> Send {pendingFiles.length > 1 ? `All (${pendingFiles.length})` : ''}
             </button>
@@ -185,8 +184,6 @@ export default function InputArea({
         </div>
 
         <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
-          
-          {/* 👇 UPDATED: Auto-Send intercepted. Native Enter works everywhere 👇 */}
           <div 
             contentEditable 
             ref={chatInputRef} 
@@ -198,10 +195,16 @@ export default function InputArea({
             data-placeholder={isOnline ? "Type or Paste a message..." : "Offline - message will be queued"}
             className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium" 
             style={{ minHeight: '46px', maxHeight: '120px' }} 
+            onKeyDown={(e) => { 
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                document.execCommand('insertHTML', false, '<br><br>');
+              }
+            }} 
           />
         </div>
 
-        <button onClick={() => { if (!inputText.trim()) return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+        <button onClick={() => { if (!inputText.trim() || inputText === '<br>') return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
           <i className="fa-regular fa-clock text-xl"></i>
         </button>
 
