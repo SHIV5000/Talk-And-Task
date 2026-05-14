@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { db } from './firebase.js'; // Adjust path if your firebase file is elsewhere
+import { db } from '../firebase.js'; // Adjust path if your firebase file is elsewhere
 import { collection, getDocs, doc, deleteDoc, setDoc, addDoc } from 'firebase/firestore';
 
 export default function SeedDatabase() {
