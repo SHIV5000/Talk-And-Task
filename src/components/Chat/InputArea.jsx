@@ -12,10 +12,9 @@ export default function InputArea({
   handleSendPendingFiles
 }) {
   
-  // Text Selection State for Formatting Toolbar
   const [textSelection, setTextSelection] = useState(null);
 
-  const lastWord = inputText.split(/\s/).pop();
+  const lastWord = inputText.trim() ? inputText.split(/\s/).pop() : '';
   const mentionQuery = lastWord.startsWith('@') ? lastWord.substring(1).toLowerCase() : null;
 
   const handleSelectMention = (name, isGroup = false) => {
@@ -26,7 +25,6 @@ export default function InputArea({
     chatInputRef.current?.focus();
   };
 
-  // 👇 TASK 16: Check highlighted text on mouse/key up 👇
   const checkSelection = () => {
     const el = chatInputRef.current;
     if (el && el.selectionStart !== el.selectionEnd) {
@@ -36,7 +34,6 @@ export default function InputArea({
     }
   };
 
-  // 👇 TASK 16: Apply HTML tag wraps to selected text 👇
   const handleFormat = (startTag, endTag) => {
     if (!textSelection) return;
     const before = inputText.substring(0, textSelection.start);
@@ -66,7 +63,6 @@ export default function InputArea({
         </div>
       )}
 
-      {/* Floating Rich Text Formatting Toolbar */}
       {textSelection && (
         <div className="absolute bottom-full left-4 mb-2 z-50 bg-slate-800 text-white rounded-lg shadow-xl px-2 py-1.5 flex items-center gap-1 animate-in fade-in zoom-in-95">
            <button onClick={(e) => { e.preventDefault(); handleFormat('<b>', '</b>'); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded font-bold text-sm transition-colors" title="Bold">B</button>
