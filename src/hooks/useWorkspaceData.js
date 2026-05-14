@@ -40,7 +40,6 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
             setGenericNotifications(sorted);
         });
 
-        // 👇 UPDATED WITH SLACK-STYLE SHORT CODES
         const unsubTags = onSnapshot(collection(db, "workspace_tags"), (snapshot) => {
             if (snapshot.empty) {
                 setCustomTags([
