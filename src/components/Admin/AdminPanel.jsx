@@ -5,7 +5,7 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, setDoc,
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-// Global Utility to eradicate raw HTML from tables/dropdowns
+// Global Utility to eradicate raw HTML from tables/dropdowns safely
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 const tagThemes = {
@@ -25,7 +25,7 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
   const toggle = () => setLocalExpanded(prev => !prev);
   const hasChildren = node.children && node.children.length > 0;
   const isTask = node.type === 'task';
-  const tData = node.task?.taskData;
+  const tData = node.task?.taskData || {};
   const indentStyle = node.type !== 'org' ? { marginLeft: '1.25rem', paddingLeft: '1.25rem', borderLeft: '2px solid #e2e8f0' } : {};
 
   return (
@@ -50,20 +50,20 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
           )}
           <div className="p-4 md:p-5 cursor-pointer" onClick={() => setShowInlineTrail(!showInlineTrail)}>
             <div className="flex justify-between items-center mb-2.5">
-               <div className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5"><i className="fa-solid fa-square-check text-indigo-500"></i> {node.id.slice(-5).toUpperCase()}</div>
-               <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${tData.status === 'Completed' ? 'bg-teal-100 text-teal-700' : tData.status === 'In Progress' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{tData.status}</span>
+               <div className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5"><i className="fa-solid fa-square-check text-indigo-500"></i> {(node.id || '').slice(-5).toUpperCase()}</div>
+               <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${tData.status === 'Completed' ? 'bg-teal-100 text-teal-700' : tData.status === 'In Progress' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{tData.status || 'Pending'}</span>
             </div>
             <h4 className="text-[15px] font-semibold text-slate-800 leading-snug mb-5">{stripHtml(node.name)}</h4>
             <div className="flex items-end justify-between">
                <div className="flex items-center gap-3">
-                 <i className={`fa-solid fa-flag text-[14px] ${tData.priority==='High'?'text-rose-500':tData.priority==='Medium'?'text-amber-500':'text-emerald-500'}`} title={tData.priority}></i>
+                 <i className={`fa-solid fa-flag text-[14px] ${tData.priority==='High'?'text-rose-500':tData.priority==='Medium'?'text-amber-500':'text-emerald-500'}`} title={tData.priority || 'Medium'}></i>
                  {tData.status !== 'Completed' && (
                     <button onClick={(e) => handlePoke(node.task, e)} className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-transparent hover:border-indigo-200 px-3 py-1.5 rounded-lg text-[11px] font-extrabold transition-all shadow-sm">POKE</button>
                  )}
                </div>
                <div className="flex -space-x-1.5">
                   {(tData.assignees || []).slice(0, 5).map(email => {
-                     const assignee = dbUsers.find(u => u.email === email);
+                     const assignee = (dbUsers || []).find(u => u.email === email);
                      return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || 'User'} sizeClass="w-7 h-7" extraClasses="border-2 border-white shadow-sm" />;
                   })}
                </div>
@@ -73,13 +73,13 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
             <div className="border-t border-slate-100 bg-slate-50 p-4 md:p-5 max-h-[300px] overflow-y-auto custom-sidebar-scroll scroll-smooth">
                <div className="relative pl-4 space-y-4 before:absolute before:inset-y-0 before:left-[7px] before:w-px before:bg-slate-300">
                   {(tData.trail || []).map((t, idx) => {
-                     const authorName = dbUsers.find(u => u.email === t.by)?.name || 'System';
+                     const authorName = (dbUsers || []).find(u => u.email === t.by)?.name || 'System';
                      return (
                      <div key={idx} className="relative z-10 text-left">
-                        <div className={`w-2 h-2 rounded-full absolute -left-[14px] top-1.5 border-2 border-slate-50 ${t.action.includes('Completed') ? 'bg-teal-500' : 'bg-indigo-500'}`}></div>
+                        <div className={`w-2 h-2 rounded-full absolute -left-[14px] top-1.5 border-2 border-slate-50 ${(t.action || '').includes('Completed') ? 'bg-teal-500' : 'bg-indigo-500'}`}></div>
                         <div className="font-bold text-[13px] text-slate-700 leading-tight">
                             <span className="text-indigo-600">{authorName}</span> <span className="text-slate-400 font-medium mx-1">did</span> {t.action}
-                            <span className="font-semibold text-slate-400 ml-2">{t.time?.split(',')[0]}</span>
+                            <span className="font-semibold text-slate-400 ml-2">{(t.time || '').split(',')[0]}</span>
                         </div>
                         {t.comment && <div className="text-[14px] text-slate-600 italic mt-1 bg-white p-2 rounded-lg border border-slate-200 shadow-sm w-fit">"{t.comment}"</div>}
                      </div>
@@ -156,29 +156,29 @@ export default function AdminPanel({
   }, [activeTab]);
 
   const uniqueBroadcastIds = useMemo(() => {
-      return [...new Set(allAcks.map(a => a.broadcastId))];
+      return [...new Set((allAcks || []).map(a => a.broadcastId))];
   }, [allAcks]);
 
   const displayedAcks = useMemo(() => {
-      if (globalAnnouncement?.isActive) return allAcks.filter(a => a.broadcastId === globalAnnouncement.id);
-      if (selectedBroadcastId) return allAcks.filter(a => a.broadcastId === selectedBroadcastId);
+      if (globalAnnouncement?.isActive) return (allAcks || []).filter(a => a.broadcastId === globalAnnouncement.id);
+      if (selectedBroadcastId) return (allAcks || []).filter(a => a.broadcastId === selectedBroadcastId);
       return [];
   }, [allAcks, globalAnnouncement?.isActive, globalAnnouncement?.id, selectedBroadcastId]);
 
-  // Bug Fix: Task Logs now use `includes` instead of strict equality
+  // Task Logs using fuzzy `includes` matching
   const taskLogs = useMemo(() => {
-    let logs = filteredAuditLogs.filter(l => l.type?.startsWith('TASK_'));
+    let logs = (filteredAuditLogs || []).filter(l => (l.type || '').startsWith('TASK_'));
     if (adminFilterUser) logs = logs.filter(l => l.user === adminFilterUser);
-    if (adminFilterType) logs = logs.filter(l => l.type?.includes(adminFilterType));
+    if (adminFilterType) logs = logs.filter(l => (l.type || '').includes(adminFilterType));
     if (adminFilterDate) logs = logs.filter(l => l.dateString === adminFilterDate);
     if (adminFilterGroup) logs = logs.filter(l => l.groupId === adminFilterGroup);
     return logs;
   }, [filteredAuditLogs, adminFilterUser, adminFilterType, adminFilterDate, adminFilterGroup]);
 
   const messageLogs = useMemo(() => {
-    let logs = filteredAuditLogs.filter(l => !l.type?.startsWith('TASK_') && l.type !== 'REACTION' && l.type !== 'LOGIN' && l.type !== 'LOGOUT');
+    let logs = (filteredAuditLogs || []).filter(l => !(l.type || '').startsWith('TASK_') && l.type !== 'REACTION' && l.type !== 'LOGIN' && l.type !== 'LOGOUT');
     if (adminFilterUser) logs = logs.filter(l => l.user === adminFilterUser);
-    if (adminFilterType) logs = logs.filter(l => l.type?.includes(adminFilterType));
+    if (adminFilterType) logs = logs.filter(l => (l.type || '').includes(adminFilterType));
     if (adminFilterDate) logs = logs.filter(l => l.dateString === adminFilterDate);
     if (adminFilterGroup) logs = logs.filter(l => l.groupId === adminFilterGroup);
     return logs;
@@ -187,17 +187,17 @@ export default function AdminPanel({
   const currentLogs = logSubTab === 'tasks' ? taskLogs : messageLogs;
 
   const userHistoryLogs = useMemo(() => {
-    let logs = filteredAuditLogs; 
+    let logs = [...(filteredAuditLogs || [])]; 
     if (historyUserEmail) logs = logs.filter(l => l.user === historyUserEmail);
     if (historyStartDate) logs = logs.filter(l => new Date(l.dateString) >= new Date(historyStartDate));
     if (historyEndDate) logs = logs.filter(l => new Date(l.dateString) <= new Date(historyEndDate));
     return logs.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
   }, [filteredAuditLogs, historyUserEmail, historyStartDate, historyEndDate]);
 
-  const filteredUsers = useMemo(() => dbUsers, [dbUsers]);
+  const filteredUsers = useMemo(() => (dbUsers || []), [dbUsers]);
 
   const filteredTaskMessages = useMemo(() => {
-    let filtered = messages.filter(m => m.isTask);
+    let filtered = (messages || []).filter(m => m.isTask);
     if (taskFilterStatus !== 'All') filtered = filtered.filter(m => m.taskData?.status === taskFilterStatus);
     if (taskFilterStart) filtered = filtered.filter(m => new Date(m.taskData?.deadline) >= new Date(taskFilterStart));
     if (taskFilterEnd) filtered = filtered.filter(m => new Date(m.taskData?.deadline) <= new Date(taskFilterEnd));
@@ -207,15 +207,15 @@ export default function AdminPanel({
   const treeData = useMemo(() => {
     const root = { id: 'org', name: 'Talk & Task Corp', type: 'org', children: [] };
     const groupMap = {};
-    filteredTaskMessages.forEach(task => { const gid = task.groupId || 'direct'; if (!groupMap[gid]) groupMap[gid] = []; groupMap[gid].push(task); });
+    (filteredTaskMessages || []).forEach(task => { const gid = task.groupId || 'direct'; if (!groupMap[gid]) groupMap[gid] = []; groupMap[gid].push(task); });
     Object.entries(groupMap).forEach(([gid, tasks]) => {
-      const group = groups.find(g => g.id === gid);
+      const group = (groups || []).find(g => g.id === gid);
       let groupName = gid;
       if (group) groupName = group.name;
       else if (gid === 'direct') groupName = 'Direct Tasks';
       else if (gid.includes('_')) {
-        const uids = gid.split('_'); const u1 = dbUsers.find(u => u.uid === uids[0]); const u2 = dbUsers.find(u => u.uid === uids[1]);
-        groupName = `DM: ${u1 ? u1.name.split(' ')[0] : 'User'} & ${u2 ? u2.name.split(' ')[0] : 'User'}`;
+        const uids = gid.split('_'); const u1 = (dbUsers || []).find(u => u.uid === uids[0]); const u2 = (dbUsers || []).find(u => u.uid === uids[1]);
+        groupName = `DM: ${u1 ? (u1.name || '').split(' ')[0] : 'User'} & ${u2 ? (u2.name || '').split(' ')[0] : 'User'}`;
       }
       const teamNode = { id: gid, name: groupName, type: 'team', children: [] };
       tasks.forEach(task => { teamNode.children.push({ id: task.id, name: task.text || 'Untitled Task', type: 'task', task, children: [] }); });
@@ -230,8 +230,8 @@ export default function AdminPanel({
     e.stopPropagation();
     if(!window.confirm(`Issue an urgent Poke to assignees for "${task.text}"?`)) return;
     try {
-        const involved = [...new Set(task.taskData.assignees || [])];
-        const uidsToNotify = dbUsers.filter(u => involved.includes(u.email)).map(u => u.uid);
+        const involved = [...new Set(task.taskData?.assignees || [])];
+        const uidsToNotify = (dbUsers || []).filter(u => involved.includes(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
             await addDoc(collection(db, "notifications"), {
                 userId: uid, type: "task", text: `👉 ADMIN POKE: Regarding task "${task.text}". Please complete as early as possible.`,
@@ -276,7 +276,7 @@ export default function AdminPanel({
       if (!window.confirm("Are you sure you want to pull down the active global broadcast?")) return;
       try {
           await updateDoc(doc(db, "workspace", "announcement"), { isActive: false });
-          setSelectedBroadcastId(globalAnnouncement.id); // Switch viewer to history mode
+          if(globalAnnouncement?.id) setSelectedBroadcastId(globalAnnouncement.id);
       } catch (error) {}
   };
 
@@ -290,8 +290,8 @@ export default function AdminPanel({
 
   const graphData = useMemo(() => {
     return last7Days.map(dateStr => {
-        const dayMsgs = messages.filter(m => m.dateString === dateStr && !m.isTask).length;
-        const dayTasks = messages.filter(m => m.dateString === dateStr && m.isTask).length;
+        const dayMsgs = (messages || []).filter(m => m.dateString === dateStr && !m.isTask).length;
+        const dayTasks = (messages || []).filter(m => m.dateString === dateStr && m.isTask).length;
         return { dateStr, dayMsgs, dayTasks };
     });
   }, [messages, last7Days]);
@@ -306,7 +306,7 @@ export default function AdminPanel({
     const cutoff = dashboardTimeRange === 'today' ? todayStart :
                     dashboardTimeRange === 'week' ? weekAgo : monthAgo;
 
-    const recentMessages = messages.filter(m => {
+    const recentMessages = (messages || []).filter(m => {
       const t = m.timestamp?.toMillis?.() || 0;
       return t >= cutoff.getTime();
     });
@@ -315,7 +315,7 @@ export default function AdminPanel({
     const completedTasks = tasks.filter(t => t.taskData?.status === 'Completed');
     const activeTasks = tasks.filter(t => t.taskData?.status !== 'Completed');
 
-    const usersActiveRecently = dbUsers.filter(u => {
+    const usersActiveRecently = (dbUsers || []).filter(u => {
       if (!u.lastActive?.toMillis) return false;
       return u.lastActive.toMillis() >= cutoff.getTime();
     });
@@ -326,31 +326,31 @@ export default function AdminPanel({
       completedTasks: completedTasks.length,
       activeTasks: activeTasks.length,
       activeUsersCount: usersActiveRecently.length,
-      pendingApprovals: dbUsers.filter(u => !u.isApproved).length,
-      newestUser: dbUsers.sort((a, b) => (b.lastActive?.toMillis?.() || 0) - (a.lastActive?.toMillis?.() || 0))[0],
+      pendingApprovals: (dbUsers || []).filter(u => !u.isApproved).length,
+      newestUser: [...(dbUsers || [])].sort((a, b) => (b.lastActive?.toMillis?.() || 0) - (a.lastActive?.toMillis?.() || 0))[0],
     };
   }, [messages, dbUsers, dashboardTimeRange]);
 
   const recentAuditFeed = useMemo(() => {
-    return filteredAuditLogs.slice(0, 10).map(log => ({
+    return (filteredAuditLogs || []).slice(0, 10).map(log => ({
       ...log,
-      userName: dbUsers.find(u => u.email === log.user)?.name || 'System',
+      userName: (dbUsers || []).find(u => u.email === log.user)?.name || 'System',
     }));
   }, [filteredAuditLogs, dbUsers]);
 
   // Reactions Universal Search logic
   const reactionLogs = useMemo(() => {
-      let logs = filteredAuditLogs.filter(l => l.type === 'REACTION');
+      let logs = (filteredAuditLogs || []).filter(l => l.type === 'REACTION');
       let mappedLogs = logs.map(l => {
-          const msg = messages.find(m => m.id === l.messageId) || messages.find(m => m.text && m.text.includes(l.target)) || null;
+          const msg = (messages || []).find(m => m.id === l.messageId) || (messages || []).find(m => m.text && m.text.includes(l.target)) || null;
           return { ...l, msgObj: msg };
       }).filter(l => l.msgObj);
 
       if (reactionSearchQuery.trim()) {
           const q = reactionSearchQuery.toLowerCase();
           mappedLogs = mappedLogs.filter(l => {
-              const reactorName = (dbUsers.find(u => u.email === l.user)?.name || 'System').toLowerCase();
-              const tag = l.content.toLowerCase();
+              const reactorName = ((dbUsers || []).find(u => u.email === l.user)?.name || 'System').toLowerCase();
+              const tag = (l.content || '').toLowerCase();
               const msgText = (stripHtml(l.msgObj?.text) || l.msgObj?.fileName || l.target || '').toLowerCase();
               return reactorName.includes(q) || tag.includes(q) || msgText.includes(q);
           });
@@ -359,30 +359,30 @@ export default function AdminPanel({
       return mappedLogs.sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
   }, [filteredAuditLogs, messages, dbUsers, reactionSearchQuery]);
 
-  const toggleSelectAllUsers = () => { if (selectedUsers.size === filteredUsers.length) setSelectedUsers(new Set()); else setSelectedUsers(new Set(filteredUsers.map(u => u.uid))); };
+  const toggleSelectAllUsers = () => { if (selectedUsers.size === (filteredUsers || []).length) setSelectedUsers(new Set()); else setSelectedUsers(new Set((filteredUsers || []).map(u => u.uid))); };
   const toggleSelectUser = (uid) => { const s = new Set(selectedUsers); s.has(uid) ? s.delete(uid) : s.add(uid); setSelectedUsers(s); };
-  const toggleSelectAllLogs = () => { if (selectedLogs.size === currentLogs.length) setSelectedLogs(new Set()); else setSelectedLogs(new Set(currentLogs.map(l => l.id))); };
+  const toggleSelectAllLogs = () => { if (selectedLogs.size === (currentLogs || []).length) setSelectedLogs(new Set()); else setSelectedLogs(new Set((currentLogs || []).map(l => l.id))); };
   const toggleSelectLog = (id) => { const s = new Set(selectedLogs); s.has(id) ? s.delete(id) : s.add(id); setSelectedLogs(s); };
-  const toggleSelectAllHistory = () => { if (selectedHistory.size === userHistoryLogs.length) setSelectedHistory(new Set()); else setSelectedHistory(new Set(userHistoryLogs.map(l => l.id))); };
+  const toggleSelectAllHistory = () => { if (selectedHistory.size === (userHistoryLogs || []).length) setSelectedHistory(new Set()); else setSelectedHistory(new Set((userHistoryLogs || []).map(l => l.id))); };
   const toggleSelectHistory = (id) => { const s = new Set(selectedHistory); s.has(id) ? s.delete(id) : s.add(id); setSelectedHistory(s); };
-  const toggleSelectAllReactions = () => { if (selectedReactions.size === reactionLogs.length) setSelectedReactions(new Set()); else setSelectedReactions(new Set(reactionLogs.map(l => l.id))); };
+  const toggleSelectAllReactions = () => { if (selectedReactions.size === (reactionLogs || []).length) setSelectedReactions(new Set()); else setSelectedReactions(new Set((reactionLogs || []).map(l => l.id))); };
   const toggleSelectReaction = (id) => { const s = new Set(selectedReactions); s.has(id) ? s.delete(id) : s.add(id); setSelectedReactions(s); };
 
   const printSelectedPDF = () => {
     const doc = new jsPDF('p', 'mm', 'a4'); doc.setFont('Inter'); doc.setFontSize(16); doc.text('Talk & Task – Admin Report', 14, 20); doc.setFontSize(10); doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
     let y = 40;
     if (activeTab === 'users') {
-      const data = filteredUsers.filter(u => selectedUsers.has(u.uid)); doc.text('Selected Users', 14, y); y += 6;
+      const data = (filteredUsers || []).filter(u => selectedUsers.has(u.uid)); doc.text('Selected Users', 14, y); y += 6;
       doc.autoTable({ startY: y, head: [['#', 'Name', 'Status']], body: data.map((u, i) => [i + 1, u.name, u.isApproved ? 'APPROVED' : 'PENDING']), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
     } else if (activeTab === 'logs') {
-      const data = currentLogs.filter(l => selectedLogs.has(l.id)); doc.text(`Logs – ${logSubTab === 'tasks' ? 'Task' : 'Message'}`, 14, y); y += 6;
-      doc.autoTable({ startY: y, head: [['#', 'Time', 'Action', 'User', 'Details']], body: data.map((l, i) => { const uname = dbUsers.find(u=>u.email===l.user)?.name || 'System'; return [i + 1, l.dateString + ' ' + l.time, l.type, uname, stripHtml(l.content)]}), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
+      const data = (currentLogs || []).filter(l => selectedLogs.has(l.id)); doc.text(`Logs – ${logSubTab === 'tasks' ? 'Task' : 'Message'}`, 14, y); y += 6;
+      doc.autoTable({ startY: y, head: [['#', 'Time', 'Action', 'User', 'Details']], body: data.map((l, i) => { const uname = (dbUsers || []).find(u=>u.email===l.user)?.name || 'System'; return [i + 1, l.dateString + ' ' + l.time, l.type, uname, stripHtml(l.content)]}), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
     } else if (activeTab === 'history') {
-      const data = userHistoryLogs.filter(l => selectedHistory.has(l.id)); doc.text(`User Activity History`, 14, y); y += 6;
-      doc.autoTable({ startY: y, head: [['#', 'Time', 'User', 'Action', 'Details']], body: data.map((l, i) => { const uname = dbUsers.find(u=>u.email===l.user)?.name || 'System'; return [i + 1, l.dateString + ' ' + l.time, uname, l.type, stripHtml(l.content)]}), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
+      const data = (userHistoryLogs || []).filter(l => selectedHistory.has(l.id)); doc.text(`User Activity History`, 14, y); y += 6;
+      doc.autoTable({ startY: y, head: [['#', 'Time', 'User', 'Action', 'Details']], body: data.map((l, i) => { const uname = (dbUsers || []).find(u=>u.email===l.user)?.name || 'System'; return [i + 1, l.dateString + ' ' + l.time, uname, l.type, stripHtml(l.content)]}), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
     } else if (activeTab === 'reactions') {
-      const data = reactionLogs.filter(l => selectedReactions.has(l.id)); doc.text(`Reactions & Tags Log`, 14, y); y += 6;
-      doc.autoTable({ startY: y, head: [['#', 'Time', 'User', 'Tag/Emoji', 'Message Details']], body: data.map((l, i) => { const uname = dbUsers.find(u=>u.email===l.user)?.name || 'System'; return [i + 1, l.dateString + ' ' + l.time, uname, l.content.replace('Reacted with ', ''), stripHtml(l.target) || '']}), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
+      const data = (reactionLogs || []).filter(l => selectedReactions.has(l.id)); doc.text(`Reactions & Tags Log`, 14, y); y += 6;
+      doc.autoTable({ startY: y, head: [['#', 'Time', 'User', 'Tag/Emoji', 'Message Details']], body: data.map((l, i) => { const uname = (dbUsers || []).find(u=>u.email===l.user)?.name || 'System'; return [i + 1, l.dateString + ' ' + l.time, uname, (l.content || '').replace('Reacted with ', ''), stripHtml(l.target) || '']}), styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } });
     }
     doc.save(`admin_report_${activeTab}_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
@@ -397,12 +397,12 @@ export default function AdminPanel({
 
   const download30DayLogins = () => {
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-      const logins = filteredAuditLogs.filter(l => (l.type === 'LOGIN' || l.type === 'LOGOUT') && (l.timestamp?.toMillis?.() || 0) >= thirtyDaysAgo);
+      const logins = (filteredAuditLogs || []).filter(l => (l.type === 'LOGIN' || l.type === 'LOGOUT') && (l.timestamp?.toMillis?.() || 0) >= thirtyDaysAgo);
       if (logins.length === 0) return alert("No login activity found in the last 30 days.");
       
       const csvContent = "data:text/csv;charset=utf-8,User,Time,Action,Details\n" +
           logins.map(l => {
-             const uname = dbUsers.find(u=>u.email===l.user)?.name || l.user;
+             const uname = (dbUsers || []).find(u=>u.email===l.user)?.name || l.user;
              return `"${uname}","${l.dateString} ${l.time}","${l.type}","${stripHtml(l.content)}"`
           }).join("\n");
           
@@ -443,7 +443,7 @@ export default function AdminPanel({
 
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
         
-        {/* DASHBOARD TAB (WITH BAR GRAPH) */}
+        {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
           <div className="flex flex-col gap-6 h-full p-4 md:p-6 overflow-y-auto custom-sidebar-scroll">
             <div className="flex items-center gap-2 justify-end">
@@ -502,26 +502,20 @@ export default function AdminPanel({
               </div>
             </div>
 
-            {/* 👇 DASHBOARD BAR GRAPH (NATIVE TAILWIND) 👇 */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col mt-2">
                 <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2 text-lg">
                     <i className="fa-solid fa-chart-column text-indigo-500"></i> 7-Day Activity Trends
                 </h3>
                 <div className="h-64 flex items-end gap-2 sm:gap-4 md:gap-8 border-b border-slate-100 pb-2 relative w-full overflow-hidden">
-                    {/* Y-Axis Line */}
                     <div className="absolute left-0 top-0 h-full w-px bg-slate-100"></div>
-                    
                     {graphData.map((data, i) => (
                         <div key={i} className="flex-1 flex justify-center gap-1 sm:gap-2 h-full items-end group relative z-10">
-                            {/* Messages Bar */}
                             <div className="w-full max-w-[30px] bg-indigo-500 rounded-t-md transition-all hover:bg-indigo-400 relative" style={{ height: `${(data.dayMsgs / maxGraphVal) * 100}%`, minHeight: data.dayMsgs > 0 ? '4px' : '0' }}>
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-20 shadow-lg">{data.dayMsgs} Msgs</div>
                             </div>
-                            {/* Tasks Bar */}
                             <div className="w-full max-w-[30px] bg-amber-400 rounded-t-md transition-all hover:bg-amber-300 relative" style={{ height: `${(data.dayTasks / maxGraphVal) * 100}%`, minHeight: data.dayTasks > 0 ? '4px' : '0' }}>
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-20 shadow-lg">{data.dayTasks} Tasks</div>
                             </div>
-                            {/* Date Label */}
                             <div className="absolute top-full mt-3 text-[10px] font-bold text-slate-400 truncate w-full text-center tracking-widest uppercase">{new Date(data.dateStr).toLocaleDateString('en-US', {weekday:'short'})}</div>
                         </div>
                     ))}
@@ -565,15 +559,15 @@ export default function AdminPanel({
                      <p className="text-sm font-bold text-slate-500">No recent activity found.</p>
                   </div>
                 ) : (
-                  recentAuditFeed.map((log, idx) => (
+                  recentAuditFeed.map((log) => (
                     <div key={log.id} className="px-5 py-3 flex items-center gap-4 hover:bg-slate-50 transition-colors">
                       <span className={`w-9 h-9 rounded-full flex items-center justify-center text-xs shadow-sm ${
-                        log.type?.startsWith('TASK_') ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                        (log.type || '').startsWith('TASK_') ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                         log.type === 'LOGIN' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
                         'bg-indigo-50 text-indigo-600 border border-indigo-100'
                       }`}>
                         <i className={`fa-solid ${
-                          log.type?.startsWith('TASK_') ? 'fa-check-square' :
+                          (log.type || '').startsWith('TASK_') ? 'fa-check-square' :
                           log.type === 'LOGIN' ? 'fa-right-to-bracket' : 'fa-circle'
                         }`}></i>
                       </span>
@@ -591,7 +585,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* BROADCAST TAB WITH HISTORICAL VAULT (Fix 2) */}
+        {/* BROADCAST TAB */}
         {activeTab === 'broadcast' && (
            <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full max-w-4xl mx-auto">
@@ -613,13 +607,13 @@ export default function AdminPanel({
                             <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col mb-4">
                                 <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 font-bold text-slate-700 text-[11px] uppercase tracking-widest flex justify-between shrink-0">
                                     <span><i className="fa-solid fa-eye text-indigo-500 mr-1.5"></i> Read Receipts</span>
-                                    <span className="text-indigo-700 font-black">{displayedAcks.length} Acknowledged</span>
+                                    <span className="text-indigo-700 font-black">{(displayedAcks || []).length} Acknowledged</span>
                                 </div>
                                 <div className="overflow-y-auto custom-sidebar-scroll flex-1 p-2">
-                                    {displayedAcks.length === 0 ? (
+                                    {(displayedAcks || []).length === 0 ? (
                                         <div className="text-center text-slate-400 text-xs py-6 font-medium italic">No users have dismissed this broadcast yet.</div>
                                     ) : (
-                                        displayedAcks.map((ack, i) => (
+                                        (displayedAcks || []).map((ack, i) => (
                                             <div key={i} className="flex justify-between items-center px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 rounded">
                                                 <span className="text-sm font-bold text-slate-800"><i className="fa-solid fa-check-double text-emerald-500 mr-2 text-[10px]"></i>{ack.userName}</span>
                                                 <span className="text-[11px] text-slate-400 font-bold">{ack.timestamp?.toDate ? new Date(ack.timestamp.toDate()).toLocaleString() : ''}</span>
@@ -664,8 +658,7 @@ export default function AdminPanel({
                         </div>
                     )}
                     
-                    {/* 👇 NEW: Historical Broadcast Vault (Fix 2) 👇 */}
-                    {!globalAnnouncement?.isActive && uniqueBroadcastIds.length > 0 && (
+                    {!globalAnnouncement?.isActive && (uniqueBroadcastIds || []).length > 0 && (
                         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-0 flex-1">
                              <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between shrink-0">
                                  <div>
@@ -674,7 +667,7 @@ export default function AdminPanel({
                                  </div>
                                  <select value={selectedBroadcastId || ''} onChange={(e) => setSelectedBroadcastId(e.target.value)} className="w-full sm:w-64 p-2.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20">
                                      <option value="">Select a past broadcast...</option>
-                                     {uniqueBroadcastIds.map(id => <option key={id} value={id}>Broadcast ID: {id.substring(0,6).toUpperCase()}</option>)}
+                                     {(uniqueBroadcastIds || []).map(id => <option key={id} value={id}>Broadcast ID: {(id || '').substring(0,6).toUpperCase()}</option>)}
                                  </select>
                              </div>
                              
@@ -684,10 +677,10 @@ export default function AdminPanel({
                                           <i className="fa-solid fa-folder-open text-4xl text-slate-300 mb-3"></i>
                                           <p className="text-xs font-bold text-slate-500">Select a broadcast to view its logs.</p>
                                       </div>
-                                  ) : displayedAcks.length === 0 ? (
+                                  ) : (displayedAcks || []).length === 0 ? (
                                       <div className="text-center text-slate-400 text-xs py-10 font-medium italic">No acknowledgements found for this broadcast.</div>
                                   ) : (
-                                      displayedAcks.map((ack, i) => (
+                                      (displayedAcks || []).map((ack, i) => (
                                           <div key={i} className="flex justify-between items-center px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 rounded-lg transition-colors">
                                               <span className="text-sm font-bold text-slate-800"><i className="fa-solid fa-check-double text-emerald-500 mr-2 text-[10px]"></i>{ack.userName}</span>
                                               <span className="text-[11px] text-slate-400 font-bold bg-white px-2 py-1 border border-slate-100 rounded-md shadow-sm">{ack.timestamp?.toDate ? new Date(ack.timestamp.toDate()).toLocaleString() : ''}</span>
@@ -702,7 +695,7 @@ export default function AdminPanel({
            </div>
         )}
 
-        {/* TAGS STUDIO (unchanged) */}
+        {/* TAGS STUDIO */}
         {activeTab === 'tags' && (
            <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full min-h-[600px] overflow-hidden">
@@ -737,7 +730,7 @@ export default function AdminPanel({
                     <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-5 overflow-y-auto custom-sidebar-scroll shadow-sm">
                        <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Active Global Tags</h3>
                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                          {customTags.length === 0 && <div className="col-span-full text-center py-10 text-slate-400 font-medium italic">No tags created yet.</div>}
+                          {(!customTags || (customTags || []).length === 0) && <div className="col-span-full text-center py-10 text-slate-400 font-medium italic">No tags created yet.</div>}
                           {(customTags || []).map(tag => (
                              <div key={tag.id} className="flex justify-between items-center p-3.5 border border-slate-100 rounded-xl bg-white shadow-sm hover:border-indigo-200 hover:shadow transition-all group">
                                 <span className={`px-2.5 py-1 rounded-md font-extrabold text-[11px] shadow-sm tracking-wide ${tag.bgClass} ${tag.textClass}`}>{tag.label}</span>
@@ -751,7 +744,7 @@ export default function AdminPanel({
            </div>
         )}
 
-        {/* REACTIONS TAB (Fix 4: Universal Search Bar & Smooth Table) */}
+        {/* REACTIONS TAB (Universal Search) */}
         {activeTab === 'reactions' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
               <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[600px]">
@@ -760,7 +753,6 @@ export default function AdminPanel({
                     <h2 className="font-extrabold text-slate-800 text-xl tracking-tight">Tags & Emojis Log</h2>
                 </div>
                 
-                {/* Unified Glassmorphism Universal Search Bar */}
                 <div className="p-5 bg-white border-b border-slate-100 shrink-0 relative overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-r from-indigo-50/30 to-purple-50/30 pointer-events-none"></div>
                   <div className="flex flex-wrap gap-4 items-end relative z-10 w-full max-w-2xl mx-auto">
@@ -784,7 +776,7 @@ export default function AdminPanel({
                   <table className="w-full text-left text-sm border-collapse">
                     <thead className="bg-slate-100/80 backdrop-blur text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm border-b border-slate-200">
                       <tr>
-                         <th className="px-5 py-4 w-12"><input type="checkbox" onChange={toggleSelectAllReactions} checked={selectedReactions.size === reactionLogs.length && reactionLogs.length > 0} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></th>
+                         <th className="px-5 py-4 w-12"><input type="checkbox" onChange={toggleSelectAllReactions} checked={selectedReactions.size === (reactionLogs || []).length && (reactionLogs || []).length > 0} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></th>
                          <th className="px-5 py-4 font-extrabold tracking-wider">#</th>
                          <th className="px-5 py-4 font-extrabold tracking-wider">Time</th>
                          <th className="px-5 py-4 font-extrabold tracking-wider">Reacted By</th>
@@ -793,19 +785,19 @@ export default function AdminPanel({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {reactionLogs.length === 0 ? (
+                      {(reactionLogs || []).length === 0 ? (
                           <tr><td colSpan={6} className="px-5 py-20 text-center"><div className="flex flex-col items-center justify-center opacity-50"><i className="fa-solid fa-face-meh text-5xl text-slate-300 mb-4"></i><span className="text-slate-500 font-bold">No reactions match your universal search.</span></div></td></tr>
                       ) : (
-                          reactionLogs.map((log, idx) => {
+                          (reactionLogs || []).map((log, idx) => {
                              const msgText = log.msgObj?.text || log.msgObj?.fileName || log.target || 'Unknown Message';
-                             const reactorName = dbUsers.find(u => u.email === log.user)?.name || 'System';
+                             const reactorName = (dbUsers || []).find(u => u.email === log.user)?.name || 'System';
                              return (
                             <tr key={log.id} className="hover:bg-indigo-50/30 transition-colors even:bg-slate-50/50">
                               <td className="px-5 py-4"><input type="checkbox" checked={selectedReactions.has(log.id)} onChange={() => toggleSelectReaction(log.id)} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></td>
                               <td className="px-5 py-4 text-slate-400 font-bold">{idx + 1}</td>
                               <td className="px-5 py-4"><div className="text-xs font-bold text-slate-700">{log.dateString}</div><div className="text-[11px] text-slate-500 font-medium">{log.time}</div></td>
                               <td className="px-5 py-4 font-bold text-indigo-600">{reactorName}</td>
-                              <td className="px-5 py-4"><span className="text-[11px] font-extrabold tracking-wide bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">{log.content.replace('Reacted with ', '')}</span></td>
+                              <td className="px-5 py-4"><span className="text-[11px] font-extrabold tracking-wide bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">{(log.content || '').replace('Reacted with ', '')}</span></td>
                               <td className="px-5 py-4 text-[12px] font-medium text-slate-600 truncate max-w-xs">{stripHtml(msgText).substring(0, 50)}...</td>
                             </tr>
                           )})
@@ -817,7 +809,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* TEAM MANAGEMENT (Fix 1 applied: form onSubmit handled safely) */}
+        {/* TEAM MANAGEMENT */}
         {activeTab === 'groups' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
               <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[600px]">
@@ -836,10 +828,10 @@ export default function AdminPanel({
                   </button>
                 </div>
 
-                {(editingGroup || groupForm.name !== '' || (groupForm?.members || []).length > 0) && (
+                {(editingGroup || (groupForm?.name || '') !== '' || (groupForm?.members || []).length > 0) && (
                   <div className="p-6 border-b border-slate-200 bg-white animate-in fade-in slide-in-from-top-2 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500"></div>
-                    <form onSubmit={handleGroupSubmit} className="space-y-6 max-w-4xl mx-auto">
+                    <form onSubmit={(e) => { e.preventDefault(); handleGroupSubmit(e); }} className="space-y-6 max-w-4xl mx-auto">
                       <div>
                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Name</label>
                         <input 
@@ -862,17 +854,17 @@ export default function AdminPanel({
                         <div className="flex justify-between items-center mb-3">
                           <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Select Members</label>
                           <div className="flex gap-3">
-                            <button type="button" onClick={() => setGroupForm({...groupForm, members: dbUsers.map(u => u.email)})} className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full hover:bg-indigo-100 transition-colors shadow-sm">Select All</button>
+                            <button type="button" onClick={() => setGroupForm({...groupForm, members: (dbUsers || []).map(u => u.email)})} className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full hover:bg-indigo-100 transition-colors shadow-sm">Select All</button>
                             <button type="button" onClick={() => setGroupForm({...groupForm, members: []})} className="text-[10px] font-extrabold text-rose-500 bg-rose-50 px-3 py-1 rounded-full hover:bg-rose-100 transition-colors shadow-sm">Clear All</button>
                           </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 border border-slate-200 p-4 rounded-xl max-h-64 overflow-y-auto bg-slate-50 shadow-inner custom-sidebar-scroll">
-                          {dbUsers.map(u => (
+                          {(dbUsers || []).map(u => (
                             <label key={u.uid} className="flex items-center gap-3 text-sm bg-white p-3 border border-slate-100 rounded-xl shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow transition-all group">
                               <div className="relative flex items-center justify-center">
                                 <input 
                                   type="checkbox" 
-                                  checked={(groupForm?.members || []).includes(u.email)} 
+                                  checked={(groupForm.members || []).includes(u.email)} 
                                   onChange={(e) => {
                                     const m = new Set(groupForm.members || []); 
                                     e.target.checked ? m.add(u.email) : m.delete(u.email); 
@@ -899,19 +891,19 @@ export default function AdminPanel({
 
                 <div className="flex-1 overflow-auto bg-slate-50/30 custom-sidebar-scroll p-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 max-w-7xl mx-auto">
-                         {groups.map((g, idx) => (
+                         {(groups || []).map((g, idx) => (
                              <div key={g.id} className="w-full bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:border-indigo-300 hover:shadow-lg transition-all group flex flex-col min-h-0 relative overflow-hidden">
                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                <div className="flex items-center gap-4 mb-5">
                                  <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-12 h-12 shadow-sm border border-slate-100" isGroup={true} />
                                  <div className="flex-1 min-w-0">
                                     <h3 className="font-extrabold text-slate-800 text-[16px] truncate group-hover:text-indigo-600 transition-colors">{g.name}</h3>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 bg-slate-100 w-fit px-2 py-0.5 rounded-full">{g.members?.length || 0} Members</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 bg-slate-100 w-fit px-2 py-0.5 rounded-full">{(g.members || []).length} Members</p>
                                  </div>
                                </div>
                                <div className="flex -space-x-1.5 mb-5 px-1 flex-wrap">
                                   {(g.members || []).slice(0, 10).map(email => {
-                                     const u = dbUsers.find(u => u.email === email);
+                                     const u = (dbUsers || []).find(u => u.email === email);
                                      return <MemoizedAvatar key={email} uid={u?.uid||email} url={u?.profilePicUrl} name={u?.name||'User'} sizeClass="w-7 h-7 border-2 border-white shadow-sm" />
                                   })}
                                   {(g.members || []).length > 10 && (
@@ -931,7 +923,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* LOGS TAB (Fix 3: Fuzzy `includes` matching for tasks) */}
+        {/* LOGS TAB */}
         {activeTab === 'logs' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             <div className="flex flex-col gap-4 h-full min-h-[600px]">
@@ -950,7 +942,7 @@ export default function AdminPanel({
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">By User</label>
                           <select value={adminFilterUser} onChange={e => setAdminFilterUser(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-slate-700 font-bold shadow-sm transition-all">
                               <option value="">All Users...</option>
-                              {dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
+                              {(dbUsers || []).map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
                           </select>
                       </div>
                       <div className="flex-1 min-w-[150px]">
@@ -968,7 +960,7 @@ export default function AdminPanel({
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">By Team/Group</label>
                           <select value={adminFilterGroup} onChange={e => setAdminFilterGroup(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-slate-700 font-bold shadow-sm transition-all">
                               <option value="">All Groups...</option>
-                              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                              {(groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                           </select>
                       </div>
                       <div className="flex-1 min-w-[150px]">
@@ -983,7 +975,7 @@ export default function AdminPanel({
                     <table className="w-full text-left text-sm border-collapse">
                       <thead className="bg-slate-100/80 backdrop-blur text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm border-b border-slate-200">
                           <tr>
-                              <th className="px-5 py-4 w-12"><input type="checkbox" onChange={toggleSelectAllLogs} checked={selectedLogs.size === currentLogs.length && currentLogs.length > 0} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></th>
+                              <th className="px-5 py-4 w-12"><input type="checkbox" onChange={toggleSelectAllLogs} checked={selectedLogs.size === (currentLogs || []).length && (currentLogs || []).length > 0} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></th>
                               <th className="px-5 py-4 font-extrabold tracking-wider">#</th>
                               <th className="px-5 py-4 font-extrabold tracking-wider">Time</th>
                               <th className="px-5 py-4 font-extrabold tracking-wider">Action</th>
@@ -992,16 +984,16 @@ export default function AdminPanel({
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {currentLogs.length === 0 ? (
+                        {(currentLogs || []).length === 0 ? (
                             <tr><td colSpan={6} className="px-5 py-20 text-center"><div className="flex flex-col items-center justify-center opacity-50"><i className="fa-solid fa-folder-open text-5xl text-slate-300 mb-4"></i><span className="text-slate-500 font-bold">No records found matching filters.</span></div></td></tr>
                         ) : (
-                            currentLogs.map((log, idx) => (
+                            (currentLogs || []).map((log, idx) => (
                               <tr key={log.id} className="hover:bg-indigo-50/30 transition-colors even:bg-slate-50/50">
                                 <td className="px-5 py-4"><input type="checkbox" checked={selectedLogs.has(log.id)} onChange={() => toggleSelectLog(log.id)} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></td>
                                 <td className="px-5 py-4 text-slate-400 font-bold">{idx + 1}</td>
                                 <td className="px-5 py-4"><div className="text-xs font-bold text-slate-700">{log.dateString}</div><div className="text-[11px] text-slate-500 font-medium">{log.time}</div></td>
                                 <td className="px-5 py-4"><span className="text-[10px] font-extrabold tracking-wider bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm uppercase">{log.type}</span></td>
-                                <td className="px-5 py-4 font-bold text-indigo-600">{dbUsers.find(u => u.email === log.user)?.name || 'Unknown'}</td>
+                                <td className="px-5 py-4 font-bold text-indigo-600">{(dbUsers || []).find(u => u.email === log.user)?.name || 'Unknown'}</td>
                                 <td className="px-5 py-4 max-w-sm"><div className="text-slate-600 whitespace-pre-wrap leading-relaxed font-medium text-[13px]">{stripHtml(log.content)}</div>{log.target && <div className="text-[10px] font-bold text-indigo-500 mt-1 uppercase tracking-wider">{stripHtml(log.target)}</div>}</td>
                               </tr>
                             ))
