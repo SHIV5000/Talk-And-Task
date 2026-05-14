@@ -21,7 +21,6 @@ export default function ProfileSettingsModal({
         </div>
         
         <div className="p-6 space-y-8">
-          {/* Avatar Section */}
           <div className="flex flex-col items-center gap-4">
             <div className="w-32 h-32 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden relative cursor-pointer group shadow-inner border-4 border-slate-50" onClick={() => profilePicInputRef.current?.click()}>
               {currentUserData?.profilePicUrl ? (
@@ -37,7 +36,6 @@ export default function ProfileSettingsModal({
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">Tap to change avatar</div>
           </div>
 
-          {/* Display Name Section */}
           <div>
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-2 ml-1">Display Name</label>
             <input 
