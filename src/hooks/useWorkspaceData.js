@@ -12,7 +12,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
     const [allAdminReminders, setAllAdminReminders] = useState([]);
     const [immutableAuditLogs, setImmutableAuditLogs] = useState([]);
     const [customTags, setCustomTags] = useState([]); 
-    const [globalAnnouncement, setGlobalAnnouncement] = useState(null); // 👈 NEW STATE
+    const [globalAnnouncement, setGlobalAnnouncement] = useState(null); 
     const [toolPreferences, setToolPreferences] = useState({
         reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
     });
@@ -54,10 +54,10 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
             }
         });
 
-        // 👇 NEW: Listen for Global Admin Announcements 👇
+        // 👇 UPDATED: Now fetches the ID for Broadcast Acknowledgements 👇
         const unsubAnnouncement = onSnapshot(doc(db, "workspace", "announcement"), (docSnap) => {
             if (docSnap.exists()) {
-                setGlobalAnnouncement(docSnap.data());
+                setGlobalAnnouncement({ id: docSnap.id, ...docSnap.data() });
             } else {
                 setGlobalAnnouncement(null);
             }
@@ -114,6 +114,6 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
         isVipAdmin, currentUserData, dbUsers, groups,
         activeReminders, genericNotifications, allAdminReminders,
         immutableAuditLogs, toolPreferences, setToolPreferences, customTags,
-        globalAnnouncement // 👈 EXPORT NEW STATE
+        globalAnnouncement 
     };
 }
