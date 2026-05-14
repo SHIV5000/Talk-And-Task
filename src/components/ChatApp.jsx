@@ -18,7 +18,8 @@ import useChatEngine from '../hooks/useChatEngine.js';
 // Utils & Firebase Core
 import { lockExtension } from '../utils/helpers.js';
 import { auth, db, storage, signOut } from '../firebase.js';
-import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, ref, uploadBytesResumable, getDownloadURL, deleteDoc } from '../firebase.js';
+import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 export default function ChatApp({ user, onLogout }) {
     // ==================== UI STATE ====================
@@ -32,7 +33,7 @@ export default function ChatApp({ user, onLogout }) {
     const MAX_FILE_SIZE_MB = 10;
     const [inputText, setInputText] = useState("");
     
-    // 👇 TASK 17: Global Search State 👇
+    // Global Search State
     const [searchQuery, setSearchQuery] = useState(""); 
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchWrapperRef = useRef(null);
@@ -126,7 +127,6 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [toolPreferences?.darkMode]);
 
-    // 👇 TASK 17: Close Search Dropdown on Outside Click
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target)) {
@@ -276,18 +276,13 @@ export default function ChatApp({ user, onLogout }) {
 
     const pinnedMessages = useMemo(() => activeGroup ? messages.filter(m => m.groupId === activeGroup.id && m.isPinned) : [], [messages, activeGroup]);
 
-    // 👇 TASK 17: Universal Search Engine Core Logic 👇
     const globalSearchResults = useMemo(() => {
         if (!searchQuery.trim()) return null;
         const q = searchQuery.toLowerCase();
         
-        // 1. Search Users
         const matchedUsers = dbUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q));
-        
-        // 2. Search Workflow Tags
         const matchedTags = (customTags || []).filter(t => (t.label||'').toLowerCase().includes(q) || (t.shortCode||'').toLowerCase().includes(q));
         
-        // 3. Search All Messages & Trail Comments (Where user has access)
         const matchedMessages = messages.filter(m => {
             if (m.isPrivateMention && !m.allowedUsers?.includes(user.email) && m.senderEmail !== user.email) return false;
             
@@ -296,13 +291,11 @@ export default function ChatApp({ user, onLogout }) {
             const trailMatch = m.isTask && (m.taskData?.trail || []).some(t => (t.comment || '').toLowerCase().includes(q));
             
             return textMatch || fileMatch || trailMatch;
-        }).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).slice(0, 50); // Cap at top 50 to prevent UI lag
+        }).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).slice(0, 50);
 
         return { users: matchedUsers, tags: matchedTags, messages: matchedMessages };
     }, [searchQuery, dbUsers, customTags, messages, user.email]);
 
-
-    // Chat View Engine (Stripped of local search dependency)
     const messagesToRender = useMemo(() => {
         if(!activeGroup) return [];
         let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
@@ -313,7 +306,6 @@ export default function ChatApp({ user, onLogout }) {
         else if (chatFilter === 'today') filtered = filtered.filter(m => m.dateString === new Date().toISOString().split('T')[0]);
         else if (chatFilter === 'bookmarked') filtered = filtered.filter(m => m.bookmarkedBy?.includes(user.email));
 
-        // Thread Algorithm
         if (chatFilter === 'all' || chatFilter === 'messages') {
             const threaded = [];
             const topLevel = filtered.filter(m => !m.replyToId).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
@@ -622,6 +614,18 @@ export default function ChatApp({ user, onLogout }) {
         }
     };
 
+    // 👇 FIX: Restored DB Wipe Function 👇
+    const handleWipeAllTasks = async () => {
+        if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
+        try {
+            const q = query(collection(db, "messages"), where("isTask", "==", true));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) return alert("No tasks found! You are already clean.");
+            await Promise.all(snapshot.docs.map(document => deleteDoc(doc(db, "messages", document.id))));
+            alert(`🧹 Successfully wiped ${snapshot.docs.length} tasks! Clean slate ready.`);
+        } catch (error) { alert("Failed to clean database."); }
+    };
+
     const handleGroupPicUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -803,7 +807,7 @@ export default function ChatApp({ user, onLogout }) {
               setActiveModal={setActiveModal}
               dbUsers={dbUsers}
               groups={groups}
-              filteredAuditLogs={filteredAuditLogs}
+              filteredAuditLogs={immutableAuditLogs} 
               adminFilterUser={adminFilterUser}
               setAdminFilterUser={setAdminFilterUser}
               adminFilterDate={adminFilterDate}
@@ -825,6 +829,8 @@ export default function ChatApp({ user, onLogout }) {
               handleGroupSubmit={handleGroupSubmit}
               handleGroupPicUpload={handleGroupPicUpload}
               groupPicUploadProgress={groupPicUploadProgress}
+              playMelody={playMelody}
+              customTags={customTags} 
             />
             ) : (
                 <div className="flex h-full w-full relative">
@@ -867,7 +873,6 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                 </div>
 
-                                {/* 👇 TASK 17: UNIVERSAL GLOBAL SEARCH BAR 👇 */}
                                 <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
                                     <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
                                         <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
@@ -882,7 +887,6 @@ export default function ChatApp({ user, onLogout }) {
                                         {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
                                     </div>
                                     
-                                    {/* Universal Search Dropdown Engine */}
                                     {isSearchFocused && globalSearchResults && (
                                         <div className="absolute top-[110%] left-0 w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
                                             <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
@@ -1003,7 +1007,6 @@ export default function ChatApp({ user, onLogout }) {
                                                   {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
                                                   <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
                                                   <div className="space-y-2">
-                                                    {/* SORTED LATEST AT TOP */}
                                                     {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => {
                                                       const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
                                                       return (
