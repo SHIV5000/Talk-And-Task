@@ -23,6 +23,7 @@ const MessageBubble = React.memo(({
   const [tagPickerOpen, setTagPickerOpen] = useState(false); 
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
   
+  // Task Inline Control States
   const [isAddingUpdate, setIsAddingUpdate] = useState(false);
   const [inlineUpdateText, setInlineUpdateText] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -31,6 +32,7 @@ const MessageBubble = React.memo(({
   const [delegateSelection, setDelegateSelection] = useState([]);
   const [editingTrailIdx, setEditingTrailIdx] = useState(null);
   const [trailEditText, setTrailEditText] = useState("");
+  const [trailFileUploading, setTrailFileUploading] = useState(false);
   
   const menuRef = useRef(null);
   const tagPickerRef = useRef(null);
@@ -90,12 +92,25 @@ const MessageBubble = React.memo(({
     try { await updateDoc(doc(db, "messages", msg.id), { text: tempTitle }); setIsEditingTitle(false); } catch(e) {}
   };
 
+  const submitInlineUpdate = async () => {
+    if (!inlineUpdateText.trim()) return setIsAddingUpdate(false);
+    try {
+        const now = new Date();
+        const updatedTrail = [...(msg.taskData.trail || []), { action: "Update Added", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: inlineUpdateText }];
+        await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": updatedTrail });
+        notifyTaskChange(`${(userEmail||"").split('@')[0]} updated the task.`);
+        setInlineUpdateText(""); setIsAddingUpdate(false);
+    } catch(e) {}
+  };
+
   const handleInlineEditTrail = async (idx) => {
     if (!trailEditText.trim()) return setEditingTrailIdx(null);
     try {
       const newTrail = [...msg.taskData.trail];
-      newTrail[idx].comment = trailEditText; newTrail[idx].isEdited = true;
-      await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": newTrail }); setEditingTrailIdx(null);
+      newTrail[idx].comment = trailEditText; 
+      newTrail[idx].isEdited = true;
+      await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": newTrail }); 
+      setEditingTrailIdx(null);
     } catch(e) {}
   };
 
@@ -132,38 +147,28 @@ const MessageBubble = React.memo(({
   const handleInlineFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setTrailFileUploading(true);
     try {
       const uniqueFileName = `${Date.now()}_${file.name}`;
       const uploadTask = uploadBytesResumable(ref(storage, `task_updates/${uniqueFileName}`), file);
-      uploadTask.on('state_changed', null, null, async () => {
+      uploadTask.on('state_changed', null, () => setTrailFileUploading(false), async () => {
         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
         const now = new Date();
-        const newTrail = [...msg.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file", fileUrl: downloadURL, fileName: file.name }];
+        const newTrail = [...msg.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": newTrail });
         notifyTaskChange(`${(userEmail||"").split('@')[0]} attached a file 📎`);
+        setTrailFileUploading(false);
       });
-    } catch(err) {} finally { if(inlineFileInputRef.current) inlineFileInputRef.current.value = ""; }
-  };
-
-  const handlePrintTrail = (e) => {
-    e.stopPropagation();
-    const doc = new jsPDF();
-    doc.setFontSize(18); doc.setTextColor(0, 128, 105); doc.text("Task Audit Trail", 14, 20);
-    doc.setFontSize(11); doc.setTextColor(50); doc.text(`Task: ${msg.text}`, 14, 30); doc.text(`Status: ${msg.taskData.status} | Priority: ${msg.taskData.priority}`, 14, 36); doc.text(`Due: ${new Date(msg.taskData.deadline).toLocaleDateString()}`, 14, 42);
-    const tableRows = (msg.taskData.trail || []).map(t => [t.time, (t.by || '').split('@')[0], t.action, t.comment || t.fileName || '-']);
-    doc.autoTable({ startY: 50, head: [['Date/Time', 'User', 'Action', 'Details']], body: tableRows, theme: 'grid', headStyles: { fillColor: [79, 70, 229] }, styles: { fontSize: 9 } });
-    doc.save(`Task_Trail_${msg.id}.pdf`);
+    } catch(err) { setTrailFileUploading(false); } finally { if(inlineFileInputRef.current) inlineFileInputRef.current.value = ""; }
   };
 
   return (
-    // 👇 FIX 1: DYNAMIC INLINE THREAD INDENTATION & PADDING 👇
     <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${msg.isInlineReply ? 'mt-1 mb-3 pl-[12%] md:pl-[20%]' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-50' : 'relative z-[1]'}`}>
       
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass={`${msg.isInlineReply ? 'w-6 h-6' : 'w-8 h-8'} shrink-0 mt-1`} extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
       
       <div className={`flex-1 w-full min-w-0 bg-white ${msg.isInlineReply ? 'rounded-xl' : 'rounded-2xl'} shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
         
-        {/* THICK STATIC ARROWS (Animations Removed) */}
         {!msg.isInlineReply && msg.isMine && (
             <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Sent">
                 <i className="fa-solid fa-arrow-up text-[13px] text-green-700" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
@@ -195,7 +200,6 @@ const MessageBubble = React.memo(({
               </div>
             )}
             
-            {/* THREAD BADGE REPLACES QUOTE IF INLINE */}
             {msg.isInlineReply && (
                <div className="text-[10px] font-extrabold text-indigo-500 mb-2 mt-0.5 flex items-center gap-1.5 bg-indigo-50/80 px-2.5 py-1 rounded-md w-fit border border-indigo-100 uppercase tracking-widest shadow-sm">
                   <i className="fa-solid fa-reply-all"></i> Thread Reply #{msg.threadIndex}
@@ -261,6 +265,41 @@ const MessageBubble = React.memo(({
                       </div>
                     </div>
 
+                    {/* 👇 TASK 3: INLINE ACTION CONTROLS 👇 */}
+                    {isTaskParticipant && !isTaskCompleted && (
+                        <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
+                           <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
+                           {trailFileUploading && <span className="text-xs font-bold text-indigo-500 animate-pulse mr-2">Uploading...</span>}
+                           
+                           {isDelegating ? (
+                              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded p-1 shadow-sm w-full md:w-auto flex-1">
+                                 <select value="" onChange={(e) => { if(!delegateSelection.includes(e.target.value)) setDelegateSelection([...delegateSelection, e.target.value]); }} className="text-[11px] p-1 w-full outline-none">
+                                    <option value="">+ Add Assignee</option>
+                                    {dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
+                                 </select>
+                                 <div className="flex items-center gap-1">
+                                    {delegateSelection.map(e => <span key={e} onClick={()=>setDelegateSelection(delegateSelection.filter(x=>x!==e))} className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded cursor-pointer hover:bg-rose-100 hover:text-rose-600 truncate max-w-[60px]">{e.split('@')[0]}</span>)}
+                                 </div>
+                                 <button onClick={handleInlineDelegateSubmit} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded font-bold hover:bg-indigo-700">Save</button>
+                                 <button onClick={()=>{setIsDelegating(false); setDelegateSelection([]);}} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold">X</button>
+                              </div>
+                           ) : isAddingUpdate ? (
+                              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded p-1 shadow-sm w-full">
+                                 <input type="text" value={inlineUpdateText} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type a quick update..." className="flex-1 text-[12px] p-1 outline-none font-medium text-slate-700" autoFocus />
+                                 <button onClick={submitInlineUpdate} className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-bold hover:bg-indigo-700">Post</button>
+                                 <button onClick={()=>setIsAddingUpdate(false)} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold">Cancel</button>
+                              </div>
+                           ) : (
+                              <>
+                                 <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Delegate</button>
+                                 <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Attach</button>
+                                 <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Update</button>
+                                 <button onClick={handleInlineComplete} className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors">Resolve</button>
+                              </>
+                           )}
+                        </div>
+                    )}
+
                     <button onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); setIsDelegating(false); }} className={`w-full border-t border-slate-200 py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isTaskCompleted ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}>
                       <i className={`fa-solid fa-chevron-${isTaskExpanded ? 'up' : 'down'} text-[10px]`}></i>
                       {isTaskExpanded ? 'Hide Details' : `View Updates & Trail (${msg.taskData.trail?.length || 0})`}
@@ -268,23 +307,56 @@ const MessageBubble = React.memo(({
 
                     {isTaskExpanded && (
                       <div className="bg-slate-50 border-t border-slate-200 p-3 animate-in slide-in-from-top-2">
-                        <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-2 custom-sidebar-scroll">
+                        <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-2 custom-sidebar-scroll scroll-smooth">
                           {(msg.taskData.trail || []).map((t, idx) => {
+                            const tAuthor = dbUsers.find(u => u.email === t.by)?.name || 'System';
+                            const isAuthor = t.by === userEmail || isSuperAdmin;
                             return (
                             <div key={idx} className="flex gap-3 text-sm group/trailitem">
                               <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 mt-1">
                                 <i className={`text-[10px] ${t.action.includes('Created') ? 'fa-solid fa-bolt text-amber-500' : t.action.includes('Completed') ? 'fa-solid fa-check text-teal-500' : t.action.includes('Delegated') ? 'fa-solid fa-share-nodes text-indigo-500' : t.fileUrl ? 'fa-solid fa-paperclip text-blue-500' : 'fa-solid fa-comment-dots text-indigo-500'}`}></i>
                               </div>
-                              <div className="flex-1">
-                                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm relative">
+                              <div className="flex-1 min-w-0">
+                                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm relative group/editbox">
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className="font-bold text-[11px] text-slate-700">{(t.by||'').split('@')[0]}</span>
+                                      <span className="font-bold text-[11px] text-indigo-600">{tAuthor}</span>
                                       <span className="text-[10px] font-bold text-slate-400">{t.time?.split(',')[0]}</span>
                                     </div>
-                                    <div className="text-[13px] text-slate-600 leading-snug">
+                                    <div className="text-[13px] text-slate-600 leading-snug break-words">
                                       <span className="font-semibold">{t.action}</span>
                                       {t.to && <span> to <span className="font-semibold text-indigo-600">@{t.to}</span></span>}
-                                      {t.comment && <div className="mt-1 pl-2 border-l-[3px] border-slate-200 text-slate-500 italic">"{t.comment}"</div>}
+                                      
+                                      {/* 👇 TASK 3: INLINE EDIT/DELETE LOGIC FOR TRAIL ITEMS 👇 */}
+                                      {t.comment && !t.fileUrl && (
+                                         editingTrailIdx === idx ? (
+                                            <div className="flex items-center gap-2 mt-2 bg-slate-50 p-1.5 rounded border border-slate-200">
+                                               <input value={trailEditText} onChange={e=>setTrailEditText(e.target.value)} className="flex-1 border border-slate-300 p-1 text-xs rounded font-medium outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" autoFocus />
+                                               <button onClick={()=>handleInlineEditTrail(idx)} className="text-emerald-600 hover:text-emerald-700 bg-white shadow-sm rounded p-1"><i className="fa-solid fa-check"></i></button>
+                                               <button onClick={()=>setEditingTrailIdx(null)} className="text-rose-600 hover:text-rose-700 bg-white shadow-sm rounded p-1"><i className="fa-solid fa-xmark"></i></button>
+                                            </div>
+                                         ) : (
+                                            <div className="mt-1 pl-2 border-l-[3px] border-slate-200 text-slate-500 italic relative">
+                                                "{t.comment}"
+                                                {t.isEdited && <span className="text-[9px] text-slate-400 ml-1 not-italic">(edited)</span>}
+                                            </div>
+                                         )
+                                      )}
+
+                                      {t.fileUrl && (
+                                          <div className="mt-2 flex items-center gap-2 p-1.5 border border-slate-200 rounded-md bg-slate-50 cursor-pointer hover:bg-slate-100 relative" onClick={() => window.open(t.fileUrl, '_blank')}>
+                                             <i className="fa-solid fa-file text-indigo-500 text-lg"></i>
+                                             <span className="text-xs font-bold text-slate-600 truncate">{t.fileName}</span>
+                                          </div>
+                                      )}
+
+                                      {/* Hover Action Buttons for Editor/Admin */}
+                                      {isAuthor && editingTrailIdx !== idx && (
+                                          <div className="absolute top-1 right-1 hidden group-hover/editbox:flex gap-1.5 bg-white border border-slate-200 shadow-sm rounded-md px-1.5 py-1 z-20">
+                                              {t.comment && !t.fileUrl && <i className="fa-solid fa-pen text-[10px] text-indigo-500 cursor-pointer hover:scale-110" onClick={()=>{setEditingTrailIdx(idx); setTrailEditText(t.comment);}}></i>}
+                                              <i className="fa-solid fa-trash text-[10px] text-rose-500 cursor-pointer hover:scale-110" onClick={()=>handleInlineDeleteTrail(idx)}></i>
+                                          </div>
+                                      )}
+
                                     </div>
                                   </div>
                               </div>
@@ -343,7 +415,6 @@ const MessageBubble = React.memo(({
                     const isEmoji = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(tagLabel) || STANDARD_EMOJIS.includes(tagLabel);
                     const isMe = users.includes(userEmail);
                     
-                    // 👇 FIX 2: TOOLTIP PROUDLY DISPLAYS FULL NAMES 👇
                     const hoverNames = users.map(e => dbUsers?.find(u => u.email === e)?.name || e.split('@')[0]).join(', ');
                     const titleText = `${tagLabel} affixed by: ${hoverNames}`;
                     
