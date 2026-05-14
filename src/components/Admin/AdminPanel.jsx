@@ -5,6 +5,7 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, setDoc,
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
+// Global Utility to eradicate raw HTML from tables/dropdowns
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 const tagThemes = {
@@ -52,7 +53,7 @@ function VerticalTreeNode({ node, depth = 0, dbUsers, handlePoke, isFilterActive
                <div className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5"><i className="fa-solid fa-square-check text-indigo-500"></i> {node.id.slice(-5).toUpperCase()}</div>
                <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${tData.status === 'Completed' ? 'bg-teal-100 text-teal-700' : tData.status === 'In Progress' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>{tData.status}</span>
             </div>
-            <h4 className="text-[15px] font-semibold text-slate-800 leading-snug mb-5">{node.name}</h4>
+            <h4 className="text-[15px] font-semibold text-slate-800 leading-snug mb-5">{stripHtml(node.name)}</h4>
             <div className="flex items-end justify-between">
                <div className="flex items-center gap-3">
                  <i className={`fa-solid fa-flag text-[14px] ${tData.priority==='High'?'text-rose-500':tData.priority==='Medium'?'text-amber-500':'text-emerald-500'}`} title={tData.priority}></i>
@@ -107,16 +108,19 @@ export default function AdminPanel({
   setSelectedMessage, setIsEditingTaskTitle, messages,
   setGroupForm, setEditingGroup, editingGroup, groupForm,
   handleGroupSubmit, handleGroupPicUpload, groupPicUploadProgress, customTags,
-  globalAnnouncement, currentUserData
+  globalAnnouncement, currentUserData 
 }) { 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('dashboard'); 
   const [logSubTab, setLogSubTab] = useState('tasks');
-  const [dashboardTimeRange, setDashboardTimeRange] = useState('today');
+  const [dashboardTimeRange, setDashboardTimeRange] = useState('today'); 
   
   const [broadcastMessage, setBroadcastMessage] = useState('');
-  const [broadcastType, setBroadcastType] = useState('info');
+  const [broadcastType, setBroadcastType] = useState('info'); 
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [broadcastAcks, setBroadcastAcks] = useState([]); 
+  
+  // Broadcast Historical Vault States
+  const [allAcks, setAllAcks] = useState([]); 
+  const [selectedBroadcastId, setSelectedBroadcastId] = useState(null);
   
   const [historyUserEmail, setHistoryUserEmail] = useState('');
   const [historyStartDate, setHistoryStartDate] = useState('');
@@ -137,26 +141,35 @@ export default function AdminPanel({
   const [newTagLabel, setNewTagLabel] = useState('');
   const [newTagTheme, setNewTagTheme] = useState('teal');
 
-  const [reactionFilterSender, setReactionFilterSender] = useState("");
-  const [reactionFilterMsgId, setReactionFilterMsgId] = useState("");
-  const [reactionFilterDate, setReactionFilterDate] = useState("");
+  const [reactionSearchQuery, setReactionSearchQuery] = useState("");
 
+  // Real-time listener for ALL broadcast acknowledgements
   useEffect(() => {
-    if (activeTab === 'broadcast' && globalAnnouncement?.isActive) {
-        const q = query(collection(db, 'broadcast_acks'), where('broadcastId', '==', globalAnnouncement.id));
-        const unsub = onSnapshot(q, snap => {
+    if (activeTab === 'broadcast') {
+        const unsub = onSnapshot(collection(db, 'broadcast_acks'), snap => {
             const acks = snap.docs.map(d => d.data());
             acks.sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
-            setBroadcastAcks(acks);
+            setAllAcks(acks);
         });
         return () => unsub();
     }
-  }, [activeTab, globalAnnouncement?.id, globalAnnouncement?.isActive]);
+  }, [activeTab]);
 
+  const uniqueBroadcastIds = useMemo(() => {
+      return [...new Set(allAcks.map(a => a.broadcastId))];
+  }, [allAcks]);
+
+  const displayedAcks = useMemo(() => {
+      if (globalAnnouncement?.isActive) return allAcks.filter(a => a.broadcastId === globalAnnouncement.id);
+      if (selectedBroadcastId) return allAcks.filter(a => a.broadcastId === selectedBroadcastId);
+      return [];
+  }, [allAcks, globalAnnouncement?.isActive, globalAnnouncement?.id, selectedBroadcastId]);
+
+  // Bug Fix: Task Logs now use `includes` instead of strict equality
   const taskLogs = useMemo(() => {
     let logs = filteredAuditLogs.filter(l => l.type?.startsWith('TASK_'));
     if (adminFilterUser) logs = logs.filter(l => l.user === adminFilterUser);
-    if (adminFilterType) logs = logs.filter(l => l.type === adminFilterType);
+    if (adminFilterType) logs = logs.filter(l => l.type?.includes(adminFilterType));
     if (adminFilterDate) logs = logs.filter(l => l.dateString === adminFilterDate);
     if (adminFilterGroup) logs = logs.filter(l => l.groupId === adminFilterGroup);
     return logs;
@@ -165,7 +178,7 @@ export default function AdminPanel({
   const messageLogs = useMemo(() => {
     let logs = filteredAuditLogs.filter(l => !l.type?.startsWith('TASK_') && l.type !== 'REACTION' && l.type !== 'LOGIN' && l.type !== 'LOGOUT');
     if (adminFilterUser) logs = logs.filter(l => l.user === adminFilterUser);
-    if (adminFilterType) logs = logs.filter(l => l.type === adminFilterType);
+    if (adminFilterType) logs = logs.filter(l => l.type?.includes(adminFilterType));
     if (adminFilterDate) logs = logs.filter(l => l.dateString === adminFilterDate);
     if (adminFilterGroup) logs = logs.filter(l => l.groupId === adminFilterGroup);
     return logs;
@@ -263,9 +276,27 @@ export default function AdminPanel({
       if (!window.confirm("Are you sure you want to pull down the active global broadcast?")) return;
       try {
           await updateDoc(doc(db, "workspace", "announcement"), { isActive: false });
-          setBroadcastAcks([]);
+          setSelectedBroadcastId(globalAnnouncement.id); // Switch viewer to history mode
       } catch (error) {}
   };
+
+  // Dashboard Metrics & Bar Graph Generation
+  const last7Days = useMemo(() => {
+    return Array.from({length: 7}, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - (6 - i));
+        return d.toISOString().split('T')[0];
+    });
+  }, []);
+
+  const graphData = useMemo(() => {
+    return last7Days.map(dateStr => {
+        const dayMsgs = messages.filter(m => m.dateString === dateStr && !m.isTask).length;
+        const dayTasks = messages.filter(m => m.dateString === dateStr && m.isTask).length;
+        return { dateStr, dayMsgs, dayTasks };
+    });
+  }, [messages, last7Days]);
+
+  const maxGraphVal = Math.max(...graphData.map(d => Math.max(d.dayMsgs, d.dayTasks)), 10);
 
   const dashboardMetrics = useMemo(() => {
     const now = new Date();
@@ -307,17 +338,7 @@ export default function AdminPanel({
     }));
   }, [filteredAuditLogs, dbUsers]);
 
-  const sendersWithReactions = useMemo(() => {
-      const senders = new Set();
-      messages.forEach(m => { if (Object.keys(m.reactions||{}).length > 0) senders.add(m.senderEmail); });
-      return dbUsers.filter(u => senders.has(u.email));
-  }, [messages, dbUsers]);
-
-  const messagesBySender = useMemo(() => {
-      if (!reactionFilterSender) return [];
-      return messages.filter(m => m.senderEmail === reactionFilterSender && Object.keys(m.reactions||{}).length > 0);
-  }, [messages, reactionFilterSender]);
-
+  // Reactions Universal Search logic
   const reactionLogs = useMemo(() => {
       let logs = filteredAuditLogs.filter(l => l.type === 'REACTION');
       let mappedLogs = logs.map(l => {
@@ -325,12 +346,18 @@ export default function AdminPanel({
           return { ...l, msgObj: msg };
       }).filter(l => l.msgObj);
 
-      if (reactionFilterSender) mappedLogs = mappedLogs.filter(l => l.msgObj.senderEmail === reactionFilterSender);
-      if (reactionFilterMsgId) mappedLogs = mappedLogs.filter(l => l.msgObj.id === reactionFilterMsgId);
-      if (reactionFilterDate) mappedLogs = mappedLogs.filter(l => l.dateString === reactionFilterDate);
+      if (reactionSearchQuery.trim()) {
+          const q = reactionSearchQuery.toLowerCase();
+          mappedLogs = mappedLogs.filter(l => {
+              const reactorName = (dbUsers.find(u => u.email === l.user)?.name || 'System').toLowerCase();
+              const tag = l.content.toLowerCase();
+              const msgText = (stripHtml(l.msgObj?.text) || l.msgObj?.fileName || l.target || '').toLowerCase();
+              return reactorName.includes(q) || tag.includes(q) || msgText.includes(q);
+          });
+      }
 
       return mappedLogs.sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
-  }, [filteredAuditLogs, messages, reactionFilterSender, reactionFilterMsgId, reactionFilterDate]);
+  }, [filteredAuditLogs, messages, dbUsers, reactionSearchQuery]);
 
   const toggleSelectAllUsers = () => { if (selectedUsers.size === filteredUsers.length) setSelectedUsers(new Set()); else setSelectedUsers(new Set(filteredUsers.map(u => u.uid))); };
   const toggleSelectUser = (uid) => { const s = new Set(selectedUsers); s.has(uid) ? s.delete(uid) : s.add(uid); setSelectedUsers(s); };
@@ -416,7 +443,7 @@ export default function AdminPanel({
 
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
         
-        {/* DASHBOARD TAB */}
+        {/* DASHBOARD TAB (WITH BAR GRAPH) */}
         {activeTab === 'dashboard' && (
           <div className="flex flex-col gap-6 h-full p-4 md:p-6 overflow-y-auto custom-sidebar-scroll">
             <div className="flex items-center gap-2 justify-end">
@@ -475,7 +502,37 @@ export default function AdminPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 👇 DASHBOARD BAR GRAPH (NATIVE TAILWIND) 👇 */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col mt-2">
+                <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2 text-lg">
+                    <i className="fa-solid fa-chart-column text-indigo-500"></i> 7-Day Activity Trends
+                </h3>
+                <div className="h-64 flex items-end gap-2 sm:gap-4 md:gap-8 border-b border-slate-100 pb-2 relative w-full overflow-hidden">
+                    {/* Y-Axis Line */}
+                    <div className="absolute left-0 top-0 h-full w-px bg-slate-100"></div>
+                    
+                    {graphData.map((data, i) => (
+                        <div key={i} className="flex-1 flex justify-center gap-1 sm:gap-2 h-full items-end group relative z-10">
+                            {/* Messages Bar */}
+                            <div className="w-full max-w-[30px] bg-indigo-500 rounded-t-md transition-all hover:bg-indigo-400 relative" style={{ height: `${(data.dayMsgs / maxGraphVal) * 100}%`, minHeight: data.dayMsgs > 0 ? '4px' : '0' }}>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-20 shadow-lg">{data.dayMsgs} Msgs</div>
+                            </div>
+                            {/* Tasks Bar */}
+                            <div className="w-full max-w-[30px] bg-amber-400 rounded-t-md transition-all hover:bg-amber-300 relative" style={{ height: `${(data.dayTasks / maxGraphVal) * 100}%`, minHeight: data.dayTasks > 0 ? '4px' : '0' }}>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-20 shadow-lg">{data.dayTasks} Tasks</div>
+                            </div>
+                            {/* Date Label */}
+                            <div className="absolute top-full mt-3 text-[10px] font-bold text-slate-400 truncate w-full text-center tracking-widest uppercase">{new Date(data.dateStr).toLocaleDateString('en-US', {weekday:'short'})}</div>
+                        </div>
+                    ))}
+                </div>
+                <div className="flex justify-center gap-8 mt-10">
+                    <div className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded bg-indigo-500 shadow-sm"></span><span className="text-xs font-bold text-slate-600 uppercase tracking-widest">Messages</span></div>
+                    <div className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded bg-amber-400 shadow-sm"></span><span className="text-xs font-bold text-slate-600 uppercase tracking-widest">Tasks</span></div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Approvals</p>
@@ -534,7 +591,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* BROADCAST TAB */}
+        {/* BROADCAST TAB WITH HISTORICAL VAULT (Fix 2) */}
         {activeTab === 'broadcast' && (
            <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full max-w-4xl mx-auto">
@@ -556,13 +613,13 @@ export default function AdminPanel({
                             <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col mb-4">
                                 <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 font-bold text-slate-700 text-[11px] uppercase tracking-widest flex justify-between shrink-0">
                                     <span><i className="fa-solid fa-eye text-indigo-500 mr-1.5"></i> Read Receipts</span>
-                                    <span className="text-indigo-700 font-black">{broadcastAcks.length} Acknowledged</span>
+                                    <span className="text-indigo-700 font-black">{displayedAcks.length} Acknowledged</span>
                                 </div>
                                 <div className="overflow-y-auto custom-sidebar-scroll flex-1 p-2">
-                                    {broadcastAcks.length === 0 ? (
+                                    {displayedAcks.length === 0 ? (
                                         <div className="text-center text-slate-400 text-xs py-6 font-medium italic">No users have dismissed this broadcast yet.</div>
                                     ) : (
-                                        broadcastAcks.map((ack, i) => (
+                                        displayedAcks.map((ack, i) => (
                                             <div key={i} className="flex justify-between items-center px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 rounded">
                                                 <span className="text-sm font-bold text-slate-800"><i className="fa-solid fa-check-double text-emerald-500 mr-2 text-[10px]"></i>{ack.userName}</span>
                                                 <span className="text-[11px] text-slate-400 font-bold">{ack.timestamp?.toDate ? new Date(ack.timestamp.toDate()).toLocaleString() : ''}</span>
@@ -606,12 +663,46 @@ export default function AdminPanel({
                            </button>
                         </div>
                     )}
+                    
+                    {/* 👇 NEW: Historical Broadcast Vault (Fix 2) 👇 */}
+                    {!globalAnnouncement?.isActive && uniqueBroadcastIds.length > 0 && (
+                        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-0 flex-1">
+                             <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between shrink-0">
+                                 <div>
+                                     <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider flex items-center gap-2"><i className="fa-solid fa-box-archive text-indigo-400"></i> Historical Broadcast Vault</h3>
+                                     <p className="text-[11px] text-slate-500 mt-1">Audit read receipts from past alerts.</p>
+                                 </div>
+                                 <select value={selectedBroadcastId || ''} onChange={(e) => setSelectedBroadcastId(e.target.value)} className="w-full sm:w-64 p-2.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                     <option value="">Select a past broadcast...</option>
+                                     {uniqueBroadcastIds.map(id => <option key={id} value={id}>Broadcast ID: {id.substring(0,6).toUpperCase()}</option>)}
+                                 </select>
+                             </div>
+                             
+                             <div className="flex-1 overflow-y-auto custom-sidebar-scroll p-2">
+                                  {!selectedBroadcastId ? (
+                                      <div className="flex flex-col items-center justify-center h-full opacity-50 py-10">
+                                          <i className="fa-solid fa-folder-open text-4xl text-slate-300 mb-3"></i>
+                                          <p className="text-xs font-bold text-slate-500">Select a broadcast to view its logs.</p>
+                                      </div>
+                                  ) : displayedAcks.length === 0 ? (
+                                      <div className="text-center text-slate-400 text-xs py-10 font-medium italic">No acknowledgements found for this broadcast.</div>
+                                  ) : (
+                                      displayedAcks.map((ack, i) => (
+                                          <div key={i} className="flex justify-between items-center px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 rounded-lg transition-colors">
+                                              <span className="text-sm font-bold text-slate-800"><i className="fa-solid fa-check-double text-emerald-500 mr-2 text-[10px]"></i>{ack.userName}</span>
+                                              <span className="text-[11px] text-slate-400 font-bold bg-white px-2 py-1 border border-slate-100 rounded-md shadow-sm">{ack.timestamp?.toDate ? new Date(ack.timestamp.toDate()).toLocaleString() : ''}</span>
+                                          </div>
+                                      ))
+                                  )}
+                             </div>
+                        </div>
+                    )}
                  </div>
                </div>
            </div>
         )}
 
-        {/* TAGS STUDIO */}
+        {/* TAGS STUDIO (unchanged) */}
         {activeTab === 'tags' && (
            <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full min-h-[600px] overflow-hidden">
@@ -660,7 +751,7 @@ export default function AdminPanel({
            </div>
         )}
 
-        {/* REACTIONS TAB (UPGRADED UI) */}
+        {/* REACTIONS TAB (Fix 4: Universal Search Bar & Smooth Table) */}
         {activeTab === 'reactions' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
               <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[600px]">
@@ -669,31 +760,23 @@ export default function AdminPanel({
                     <h2 className="font-extrabold text-slate-800 text-xl tracking-tight">Tags & Emojis Log</h2>
                 </div>
                 
-                {/* Unified Glassmorphism Filter Bar */}
+                {/* Unified Glassmorphism Universal Search Bar */}
                 <div className="p-5 bg-white border-b border-slate-100 shrink-0 relative overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-r from-indigo-50/30 to-purple-50/30 pointer-events-none"></div>
-                  <div className="flex flex-wrap gap-4 items-end relative z-10">
-                    <div className="flex-1 min-w-[200px]">
-                      <label className="text-[10px] font-bold text-indigo-900/50 uppercase tracking-widest block mb-1.5 ml-1">1. Filter By Sender</label>
-                      <select value={reactionFilterSender} onChange={e => { setReactionFilterSender(e.target.value); setReactionFilterMsgId(""); }} className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white/80 backdrop-blur outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-slate-700 font-bold shadow-sm transition-all">
-                        <option value="">All Senders...</option>
-                        {sendersWithReactions.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
-                      </select>
+                  <div className="flex flex-wrap gap-4 items-end relative z-10 w-full max-w-2xl mx-auto">
+                    <div className="flex-1 w-full relative">
+                        <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-indigo-400"></i>
+                        <input 
+                            type="text" 
+                            value={reactionSearchQuery} 
+                            onChange={(e) => setReactionSearchQuery(e.target.value)}
+                            placeholder="Universal Search: Sender OR Tag OR Message..." 
+                            className="w-full pl-10 p-3.5 border border-slate-200 rounded-xl text-sm bg-white/80 backdrop-blur outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 text-slate-700 font-bold shadow-sm transition-all"
+                        />
                     </div>
-                    <div className="flex-[2] min-w-[300px]">
-                      <label className="text-[10px] font-bold text-indigo-900/50 uppercase tracking-widest block mb-1.5 ml-1">2. Filter By Message</label>
-                      <select value={reactionFilterMsgId} onChange={e => setReactionFilterMsgId(e.target.value)} disabled={!reactionFilterSender} className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white/80 backdrop-blur outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-slate-700 font-bold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                        <option value="">{reactionFilterSender ? "All Messages from Sender..." : "Select Sender First..."}</option>
-                        {messagesBySender.map(m => (
-                            <option key={m.id} value={m.id}>{stripHtml(m.text ? m.text.substring(0,60) : m.fileName || 'Attached File')}...</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex-1 min-w-[150px]">
-                      <label className="text-[10px] font-bold text-indigo-900/50 uppercase tracking-widest block mb-1.5 ml-1">3. By Date</label>
-                      <input type="date" value={reactionFilterDate} onChange={e => setReactionFilterDate(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white/80 backdrop-blur outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-slate-700 font-bold shadow-sm transition-all cursor-pointer" />
-                    </div>
-                    <button onClick={() => { setReactionFilterSender(''); setReactionFilterMsgId(''); setReactionFilterDate(''); }} className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 hover:text-rose-600 shadow-sm transition-all"><i className="fa-solid fa-filter-circle-xmark mr-1"></i> Clear</button>
+                    {reactionSearchQuery && (
+                        <button onClick={() => setReactionSearchQuery('')} className="bg-white border border-rose-200 text-rose-500 px-6 py-3.5 rounded-xl text-xs font-bold hover:bg-rose-50 shadow-sm transition-all shrink-0"><i className="fa-solid fa-xmark mr-1"></i> Clear</button>
+                    )}
                   </div>
                 </div>
 
@@ -711,7 +794,7 @@ export default function AdminPanel({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {reactionLogs.length === 0 ? (
-                          <tr><td colSpan={6} className="px-5 py-20 text-center"><div className="flex flex-col items-center justify-center opacity-50"><i className="fa-solid fa-face-meh text-5xl text-slate-300 mb-4"></i><span className="text-slate-500 font-bold">No reactions match your filters.</span></div></td></tr>
+                          <tr><td colSpan={6} className="px-5 py-20 text-center"><div className="flex flex-col items-center justify-center opacity-50"><i className="fa-solid fa-face-meh text-5xl text-slate-300 mb-4"></i><span className="text-slate-500 font-bold">No reactions match your universal search.</span></div></td></tr>
                       ) : (
                           reactionLogs.map((log, idx) => {
                              const msgText = log.msgObj?.text || log.msgObj?.fileName || log.target || 'Unknown Message';
@@ -734,57 +817,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* TASK TREE TAB (UPGRADED UI) */}
-        {activeTab === 'tasks' && (
-          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
-              <div className="bg-white rounded-3xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden min-h-[600px]">
-                
-                <div className="p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-slate-50/50">
-                  <div className="flex items-center gap-4">
-                     <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm border border-indigo-100"><i className="fa-solid fa-network-wired text-xl"></i></div>
-                     <div>
-                        <h2 className="font-extrabold text-slate-800 text-xl leading-tight">Organisation Task Tree</h2>
-                        <span className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest">{filteredTaskMessages.length} tasks rendered</span>
-                     </div>
-                  </div>
-                  
-                  {/* Unified Glassmorphism Filter Bar for Tasks */}
-                  <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-                      <select value={taskFilterStatus} onChange={e=>setTaskFilterStatus(e.target.value)} className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500/20">
-                          <option value="All">All Statuses</option>
-                          <option value="Pending">Pending</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Completed">Completed</option>
-                      </select>
-                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                          <i className="fa-regular fa-calendar text-indigo-400 text-xs"></i>
-                          <input type="date" value={taskFilterStart} onChange={e=>setTaskFilterStart(e.target.value)} className="text-[11px] bg-transparent font-bold text-slate-600 uppercase outline-none cursor-pointer w-[110px]" title="Start Date" />
-                          <span className="text-slate-300 font-bold">-</span>
-                          <input type="date" value={taskFilterEnd} onChange={e=>setTaskFilterEnd(e.target.value)} className="text-[11px] bg-transparent font-bold text-slate-600 uppercase outline-none cursor-pointer w-[110px]" title="End Date" />
-                      </div>
-                      {isFilterActive && (
-                          <button onClick={()=>{setTaskFilterStatus('All'); setTaskFilterStart(''); setTaskFilterEnd('');}} className="w-8 h-8 bg-white border border-rose-200 text-rose-500 rounded-lg hover:bg-rose-50 flex items-center justify-center transition-colors shadow-sm" title="Clear Filters"><i className="fa-solid fa-xmark"></i></button>
-                      )}
-                  </div>
-                </div>
-                
-                <div className="flex-1 overflow-auto custom-sidebar-scroll p-6 bg-slate-50/30">
-                   {treeData.children.length === 0 ? (
-                     <div className="flex flex-col items-center justify-center h-full opacity-50">
-                        <i className="fa-solid fa-folder-open text-6xl text-slate-300 mb-4"></i>
-                        <p className="text-sm text-slate-500 font-bold">No tasks match your filters.</p>
-                     </div>
-                   ) : (
-                     <div className="org-tree w-full max-w-5xl mx-auto">
-                        <ul><VerticalTreeNode node={treeData} depth={0} dbUsers={dbUsers} handlePoke={handlePoke} isFilterActive={isFilterActive} /></ul>
-                     </div>
-                   )}
-                </div>
-              </div>
-          </div>
-        )}
-
-        {/* TEAM MANAGEMENT (ALREADY MODERN - NO CHANGES NEEDED) */}
+        {/* TEAM MANAGEMENT (Fix 1 applied: form onSubmit handled safely) */}
         {activeTab === 'groups' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
               <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[600px]">
@@ -803,10 +836,10 @@ export default function AdminPanel({
                   </button>
                 </div>
 
-                {(editingGroup || groupForm.name !== '' || groupForm.members?.length > 0) && (
+                {(editingGroup || groupForm.name !== '' || (groupForm?.members || []).length > 0) && (
                   <div className="p-6 border-b border-slate-200 bg-white animate-in fade-in slide-in-from-top-2 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500"></div>
-                    <form onSubmit={(e) => { handleGroupSubmit(e); setEditingGroup(null); setGroupForm({name: '', members: [], profilePicUrl: null}); }} className="space-y-6 max-w-4xl mx-auto">
+                    <form onSubmit={handleGroupSubmit} className="space-y-6 max-w-4xl mx-auto">
                       <div>
                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Name</label>
                         <input 
@@ -835,13 +868,13 @@ export default function AdminPanel({
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 border border-slate-200 p-4 rounded-xl max-h-64 overflow-y-auto bg-slate-50 shadow-inner custom-sidebar-scroll">
                           {dbUsers.map(u => (
-                            <label key={u.uid} className="flex items-center gap-3 text-sm bg-white p-3 border border-slate-200 rounded-xl shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow transition-all group">
+                            <label key={u.uid} className="flex items-center gap-3 text-sm bg-white p-3 border border-slate-100 rounded-xl shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow transition-all group">
                               <div className="relative flex items-center justify-center">
                                 <input 
                                   type="checkbox" 
-                                  checked={groupForm.members.includes(u.email)} 
+                                  checked={(groupForm?.members || []).includes(u.email)} 
                                   onChange={(e) => {
-                                    const m = new Set(groupForm.members); 
+                                    const m = new Set(groupForm.members || []); 
                                     e.target.checked ? m.add(u.email) : m.delete(u.email); 
                                     setGroupForm({...groupForm, members: Array.from(m)});
                                   }} 
@@ -898,12 +931,11 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* LOGS TAB (UPGRADED UI) */}
+        {/* LOGS TAB (Fix 3: Fuzzy `includes` matching for tasks) */}
         {activeTab === 'logs' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             <div className="flex flex-col gap-4 h-full min-h-[600px]">
               
-              {/* Sub-tabs for Logs */}
               <div className="flex gap-3 shrink-0">
                 {['tasks', 'messages'].map(sub => (
                   <button key={sub} onClick={() => { setLogSubTab(sub); setAdminFilterType(''); }} className={`px-5 py-2.5 rounded-xl text-sm font-extrabold shadow-sm transition-all ${logSubTab === sub ? 'bg-indigo-600 text-white shadow-indigo-600/30 hover:-translate-y-0.5' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600'}`}><i className={`fa-solid ${sub === 'tasks' ? 'fa-check-square' : 'fa-comment'} mr-2`}></i>{sub === 'tasks' ? 'Task Analytics' : 'Message Audits'}</button>
@@ -911,7 +943,6 @@ export default function AdminPanel({
               </div>
               
               <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
-                  {/* Unified Glassmorphism Filter Bar */}
                   <div className="p-5 bg-white border-b border-slate-100 shrink-0 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-slate-50 to-indigo-50/20 pointer-events-none"></div>
                     <div className="flex flex-wrap gap-4 items-end relative z-10">
@@ -980,219 +1011,6 @@ export default function AdminPanel({
                   </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* USERS TAB (UPGRADED UI) */}
-        {activeTab === 'users' && (
-          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
-              <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[600px]">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center flex-wrap gap-4 shrink-0 bg-slate-50/50">
-                  <div className="flex items-center gap-3">
-                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users text-lg"></i></div>
-                     <h2 className="font-extrabold text-slate-800 text-xl tracking-tight">Identity Directory</h2>
-                  </div>
-                  <button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm transition-all hover:-translate-y-0.5"><i className="fa-solid fa-plus mr-2"></i>Provision New Account</button>
-                </div>
-                
-                {showAddUser && (
-                  <div className="p-6 bg-white border-b border-slate-200 flex flex-wrap gap-4 items-end animate-in fade-in slide-in-from-top-2 relative overflow-hidden shrink-0">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
-                    <div><label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-2 ml-1">Email Address</label><input type="email" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} className="w-64 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 font-medium text-slate-800 shadow-inner" placeholder="user@example.com" /></div>
-                    <div><label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-2 ml-1">Full Legal Name</label><input type="text" value={newUserName} onChange={e => setNewUserName(e.target.value)} className="w-64 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 font-medium text-slate-800 shadow-inner" placeholder="E.g. Jane Doe" /></div>
-                    <label className="flex items-center gap-3 text-sm p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors shadow-sm select-none">
-                        <input type="checkbox" checked={newUserApprove} onChange={e => setNewUserApprove(e.target.checked)} className="w-5 h-5 accent-indigo-600 cursor-pointer" />
-                        <span className="font-bold text-slate-700">Pre-Approve Access</span>
-                    </label>
-                    <button onClick={handleAddUser} className="bg-emerald-500 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-emerald-600 shadow-sm transition-all hover:-translate-y-0.5"><i className="fa-solid fa-check mr-2"></i>Create</button>
-                    <button onClick={() => setShowAddUser(false)} className="bg-slate-50 text-slate-600 border border-slate-200 px-6 py-3 rounded-xl text-sm font-bold hover:bg-slate-100 shadow-sm transition-all">Cancel</button>
-                  </div>
-                )}
-
-                {selectedUsers.size > 0 && (
-                  <div className="px-6 py-3.5 bg-indigo-600 border-b border-indigo-700 flex items-center gap-4 flex-wrap animate-in fade-in slide-in-from-top-1 shrink-0 shadow-inner">
-                    <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-white text-indigo-600 flex items-center justify-center text-xs font-black shadow-sm">{selectedUsers.size}</span>
-                        <span className="text-sm font-bold text-white tracking-wide">Identities Selected</span>
-                    </div>
-                    <div className="w-px h-6 bg-indigo-500/50 mx-2"></div>
-                    <div className="flex-1 flex flex-wrap gap-3">
-                      <button onClick={async () => {
-                          if (!window.confirm(`Approve ${selectedUsers.size} user(s)?`)) return;
-                          const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { isApproved: true }));
-                          await Promise.all(updates);
-                          setSelectedUsers(new Set());
-                        }} className="px-4 py-2 bg-white/10 text-white text-xs font-bold rounded-lg hover:bg-white border border-white/20 hover:text-indigo-700 shadow-sm transition-all"><i className="fa-solid fa-check mr-1.5"></i> Approve</button>
-                      
-                      <button onClick={async () => {
-                          if (!window.confirm(`Grant Admin to ${selectedUsers.size} user(s)?`)) return;
-                          const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { isAdmin: true }));
-                          await Promise.all(updates);
-                          setSelectedUsers(new Set());
-                        }} className="px-4 py-2 bg-white/10 text-white text-xs font-bold rounded-lg hover:bg-white border border-white/20 hover:text-indigo-700 shadow-sm transition-all"><i className="fa-solid fa-crown mr-1.5"></i> Grant Admin</button>
-                      
-                      <button onClick={async () => {
-                          if (!window.confirm(`Grant group creation to ${selectedUsers.size} user(s)?`)) return;
-                          const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { canCreateGroups: true }));
-                          await Promise.all(updates);
-                          setSelectedUsers(new Set());
-                        }} className="px-4 py-2 bg-white/10 text-white text-xs font-bold rounded-lg hover:bg-white border border-white/20 hover:text-indigo-700 shadow-sm transition-all"><i className="fa-solid fa-users-gear mr-1.5"></i> Allow Groups</button>
-                      
-                      <button onClick={async () => {
-                          if (!window.confirm(`Revoke Admin from ${selectedUsers.size} user(s)?`)) return;
-                          const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { isAdmin: false }));
-                          await Promise.all(updates);
-                          setSelectedUsers(new Set());
-                        }} className="px-4 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600 shadow-sm transition-colors border border-rose-600/50"><i className="fa-solid fa-user-slash mr-1.5"></i> Revoke Admin</button>
-                      
-                      <button onClick={async () => {
-                          if (!window.confirm(`Archive ${selectedUsers.size} user(s)?`)) return;
-                          const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { isArchived: true }));
-                          await Promise.all(updates);
-                          setSelectedUsers(new Set());
-                        }} className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-900 shadow-sm transition-colors border border-slate-950/50"><i className="fa-solid fa-box-archive mr-1.5"></i> Archive</button>
-                      
-                      <button onClick={() => {
-                          const selectedUsersList = filteredUsers.filter(u => selectedUsers.has(u.uid));
-                          const csvContent = "data:text/csv;charset=utf-8,Name,Email,Approved,Admin,Can Create Groups\n" +
-                            selectedUsersList.map(u => `"${u.name}","${u.email}","${u.isApproved}","${u.isAdmin}","${u.canCreateGroups}"`).join("\n");
-                          const encodedUri = encodeURI(csvContent);
-                          const link = document.createElement("a");
-                          link.setAttribute("href", encodedUri);
-                          link.setAttribute("download", "selected_users.csv");
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
-                        }} className="px-4 py-2 bg-emerald-500 text-white border border-emerald-600 text-xs font-bold rounded-lg hover:bg-emerald-600 shadow-sm transition-colors"><i className="fa-solid fa-file-csv mr-1.5"></i> Export CSV</button>
-                    </div>
-                    <button onClick={() => setSelectedUsers(new Set())} className="ml-auto w-8 h-8 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-rose-500 transition-colors" title="Clear Selection"><i className="fa-solid fa-xmark"></i></button>
-                  </div>
-                )}
-
-                <div className="flex-1 overflow-auto custom-sidebar-scroll bg-slate-50/30">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-slate-100/80 backdrop-blur text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm border-b border-slate-200">
-                      <tr>
-                          <th className="px-5 py-4 w-12"><input type="checkbox" onChange={toggleSelectAllUsers} checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></th>
-                          <th className="px-5 py-4 font-extrabold tracking-wider">#</th>
-                          <th className="px-5 py-4 font-extrabold tracking-wider">Identity</th>
-                          <th className="px-5 py-4 font-extrabold tracking-wider">Email Route</th>
-                          <th className="px-5 py-4 font-extrabold tracking-wider text-center">Gateway Status</th>
-                          <th className="px-3 py-4 font-extrabold tracking-wider text-center">Global Admin</th>
-                          <th className="px-3 py-4 font-extrabold tracking-wider text-center">Team Creator</th>
-                          <th className="px-5 py-4 font-extrabold tracking-wider text-center">Last Pulse</th>
-                          <th className="px-5 py-4 font-extrabold tracking-wider text-center">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredUsers.map((u, idx) => (
-                        <tr key={u.uid} className={`hover:bg-indigo-50/30 transition-colors even:bg-slate-50/50 ${u.isArchived ? 'opacity-50 grayscale' : ''}`}>
-                          <td className="px-5 py-4"><input type="checkbox" checked={selectedUsers.has(u.uid)} onChange={() => toggleSelectUser(u.uid)} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></td>
-                          <td className="px-5 py-4 text-slate-400 font-bold">{idx + 1}</td>
-                          <td className="px-5 py-4">
-                              <div className="flex items-center gap-3">
-                                  <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-9 h-9 shadow-sm border border-slate-100" />
-                                  <div className="flex flex-col">
-                                      <span className="font-extrabold text-slate-800 text-[14px]">{u.name}</span>
-                                      {u.isAdmin && <span className="text-[9px] font-black tracking-widest text-amber-600 bg-amber-100 w-fit px-2 py-0.5 rounded-md mt-0.5 shadow-sm border border-amber-200/50"><i className="fa-solid fa-crown mr-1"></i>ADMIN</span>}
-                                  </div>
-                              </div>
-                          </td>
-                          <td className="px-5 py-4 text-slate-500 font-medium text-[13px]">{u.email}</td>
-                          <td className="px-5 py-4 text-center">
-                              <button onClick={() => handleToggleApprove(u)} className={`px-3 py-1.5 rounded-full text-[10px] font-extrabold tracking-wider shadow-sm transition-all hover:scale-105 ${u.isApproved ? 'bg-emerald-100 text-emerald-700 border border-emerald-200/50' : 'bg-orange-100 text-orange-700 border border-orange-200/50'}`}>
-                                  {u.isApproved ? <><i className="fa-solid fa-shield-check mr-1.5"></i>APPROVED</> : <><i className="fa-solid fa-lock mr-1.5"></i>PENDING</>}
-                              </button>
-                          </td>
-                          <td className="px-3 py-4 text-center"><input type="checkbox" checked={u.isAdmin || false} onChange={() => handleToggleAdmin(u)} className="w-5 h-5 accent-indigo-600 cursor-pointer" /></td>
-                          <td className="px-3 py-4 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-5 h-5 accent-indigo-600 cursor-pointer" /></td>
-                          <td className="px-5 py-4 text-center text-[12px] font-bold text-slate-400">{u.lastLogin?.toDate ? new Date(u.lastLogin.toDate()).toLocaleString([], {dateStyle:'short', timeStyle:'short'}) : '—'}</td>
-                          <td className="px-5 py-4 text-center">
-                              <button onClick={() => { setHistoryUserEmail(u.email); setActiveTab('history'); }} className="bg-white border border-slate-200 text-indigo-600 px-3 py-1.5 rounded-lg text-[11px] font-extrabold hover:bg-indigo-50 shadow-sm transition-colors"><i className="fa-solid fa-magnifying-glass mr-1.5"></i>Audit</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-          </div>
-        )}
-
-        {/* HISTORY TAB (UPGRADED UI) */}
-        {activeTab === 'history' && (
-          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
-              <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[600px]">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center flex-wrap gap-4 shrink-0 bg-slate-50/50">
-                   <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-clock-rotate-left text-lg"></i></div>
-                       <h2 className="font-extrabold text-slate-800 text-xl tracking-tight">Identity Activity History</h2>
-                   </div>
-                   <button onClick={download30DayLogins} className="bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-emerald-600 transition-all hover:-translate-y-0.5 flex items-center gap-2">
-                      <i className="fa-solid fa-download"></i> Extract 30-Day Logins (CSV)
-                   </button>
-                </div>
-                
-                {/* Unified Glassmorphism Filter Bar */}
-                <div className="p-5 bg-white border-b border-slate-100 shrink-0 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-50/30 to-teal-50/30 pointer-events-none"></div>
-                  <div className="flex flex-wrap gap-4 items-end relative z-10">
-                    <div className="flex-1 min-w-[200px]">
-                        <label className="text-[10px] font-bold text-emerald-900/50 uppercase tracking-widest block mb-1.5 ml-1">Target Identity</label>
-                        <select value={historyUserEmail} onChange={e => setHistoryUserEmail(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white/80 backdrop-blur outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 text-slate-700 font-bold shadow-sm transition-all">
-                            <option value="">Search across all users...</option>
-                            {dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
-                        </select>
-                    </div>
-                    <div className="flex-1 min-w-[150px]">
-                        <label className="text-[10px] font-bold text-emerald-900/50 uppercase tracking-widest block mb-1.5 ml-1">From Date</label>
-                        <input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white/80 backdrop-blur outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 text-slate-700 font-bold shadow-sm transition-all cursor-pointer" />
-                    </div>
-                    <div className="flex-1 min-w-[150px]">
-                        <label className="text-[10px] font-bold text-emerald-900/50 uppercase tracking-widest block mb-1.5 ml-1">To Date</label>
-                        <input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white/80 backdrop-blur outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 text-slate-700 font-bold shadow-sm transition-all cursor-pointer" />
-                    </div>
-                    <button onClick={() => { setHistoryUserEmail(''); setHistoryStartDate(''); setHistoryEndDate(''); }} className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 hover:text-rose-600 shadow-sm transition-all"><i className="fa-solid fa-filter-circle-xmark mr-1"></i> Clear</button>
-                  </div>
-                </div>
-                
-                <div className="flex-1 overflow-auto custom-sidebar-scroll bg-slate-50/30">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-slate-100/80 backdrop-blur text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm border-b border-slate-200">
-                        <tr>
-                            <th className="px-5 py-4 w-12"><input type="checkbox" onChange={toggleSelectAllHistory} checked={selectedHistory.size === userHistoryLogs.length && userHistoryLogs.length > 0} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></th>
-                            <th className="px-5 py-4 font-extrabold tracking-wider">#</th>
-                            <th className="px-5 py-4 font-extrabold tracking-wider">Time</th>
-                            <th className="px-5 py-4 font-extrabold tracking-wider">Identity</th>
-                            <th className="px-5 py-4 font-extrabold tracking-wider">Action Core</th>
-                            <th className="px-5 py-4 font-extrabold tracking-wider">Audit Details</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {userHistoryLogs.length === 0 ? (
-                          <tr><td colSpan={6} className="px-5 py-20 text-center"><div className="flex flex-col items-center justify-center opacity-50"><i className="fa-solid fa-ghost text-5xl text-slate-300 mb-4"></i><span className="text-slate-500 font-bold">No historical data matches parameters.</span></div></td></tr>
-                      ) : (
-                          userHistoryLogs.map((log, idx) => (
-                            <tr key={log.id} className="hover:bg-indigo-50/30 transition-colors even:bg-slate-50/50">
-                               <td className="px-5 py-4"><input type="checkbox" checked={selectedHistory.has(log.id)} onChange={() => toggleSelectHistory(log.id)} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" /></td>
-                               <td className="px-5 py-4 text-slate-400 font-bold">{idx + 1}</td>
-                               <td className="px-5 py-4"><div className="text-xs font-bold text-slate-700">{log.dateString}</div><div className="text-[11px] text-slate-500 font-medium">{log.time}</div></td>
-                               <td className="px-5 py-4 font-bold text-indigo-600">{dbUsers.find(u => u.email === log.user)?.name || 'Unknown'}</td>
-                               <td className="px-5 py-4">
-                                   <span className={`text-[10px] font-extrabold uppercase tracking-widest px-3 py-1.5 rounded-lg shadow-sm border ${log.type === 'LOGIN' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50' : log.type === 'LOGOUT' ? 'bg-rose-50 text-rose-700 border-rose-200/50' : 'bg-white text-slate-600 border-slate-200'}`}>
-                                       {log.type === 'LOGIN' && <i className="fa-solid fa-right-to-bracket mr-1.5"></i>}
-                                       {log.type === 'LOGOUT' && <i className="fa-solid fa-right-from-bracket mr-1.5"></i>}
-                                       {log.type}
-                                   </span>
-                               </td>
-                               <td className="px-5 py-4 text-[13px] text-slate-600 font-medium">{stripHtml(log.content)}</td>
-                            </tr>
-                          ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
           </div>
         )}
 
