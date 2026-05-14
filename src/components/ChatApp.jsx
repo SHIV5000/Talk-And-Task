@@ -12,8 +12,6 @@ import InputArea from './Chat/InputArea.jsx';
 import ModalManager from './Modals/ModalManager.jsx';
 import MessageBubble from './Chat/MessageBubble.jsx'; 
 
-
-
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
 import useChatEngine from '../hooks/useChatEngine.js';
@@ -161,7 +159,8 @@ export default function ChatApp({ user, onLogout }) {
     const { 
         isVipAdmin, currentUserData, dbUsers, groups, customTags,
         activeReminders, genericNotifications, allAdminReminders, 
-        immutableAuditLogs, toolPreferences, setToolPreferences 
+        immutableAuditLogs, toolPreferences, setToolPreferences,
+        globalAnnouncement // 👈 HOOKED IN
     } = useWorkspaceData(user, profileForm, setProfileForm);
 
     const {
@@ -818,331 +817,352 @@ export default function ChatApp({ user, onLogout }) {
     }
     
     return (
-        <div className="flex h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900">
+        <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900">
             
-            
-            {activeReminderAlert && (
-                <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white rounded-3xl shadow-2xl z-[100] border border-indigo-100 p-6 animate-in slide-in-from-top-10 duration-700">
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-inner relative">
-                            <span className="absolute inset-0 rounded-full bg-indigo-400 opacity-20 animate-ping"></span>
-                            <i className="fa-solid fa-bell text-xl relative z-10 animate-bounce"></i>
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800 leading-tight">Reminder</h3>
-                            <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest">Time's Up!</span>
-                        </div>
-                    </div>
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner mb-6">
-                        <p className="text-slate-700 font-medium text-sm">"{activeReminderAlert.messageText}"</p>
-                    </div>
-                    <div className="flex gap-3">
-                        <button onClick={() => { setActiveModal('reminder'); setReminderDateTime(''); setActiveReminderAlert(null); }} className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-50 shadow-sm transition-all">Snooze</button>
-                        <button onClick={() => setActiveReminderAlert(null)} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 shadow-[0_4px_15px_rgba(79,70,229,0.4)] hover:-translate-y-0.5 transition-all">OK</button>
+            {/* 👇 THE NEW GLOBAL BROADCAST BANNER 👇 */}
+            {globalAnnouncement?.isActive && (
+                <div className={`flex items-center justify-center px-4 py-3 shrink-0 shadow-md relative z-[100] ${
+                    globalAnnouncement.type === 'emergency' ? 'bg-rose-600 text-white border-b-4 border-rose-800' : 
+                    globalAnnouncement.type === 'warning' ? 'bg-amber-500 text-white border-b-4 border-amber-600' : 
+                    'bg-indigo-600 text-white border-b-4 border-indigo-800'
+                }`}>
+                    <i className={`fa-solid ${
+                        globalAnnouncement.type === 'emergency' ? 'fa-triangle-exclamation animate-pulse' : 
+                        globalAnnouncement.type === 'warning' ? 'fa-circle-exclamation' : 'fa-bullhorn'
+                    } mr-3 text-lg`}></i>
+                    <div className="text-sm font-bold tracking-wide">
+                        <span className="uppercase opacity-80 mr-2">{globalAnnouncement.author}:</span>
+                        {globalAnnouncement.message}
                     </div>
                 </div>
             )}
-
-            {viewMode === "admin" ? (
-           <AdminPanel
-              setViewMode={setViewMode}
-              setActiveModal={setActiveModal}
-              dbUsers={dbUsers}
-              groups={groups}
-              filteredAuditLogs={immutableAuditLogs} 
-              adminFilterUser={adminFilterUser}
-              setAdminFilterUser={setAdminFilterUser}
-              adminFilterDate={adminFilterDate}
-              setAdminFilterDate={setAdminFilterDate}
-              adminFilterType={adminFilterType}
-              setAdminFilterType={setAdminFilterType}
-              adminFilterGroup={adminFilterGroup}
-              setAdminFilterGroup={setAdminFilterGroup}
-              handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
-              handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
-              handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
-              setSelectedMessage={setSelectedMessage}
-              setIsEditingTaskTitle={setIsEditingTaskTitle}
-              messages={messages}
-              setGroupForm={setGroupForm}
-              setEditingGroup={setEditingGroup}
-              groupForm={groupForm}
-              editingGroup={editingGroup}
-              handleGroupSubmit={handleGroupSubmit}
-              handleGroupPicUpload={handleGroupPicUpload}
-              groupPicUploadProgress={groupPicUploadProgress}
-            />
-            ) : (
-                <div className="flex h-full w-full relative">
-                    <LeftSidebar 
-                        user={user} currentUserData={currentUserData} myGroups={myGroups} dmUsers={dmUsers} activeGroup={activeGroup} setActiveGroup={setActiveGroup}
-                        setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} getUnreadInfoForUser={getUnreadInfoForUser}
-                        getUnreadInfoForGroup={getUnreadInfoForGroup} messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
-                        sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={isVipAdmin} setViewMode={setViewMode}
-                    />
-                    
-                    {!activeGroup ? (
-                        <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
-                            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
-                                <i className="fa-solid fa-comments text-4xl"></i>
+            
+            <div className="flex-1 flex overflow-hidden relative">
+                {activeReminderAlert && (
+                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white rounded-3xl shadow-2xl z-[100] border border-indigo-100 p-6 animate-in slide-in-from-top-10 duration-700">
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-inner relative">
+                                <span className="absolute inset-0 rounded-full bg-indigo-400 opacity-20 animate-ping"></span>
+                                <i className="fa-solid fa-bell text-xl relative z-10 animate-bounce"></i>
                             </div>
-                            <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Talk & Task</h2>
-                            <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
-                            {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
-                                <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-all">
-                                    <i className="fa-solid fa-layer-group mr-2"></i> Create Department
-                                </button>
-                            )}                            
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800 leading-tight">Reminder</h3>
+                                <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest">Time's Up!</span>
+                            </div>
                         </div>
-                    ) : (
-                        <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0">
-                            <div className="h-[59px] bg-white flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
-                                <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
-                                
-                                <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) setActiveModal('group_settings'); }}>
-                                    {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
-                                    <div className="flex flex-col min-w-0 flex-1">
-                                        <span className={`text-[16px] font-bold leading-tight truncate text-slate-800`}>{activeGroup.name}</span>
-                                        <span className="text-[13px] text-indigo-500 truncate max-w-[150px] lg:max-w-[400px]">
-                                            {activeGroup.isDM ? 'End-to-Server Encrypted' :
-                                                (dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).length > 0)
-                                                ? dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).map(u=>u.name.split(' ')[0]).join(', ') + ' (Online)'
-                                                : `${activeGroup.members?.length||0} Members`
-                                            }
-                                        </span>
-                                    </div>
-                                </div>
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner mb-6">
+                            <p className="text-slate-700 font-medium text-sm">"{activeReminderAlert.messageText}"</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => { setActiveModal('reminder'); setReminderDateTime(''); setActiveReminderAlert(null); }} className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-50 shadow-sm transition-all">Snooze</button>
+                            <button onClick={() => setActiveReminderAlert(null)} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 shadow-[0_4px_15px_rgba(79,70,229,0.4)] hover:-translate-y-0.5 transition-all">OK</button>
+                        </div>
+                    </div>
+                )}
 
-                                <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
-                                    <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
-                                        <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
-                                        <input 
-                                           type="text" 
-                                           placeholder="Global Search (Users, Tags, Tasks, Messages)..." 
-                                           className="bg-transparent outline-none flex-1 text-[13px] text-slate-800 placeholder-slate-400 font-medium" 
-                                           value={searchQuery} 
-                                           onChange={(e) => setSearchQuery(e.target.value)} 
-                                           onFocus={() => setIsSearchFocused(true)} 
-                                        />
-                                        {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
-                                    </div>
+                {viewMode === "admin" ? (
+               <AdminPanel
+                  setViewMode={setViewMode}
+                  setActiveModal={setActiveModal}
+                  dbUsers={dbUsers}
+                  groups={groups}
+                  filteredAuditLogs={immutableAuditLogs} 
+                  adminFilterUser={adminFilterUser}
+                  setAdminFilterUser={setAdminFilterUser}
+                  adminFilterDate={adminFilterDate}
+                  setAdminFilterDate={setAdminFilterDate}
+                  adminFilterType={adminFilterType}
+                  setAdminFilterType={setAdminFilterType}
+                  adminFilterGroup={adminFilterGroup}
+                  setAdminFilterGroup={setAdminFilterGroup}
+                  handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
+                  handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
+                  handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
+                  setSelectedMessage={setSelectedMessage}
+                  setIsEditingTaskTitle={setIsEditingTaskTitle}
+                  messages={messages}
+                  setGroupForm={setGroupForm}
+                  setEditingGroup={setEditingGroup}
+                  groupForm={groupForm}
+                  editingGroup={editingGroup}
+                  handleGroupSubmit={handleGroupSubmit}
+                  handleGroupPicUpload={handleGroupPicUpload}
+                  groupPicUploadProgress={groupPicUploadProgress}
+                  globalAnnouncement={globalAnnouncement}
+                  currentUserData={currentUserData}
+                />
+                ) : (
+                    <div className="flex h-full w-full relative">
+                        <LeftSidebar 
+                            user={user} currentUserData={currentUserData} myGroups={myGroups} dmUsers={dmUsers} activeGroup={activeGroup} setActiveGroup={setActiveGroup}
+                            setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} getUnreadInfoForUser={getUnreadInfoForUser}
+                            getUnreadInfoForGroup={getUnreadInfoForGroup} messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
+                            sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={isVipAdmin} setViewMode={setViewMode}
+                        />
+                        
+                        {!activeGroup ? (
+                            <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
+                                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
+                                    <i className="fa-solid fa-comments text-4xl"></i>
+                                </div>
+                                <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Talk & Task</h2>
+                                <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
+                                {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
+                                    <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-all">
+                                        <i className="fa-solid fa-layer-group mr-2"></i> Create Department
+                                    </button>
+                                )}                            
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0">
+                                <div className="h-[59px] bg-white flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
+                                    <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
                                     
-                                    {isSearchFocused && globalSearchResults && (
-                                        <div className="absolute top-[110%] left-0 w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                            <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
-                                                <span>Global Search Engine</span>
-                                                <span>{globalSearchResults.users.length + globalSearchResults.tags.length + globalSearchResults.messages.length} Found</span>
-                                            </div>
-                                            <div className="overflow-y-auto p-2 custom-sidebar-scroll">
-                                                
-                                                {globalSearchResults.users.length > 0 && (
-                                                    <div className="mb-4">
-                                                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-users mr-1"></i> Directory Users</div>
-                                                        {globalSearchResults.users.map(u => (
-                                                            <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-100">
-                                                                <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
-                                                                <div>
-                                                                    <div className="font-bold text-slate-800 text-sm leading-tight">{u.name}</div>
-                                                                    <div className="text-[11px] text-slate-400 font-medium">{u.email}</div>
+                                    <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) setActiveModal('group_settings'); }}>
+                                        {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <span className={`text-[16px] font-bold leading-tight truncate text-slate-800`}>{activeGroup.name}</span>
+                                            <span className="text-[13px] text-indigo-500 truncate max-w-[150px] lg:max-w-[400px]">
+                                                {activeGroup.isDM ? 'End-to-Server Encrypted' :
+                                                    (dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).length > 0)
+                                                    ? dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).map(u=>u.name.split(' ')[0]).join(', ') + ' (Online)'
+                                                    : `${activeGroup.members?.length||0} Members`
+                                                }
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
+                                        <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
+                                            <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
+                                            <input 
+                                               type="text" 
+                                               placeholder="Global Search (Users, Tags, Tasks, Messages)..." 
+                                               className="bg-transparent outline-none flex-1 text-[13px] text-slate-800 placeholder-slate-400 font-medium" 
+                                               value={searchQuery} 
+                                               onChange={(e) => setSearchQuery(e.target.value)} 
+                                               onFocus={() => setIsSearchFocused(true)} 
+                                            />
+                                            {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
+                                        </div>
+                                        
+                                        {isSearchFocused && globalSearchResults && (
+                                            <div className="absolute top-[110%] left-0 w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                                <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
+                                                    <span>Global Search Engine</span>
+                                                    <span>{globalSearchResults.users.length + globalSearchResults.tags.length + globalSearchResults.messages.length} Found</span>
+                                                </div>
+                                                <div className="overflow-y-auto p-2 custom-sidebar-scroll">
+                                                    
+                                                    {globalSearchResults.users.length > 0 && (
+                                                        <div className="mb-4">
+                                                            <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-users mr-1"></i> Directory Users</div>
+                                                            {globalSearchResults.users.map(u => (
+                                                                <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-100">
+                                                                    <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
+                                                                    <div>
+                                                                        <div className="font-bold text-slate-800 text-sm leading-tight">{u.name}</div>
+                                                                        <div className="text-[11px] text-slate-400 font-medium">{u.email}</div>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                
-                                                {globalSearchResults.tags.length > 0 && (
-                                                    <div className="mb-4">
-                                                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-hashtag mr-1"></i> Workflow Tags</div>
-                                                        <div className="flex flex-wrap gap-2 px-3 pt-1">
-                                                            {globalSearchResults.tags.map(t => (
-                                                                <span key={t.id} className={`px-2.5 py-1 rounded-md text-xs font-bold shadow-sm ${t.bgClass} ${t.textClass}`}>{t.label}</span>
                                                             ))}
                                                         </div>
-                                                    </div>
-                                                )}
-                                                
-                                                {globalSearchResults.messages.length > 0 && (
-                                                    <div className="mb-2">
-                                                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
-                                                        {globalSearchResults.messages.map(m => (
-                                                            <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
-                                                                <div className="flex justify-between items-center">
-                                                                    <div className="text-[11px] font-extrabold text-indigo-600">{(m.sender||'').split('@')[0]}</div>
-                                                                    <div className="text-[10px] text-slate-400 font-semibold">{m.dateString}</div>
-                                                                </div>
-                                                                <div className="text-[13px] text-slate-700 line-clamp-2 leading-snug font-medium">
-                                                                    {m.text || m.fileName || 'Attached File'}
-                                                                </div>
-                                                                {m.isTask && (
-                                                                    <div className="text-[9px] mt-1.5 font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded w-fit border border-amber-200 uppercase tracking-wider">
-                                                                        <i className="fa-solid fa-square-check mr-1"></i> Task Card
-                                                                    </div>
-                                                                )}
+                                                    )}
+                                                    
+                                                    {globalSearchResults.tags.length > 0 && (
+                                                        <div className="mb-4">
+                                                            <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-hashtag mr-1"></i> Workflow Tags</div>
+                                                            <div className="flex flex-wrap gap-2 px-3 pt-1">
+                                                                {globalSearchResults.tags.map(t => (
+                                                                    <span key={t.id} className={`px-2.5 py-1 rounded-md text-xs font-bold shadow-sm ${t.bgClass} ${t.textClass}`}>{t.label}</span>
+                                                                ))}
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                
-                                                {globalSearchResults.users.length === 0 && globalSearchResults.tags.length === 0 && globalSearchResults.messages.length === 0 && (
-                                                    <div className="text-center p-8 text-slate-400 font-medium text-sm flex flex-col items-center">
-                                                        <i className="fa-solid fa-magnifying-glass text-3xl mb-3 text-slate-300"></i>
-                                                        No matching results found across the workspace.
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                
-                                <div className="flex items-center gap-1 shrink-0 relative">
-                                  <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50" title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
-                                  {showFilterMenu && (
-                                    <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-200">
-                                      {['all','tasks-pending','tasks-completed','messages','today','bookmarked'].map(f => (
-                                        <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}>
-                                          {f === 'bookmarked' ? 'BookMark' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-
-                                  <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
-                                    <i className="fa-solid fa-calendar-alt"></i>
-                                  </button>
-
-                                  <div className="relative">
-                                    <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px] relative`}>
-                                      <i className="fa-solid fa-bell"></i>
-                                      {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
-                                    </button>
-
-                                    {showNotifications && (
-                                      <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
-                                        <div className="p-3.5 bg-slate-50 flex justify-between items-center border-b border-slate-200">
-                                          <span className="text-[14px] font-bold text-slate-800 uppercase tracking-wide">Activity Feed</span>
-                                          <button onClick={() => genericNotifications.map(n => updateDoc(doc(db, "notifications", n.id), { isRead: true }))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
-                                        </div>
-                                        <div className="max-h-[70vh] overflow-y-auto bg-slate-50/50 p-2.5">
-                                          {totalNotifications === 0 ? <div className="p-8 text-center text-[13px] font-medium text-slate-400">No new activity</div> : (
-                                            <div className="flex flex-col gap-1.5">
-                                              {activeActionableTasks.length > 0 && (
-                                                <div className="mb-2">
-                                                  <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Action Required</div>
-                                                  <div className="space-y-2">
-                                                    {[...activeActionableTasks].sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(task => {
-                                                        const timeStr = task.timestamp?.toDate ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                                                        return (
-                                                          <div key={task.id} onClick={() => navigateToMessageFromNotification(task.id, task.groupId)} className="bg-white p-3.5 rounded-xl border border-rose-100 shadow-sm cursor-pointer hover:border-rose-300 transition-all relative">
-                                                            <div className="text-[12px] font-bold text-rose-600 mb-1.5 flex items-center justify-between"><span className="flex items-center"><i className="fa-regular fa-square-check mr-1.5"></i>Pending Task</span><span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span></div>
-                                                            <div className="text-[13px] text-slate-800 line-clamp-2 leading-snug font-medium">"{task.text}"</div>
-                                                            <div className="text-[11px] text-rose-500 font-bold mt-1.5">Assigned to You <i className="fa-regular fa-clock ml-0.5"></i></div>
-                                                          </div>
-                                                        );
-                                                    })}
-                                                  </div>
-                                                </div>
-                                              )}
-                                              {genericNotifications.length > 0 && (
-                                                <div>
-                                                  {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
-                                                  <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
-                                                  <div className="space-y-2">
-                                                    {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => {
-                                                      const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
-                                                      return (
-                                                        <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow transition-all flex items-start gap-3 relative pr-8">
-                                                          <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "notifications", n.id)); }} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
-                                                            <i className="fa-solid fa-xmark text-[11px]"></i>
-                                                          </button>
-                                                          <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5"><i className={n.type === 'reply' ? 'fa-solid fa-reply text-xs' : n.type === 'mention' ? 'fa-solid fa-at text-xs' : n.type === 'reminder' ? 'fa-solid fa-clock text-xs' : n.type === 'reaction' ? 'fa-solid fa-face-smile text-xs' : 'fa-solid fa-bolt text-xs'}></i></div>
-                                                          <div className="flex-1 overflow-hidden pb-4">
-                                                            <div className="text-[13px] font-bold text-slate-800">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : n.type === 'reminder' ? 'Reminder Alert' : n.type === 'task' ? 'Task Update' : n.type === 'reaction' ? 'New Reaction' : 'Notification'}</div>
-                                                            <div className="text-[12px] text-slate-600 mt-0.5 leading-snug line-clamp-2 break-words font-medium">{n.text}</div>
-                                                          </div>
-                                                          <div className="absolute bottom-2 right-3 text-[9px] text-slate-400 font-bold bg-white pl-2">{timeStr}</div>
                                                         </div>
-                                                      );
-                                                    })}
-                                                  </div>
+                                                    )}
+                                                    
+                                                    {globalSearchResults.messages.length > 0 && (
+                                                        <div className="mb-2">
+                                                            <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
+                                                            {globalSearchResults.messages.map(m => (
+                                                                <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
+                                                                    <div className="flex justify-between items-center">
+                                                                        <div className="text-[11px] font-extrabold text-indigo-600">{(m.sender||'').split('@')[0]}</div>
+                                                                        <div className="text-[10px] text-slate-400 font-semibold">{m.dateString}</div>
+                                                                    </div>
+                                                                    <div className="text-[13px] text-slate-700 line-clamp-2 leading-snug font-medium">
+                                                                        {m.text || m.fileName || 'Attached File'}
+                                                                    </div>
+                                                                    {m.isTask && (
+                                                                        <div className="text-[9px] mt-1.5 font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded w-fit border border-amber-200 uppercase tracking-wider">
+                                                                            <i className="fa-solid fa-square-check mr-1"></i> Task Card
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {globalSearchResults.users.length === 0 && globalSearchResults.tags.length === 0 && globalSearchResults.messages.length === 0 && (
+                                                        <div className="text-center p-8 text-slate-400 font-medium text-sm flex flex-col items-center">
+                                                            <i className="fa-solid fa-magnifying-glass text-3xl mb-3 text-slate-300"></i>
+                                                            No matching results found across the workspace.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-1 shrink-0 relative">
+                                      <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50" title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
+                                      {showFilterMenu && (
+                                        <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-200">
+                                          {['all','tasks-pending','tasks-completed','messages','today','bookmarked'].map(f => (
+                                            <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}>
+                                              {f === 'bookmarked' ? 'BookMark' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
+                                        <i className="fa-solid fa-calendar-alt"></i>
+                                      </button>
+
+                                      <div className="relative">
+                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px] relative`}>
+                                          <i className="fa-solid fa-bell"></i>
+                                          {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
+                                        </button>
+
+                                        {showNotifications && (
+                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
+                                            <div className="p-3.5 bg-slate-50 flex justify-between items-center border-b border-slate-200">
+                                              <span className="text-[14px] font-bold text-slate-800 uppercase tracking-wide">Activity Feed</span>
+                                              <button onClick={() => genericNotifications.map(n => updateDoc(doc(db, "notifications", n.id), { isRead: true }))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
+                                            </div>
+                                            <div className="max-h-[70vh] overflow-y-auto bg-slate-50/50 p-2.5">
+                                              {totalNotifications === 0 ? <div className="p-8 text-center text-[13px] font-medium text-slate-400">No new activity</div> : (
+                                                <div className="flex flex-col gap-1.5">
+                                                  {activeActionableTasks.length > 0 && (
+                                                    <div className="mb-2">
+                                                      <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Action Required</div>
+                                                      <div className="space-y-2">
+                                                        {[...activeActionableTasks].sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(task => {
+                                                            const timeStr = task.timestamp?.toDate ? new Date(task.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                                            return (
+                                                              <div key={task.id} onClick={() => navigateToMessageFromNotification(task.id, task.groupId)} className="bg-white p-3.5 rounded-xl border border-rose-100 shadow-sm cursor-pointer hover:border-rose-300 transition-all relative">
+                                                                <div className="text-[12px] font-bold text-rose-600 mb-1.5 flex items-center justify-between"><span className="flex items-center"><i className="fa-regular fa-square-check mr-1.5"></i>Pending Task</span><span className="text-[10px] text-slate-400 font-semibold">{timeStr}</span></div>
+                                                                <div className="text-[13px] text-slate-800 line-clamp-2 leading-snug font-medium">"{task.text}"</div>
+                                                                <div className="text-[11px] text-rose-500 font-bold mt-1.5">Assigned to You <i className="fa-regular fa-clock ml-0.5"></i></div>
+                                                              </div>
+                                                            );
+                                                        })}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {genericNotifications.length > 0 && (
+                                                    <div>
+                                                      {activeActionableTasks.length > 0 && <div className="border-t border-slate-200 my-3 mx-2"></div>}
+                                                      <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Updates</div>
+                                                      <div className="space-y-2">
+                                                        {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => {
+                                                          const timeStr = n.timestamp?.toDate ? new Date(n.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
+                                                          return (
+                                                            <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow transition-all flex items-start gap-3 relative pr-8">
+                                                              <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "notifications", n.id)); }} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
+                                                                <i className="fa-solid fa-xmark text-[11px]"></i>
+                                                              </button>
+                                                              <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5"><i className={n.type === 'reply' ? 'fa-solid fa-reply text-xs' : n.type === 'mention' ? 'fa-solid fa-at text-xs' : n.type === 'reminder' ? 'fa-solid fa-clock text-xs' : n.type === 'reaction' ? 'fa-solid fa-face-smile text-xs' : 'fa-solid fa-bolt text-xs'}></i></div>
+                                                              <div className="flex-1 overflow-hidden pb-4">
+                                                                <div className="text-[13px] font-bold text-slate-800">{n.type === 'reply' ? 'New Reply' : n.type === 'message' ? 'Direct Message' : n.type === 'mention' ? 'Mentioned You' : n.type === 'reminder' ? 'Reminder Alert' : n.type === 'task' ? 'Task Update' : n.type === 'reaction' ? 'New Reaction' : 'Notification'}</div>
+                                                                <div className="text-[12px] text-slate-600 mt-0.5 leading-snug line-clamp-2 break-words font-medium">{n.text}</div>
+                                                              </div>
+                                                              <div className="absolute bottom-2 right-3 text-[9px] text-slate-400 font-bold bg-white pl-2">{timeStr}</div>
+                                                            </div>
+                                                          );
+                                                        })}
+                                                      </div>
+                                                    </div>
+                                                  )}
                                                 </div>
                                               )}
                                             </div>
-                                          )}
-                                        </div>
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
-                                  </div>
-                                    
-                                  <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
-                                  
-                                  {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
-                                    
+                                        
+                                      <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                      
+                                      {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
+                                        
+                                    </div>
                                 </div>
+
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[80px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
+                                    <i className="fa-solid fa-arrow-down"></i>
+                                </button>
+
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[90px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
+                                    <i className="fa-solid fa-arrow-up"></i>
+                                </button>
+                                
+                                <ChatView
+                                    messagesToRender={messagesToRender} messages={messages} activeGroup={activeGroup} user={user} currentUserData={currentUserData}
+                                    isVipAdmin={isVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo} setReplyingTo={setReplyingTo} 
+                                    toolPreferences={toolPreferences} dbUsers={dbUsers} groups={groups} setActiveGroup={setActiveGroup} setShowRightSidebar={setShowRightSidebar} 
+                                    setMobileSidebarOpen={setMobileSidebarOpen} pendingScrollTarget={pendingScrollTarget} setPendingScrollTarget={setPendingScrollTarget}
+                                    setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReactionIntercept} 
+                                    handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} handleDeleteMessage={deleteMessageDB}
+                                    chatInputRef={chatInputRef} editingMessageId={editingMessageId} editMessageText={editMessageText} setEditingMessageId={setEditingMessageId} 
+                                    setEditMessageText={setEditMessageText} handleSaveEdit={handleSaveEdit} setSelectedMessage={setSelectedMessage} 
+                                    setIsEditingTaskTitle={setIsEditingTaskTitle} messagesEndRef={messagesEndRef} chatContainerRef={chatContainerRef} 
+                                    isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId} unreadHighlightIds={unreadHighlightIds} 
+                                    handleAddInlineComment={handleAddInlineComment} jumpToPrivateSource={(msgId, groupId) => navigateToMessageFromNotification(msgId, groupId)}
+                                    customTags={customTags} setActiveThread={setActiveThread}
+                                />
+
+                                <InputArea
+                                    inputText={inputText} setInputText={setInputText} isOnline={isOnline} isUploading={isUploading} activeGroup={activeGroup}
+                                    replyingTo={replyingTo} setReplyingTo={setReplyingTo} handleSendOfflineAware={handleSendOfflineAware}
+                                    handleTypingEvent={handleTypingEvent} handlePaste={handlePaste} chatInputRef={chatInputRef} fileInputRef={fileInputRef}
+                                    handleFileUpload={handleFileUpload} emojiPickerOpen={emojiPickerOpen} setEmojiPickerOpen={setEmojiPickerOpen}
+                                    emojiPickerRef={emojiPickerRef} pendingFiles={pendingFiles} setPendingFiles={setPendingFiles} showFileRename={showFileRename}
+                                    setShowFileRename={setShowFileRename} 
+                                    uploadFileDirectly={async (pf) => {
+                                        const latestInput = inputText.trim();
+                                        let finalCaption = pf.caption || "";
+                                        if (latestInput) finalCaption = finalCaption ? `${latestInput}\n${finalCaption}` : latestInput;
+                                        pf.caption = finalCaption; pf.text = finalCaption; setInputText("");
+                                        if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
+                                        await uploadAndSendFileDB(pf, setUploadProgress);
+                                    }} 
+                                    setActiveModal={setActiveModal}
+                                    setPendingScheduledText={setPendingScheduledText} offlineDrafts={offlineDrafts} user={user} dbUsers={dbUsers}
+                                    groups={groups} currentUserData={currentUserData} MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB} handleSendPendingFiles={handleSendPendingFiles}
+                                />
                             </div>
+                        )}
 
-                            <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[80px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
-                                <i className="fa-solid fa-arrow-down"></i>
-                            </button>
-
-                            <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[90px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
-                                <i className="fa-solid fa-arrow-up"></i>
-                            </button>
-                            
-                            <ChatView
-                                messagesToRender={messagesToRender} messages={messages} activeGroup={activeGroup} user={user} currentUserData={currentUserData}
-                                isVipAdmin={isVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo} setReplyingTo={setReplyingTo} 
-                                toolPreferences={toolPreferences} dbUsers={dbUsers} groups={groups} setActiveGroup={setActiveGroup} setShowRightSidebar={setShowRightSidebar} 
-                                setMobileSidebarOpen={setMobileSidebarOpen} pendingScrollTarget={pendingScrollTarget} setPendingScrollTarget={setPendingScrollTarget}
-                                setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReactionIntercept} 
-                                handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} handleDeleteMessage={deleteMessageDB}
-                                chatInputRef={chatInputRef} editingMessageId={editingMessageId} editMessageText={editMessageText} setEditingMessageId={setEditingMessageId} 
-                                setEditMessageText={setEditMessageText} handleSaveEdit={handleSaveEdit} setSelectedMessage={setSelectedMessage} 
-                                setIsEditingTaskTitle={setIsEditingTaskTitle} messagesEndRef={messagesEndRef} chatContainerRef={chatContainerRef} 
-                                isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId} unreadHighlightIds={unreadHighlightIds} 
-                                handleAddInlineComment={handleAddInlineComment} jumpToPrivateSource={(msgId, groupId) => navigateToMessageFromNotification(msgId, groupId)}
-                                customTags={customTags} setActiveThread={setActiveThread}
+                        {activeThread ? (
+                            <ThreadSidebar 
+                                activeThread={activeThread} setActiveThread={setActiveThread} messages={messages} user={user} 
+                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} handleReactionIntercept={handleReactionIntercept} 
+                                deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} customTags={customTags} 
+                                toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
                             />
-
-                            <InputArea
-                                inputText={inputText} setInputText={setInputText} isOnline={isOnline} isUploading={isUploading} activeGroup={activeGroup}
-                                replyingTo={replyingTo} setReplyingTo={setReplyingTo} handleSendOfflineAware={handleSendOfflineAware}
-                                handleTypingEvent={handleTypingEvent} handlePaste={handlePaste} chatInputRef={chatInputRef} fileInputRef={fileInputRef}
-                                handleFileUpload={handleFileUpload} emojiPickerOpen={emojiPickerOpen} setEmojiPickerOpen={setEmojiPickerOpen}
-                                emojiPickerRef={emojiPickerRef} pendingFiles={pendingFiles} setPendingFiles={setPendingFiles} showFileRename={showFileRename}
-                                setShowFileRename={setShowFileRename} 
-                                uploadFileDirectly={async (pf) => {
-                                    const latestInput = inputText.trim();
-                                    let finalCaption = pf.caption || "";
-                                    if (latestInput) finalCaption = finalCaption ? `${latestInput}\n${finalCaption}` : latestInput;
-                                    pf.caption = finalCaption; pf.text = finalCaption; setInputText("");
-                                    if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
-                                    await uploadAndSendFileDB(pf, setUploadProgress);
-                                }} 
-                                setActiveModal={setActiveModal}
-                                setPendingScheduledText={setPendingScheduledText} offlineDrafts={offlineDrafts} user={user} dbUsers={dbUsers}
-                                groups={groups} currentUserData={currentUserData} MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB} handleSendPendingFiles={handleSendPendingFiles}
-                            />
-                        </div>
-                    )}
-
-                    {activeThread ? (
-                        <ThreadSidebar 
-                            activeThread={activeThread} setActiveThread={setActiveThread} messages={messages} user={user} 
-                            currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} handleReactionIntercept={handleReactionIntercept} 
-                            deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} customTags={customTags} 
-                            toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
-                        />
-                    ) : showRightSidebar ? (
-                      <RightSidebar
-                        showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
-                        tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                        navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
-                      />
-                    ) : null}
-                    <ModalManager {...modalProps} />
-                    <Toast toasts={toasts} removeToast={removeToast} />
-                </div>
-            )}
+                        ) : showRightSidebar ? (
+                          <RightSidebar
+                            showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
+                            tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
+                            navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
+                          />
+                        ) : null}
+                        <ModalManager {...modalProps} />
+                        <Toast toasts={toasts} removeToast={removeToast} />
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
