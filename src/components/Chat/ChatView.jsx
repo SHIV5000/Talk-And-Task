@@ -13,7 +13,7 @@ export default function ChatView({
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
   unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
-  customTags 
+  customTags, setActiveThread 
 }) {
   
   const handleChatScroll = (e) => {
@@ -85,39 +85,44 @@ export default function ChatView({
         )}
 
         <div className="relative z-[1] flex flex-col justify-end">
-          {messagesToRender.map(msg => (
-            <MessageBubble
-              key={msg.id}
-              msg={msg}
-              userEmail={user.email}
-              currentUserData={currentUserData}
-              activeGroup={activeGroup}
-              isVipAdmin={isVipAdmin}
-              hasReplies={messages.some(m => m.replyToId === msg.id)}
-              isHighlighted={highlightedMsgId === msg.id}
-              isUnreadHighlight={unreadHighlightIds?.includes(msg.id)}
-              editingMessageId={editingMessageId}
-              editMessageText={editMessageText}
-              setEditingMessageId={setEditingMessageId}
-              setEditMessageText={setEditMessageText}
-              handleSaveEdit={handleSaveEdit}
-              scrollToMessageDirect={scrollToMessageDirect}
-              handleReaction={handleReaction}
-              handleToggleBookmark={handleToggleBookmark}
-              handleTogglePin={handleTogglePin}
-              handleDeleteMessage={handleDeleteMessage}
-              chatInputRef={chatInputRef}
-              toolPreferences={toolPreferences}
-              setReplyingTo={setReplyingTo}
-              setSelectedMessage={setSelectedMessage}
-              setIsEditingTaskTitle={setIsEditingTaskTitle}
-              setActiveModal={setActiveModal}
-              dbUsers={dbUsers}
-              jumpToPrivateSource={jumpToPrivateSource} 
-              handleAddInlineComment={handleAddInlineComment} 
-              customTags={customTags || []} 
-            />
-          ))}
+          {messagesToRender.map(msg => {
+            const threadReplyCount = messages.filter(m => m.replyToId === msg.id).length;
+            return (
+                <MessageBubble
+                key={msg.id}
+                msg={msg}
+                userEmail={user.email}
+                currentUserData={currentUserData}
+                activeGroup={activeGroup}
+                isVipAdmin={isVipAdmin}
+                hasReplies={threadReplyCount > 0}
+                replyCount={threadReplyCount}
+                isHighlighted={highlightedMsgId === msg.id}
+                isUnreadHighlight={unreadHighlightIds?.includes(msg.id)}
+                editingMessageId={editingMessageId}
+                editMessageText={editMessageText}
+                setEditingMessageId={setEditingMessageId}
+                setEditMessageText={setEditMessageText}
+                handleSaveEdit={handleSaveEdit}
+                scrollToMessageDirect={scrollToMessageDirect}
+                handleReaction={handleReaction}
+                handleToggleBookmark={handleToggleBookmark}
+                handleTogglePin={handleTogglePin}
+                handleDeleteMessage={handleDeleteMessage}
+                chatInputRef={chatInputRef}
+                toolPreferences={toolPreferences}
+                setReplyingTo={setReplyingTo}
+                setSelectedMessage={setSelectedMessage}
+                setIsEditingTaskTitle={setIsEditingTaskTitle}
+                setActiveModal={setActiveModal}
+                dbUsers={dbUsers}
+                jumpToPrivateSource={jumpToPrivateSource} 
+                handleAddInlineComment={handleAddInlineComment} 
+                customTags={customTags || []} 
+                setActiveThread={setActiveThread}
+                />
+            );
+          })}
         </div>
 
         {typingStatus.length > 0 && (
@@ -137,7 +142,6 @@ export default function ChatView({
         
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
-      
     </div>
   );
 }
