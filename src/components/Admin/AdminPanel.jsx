@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { db } from '../../firebase.js';
-import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore'; // Added setDoc
+import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-// ... (KEEP ALL EXISTING TAG THEMES AND VERTICAL TREE NODE EXACTLY THE SAME) ...
+// ... (TAG THEMES AND VERTICAL TREE NODE UNCHANGED) ...
 const tagThemes = {
   teal: { bg: 'bg-teal-50', text: 'text-teal-700' },
   indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700' },
@@ -106,14 +106,15 @@ export default function AdminPanel({
   setSelectedMessage, setIsEditingTaskTitle, messages,
   setGroupForm, setEditingGroup, editingGroup, groupForm,
   handleGroupSubmit, handleGroupPicUpload, groupPicUploadProgress, customTags,
-  globalAnnouncement, currentUserData // 👈 Passed down
+  globalAnnouncement, currentUserData
 }) { 
-  const [activeTab, setActiveTab] = useState('tasks');
+  const [activeTab, setActiveTab] = useState('dashboard'); // default to new dashboard
   const [logSubTab, setLogSubTab] = useState('tasks');
+  const [dashboardTimeRange, setDashboardTimeRange] = useState('today'); // new
   
   // Broadcast Form State
   const [broadcastMessage, setBroadcastMessage] = useState('');
-  const [broadcastType, setBroadcastType] = useState('info'); // info, warning, emergency
+  const [broadcastType, setBroadcastType] = useState('info');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   
   const [historyUserEmail, setHistoryUserEmail] = useState('');
@@ -128,7 +129,7 @@ export default function AdminPanel({
   const [selectedLogs, setSelectedLogs] = useState(new Set());
   const [selectedHistory, setSelectedHistory] = useState(new Set());
   const [selectedReactions, setSelectedReactions] = useState(new Set()); 
-  const [localOverlay, setLocalOverlay] = useState(null); 
+  // localOverlay removed – group form now inline
   const [taskFilterStatus, setTaskFilterStatus] = useState('All');
   const [taskFilterStart, setTaskFilterStart] = useState('');
   const [taskFilterEnd, setTaskFilterEnd] = useState('');
@@ -140,6 +141,7 @@ export default function AdminPanel({
   const [reactionFilterMsgId, setReactionFilterMsgId] = useState("");
   const [reactionFilterDate, setReactionFilterDate] = useState("");
 
+  // ... (useMemo blocks remain identical – taskLogs, messageLogs, currentLogs, userHistoryLogs, filteredUsers, filteredTaskMessages, treeData) ...
   const taskLogs = useMemo(() => {
     let logs = filteredAuditLogs.filter(l => l.type?.startsWith('TASK_'));
     if (adminFilterUser) logs = logs.filter(l => l.user === adminFilterUser);
@@ -227,7 +229,6 @@ export default function AdminPanel({
       } catch(e) { alert("Failed to save tag."); }
   };
 
-  // 👇 NEW: BROADCAST CONTROL FUNCTIONS 👇
   const publishBroadcast = async () => {
       if (!broadcastMessage.trim()) return alert('Please enter a message to broadcast.');
       setIsBroadcasting(true);
@@ -254,7 +255,48 @@ export default function AdminPanel({
       } catch (error) {}
   };
 
+  // Dashboard Metrics (NEW)
+  const dashboardMetrics = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const cutoff = dashboardTimeRange === 'today' ? todayStart :
+                    dashboardTimeRange === 'week' ? weekAgo : monthAgo;
 
+    const recentMessages = messages.filter(m => {
+      const t = m.timestamp?.toMillis?.() || 0;
+      return t >= cutoff.getTime();
+    });
+
+    const tasks = recentMessages.filter(m => m.isTask);
+    const completedTasks = tasks.filter(t => t.taskData?.status === 'Completed');
+    const activeTasks = tasks.filter(t => t.taskData?.status !== 'Completed');
+
+    const usersActiveRecently = dbUsers.filter(u => {
+      if (!u.lastActive?.toMillis) return false;
+      return u.lastActive.toMillis() >= cutoff.getTime();
+    });
+
+    return {
+      totalMessages: recentMessages.length,
+      totalTasks: tasks.length,
+      completedTasks: completedTasks.length,
+      activeTasks: activeTasks.length,
+      activeUsersCount: usersActiveRecently.length,
+      pendingApprovals: dbUsers.filter(u => !u.isApproved).length,
+      newestUser: dbUsers.sort((a, b) => (b.lastActive?.toMillis?.() || 0) - (a.lastActive?.toMillis?.() || 0))[0],
+    };
+  }, [messages, dbUsers, dashboardTimeRange]);
+
+  const recentAuditFeed = useMemo(() => {
+    return filteredAuditLogs.slice(0, 10).map(log => ({
+      ...log,
+      userName: dbUsers.find(u => u.email === log.user)?.name || 'System',
+    }));
+  }, [filteredAuditLogs, dbUsers]);
+
+  // ... (rest of existing functions: sendersWithReactions, messagesBySender, reactionLogs, toggle select functions, printSelectedPDF, handleAddUser, download30DayLogins remain unchanged) ...
   const sendersWithReactions = useMemo(() => {
       const senders = new Set();
       messages.forEach(m => { if (Object.keys(m.reactions||{}).length > 0) senders.add(m.senderEmail); });
@@ -345,7 +387,8 @@ export default function AdminPanel({
           <h1 className="font-bold text-lg text-white tracking-wide">Admin Workspace</h1>
         </div>
         <div className="flex items-center gap-2">
-          {['users', 'logs', 'history', 'reactions'].includes(activeTab) && (
+          {/* Print button only for users, logs, history (fixed) */}
+          {['users', 'logs', 'history'].includes(activeTab) && (
             <button onClick={printSelectedPDF} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30"><i className="fa-solid fa-file-pdf"></i> Print Selected</button>
           )}
           <button onClick={() => { setActiveModal(null); setViewMode("chat"); }} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30"><i className="fa-solid fa-arrow-left"></i> Back to App</button>
@@ -353,9 +396,10 @@ export default function AdminPanel({
       </div>
 
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll shrink-0">
-        {/* Added Broadcast Tab */}
-        {['tasks', 'groups', 'broadcast', 'tags', 'users', 'logs', 'reactions', 'history'].map(tab => ( 
+        {/* Added Dashboard tab */}
+        {['dashboard', 'tasks', 'groups', 'broadcast', 'tags', 'users', 'logs', 'reactions', 'history'].map(tab => ( 
           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-t-lg text-sm font-bold transition-colors whitespace-nowrap ${activeTab === tab ? 'bg-slate-50 text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}>
+            {tab === 'dashboard' && <i className="fa-solid fa-gauge-high mr-2"></i>}
             {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}{tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}{tab === 'logs' && <i className="fa-solid fa-list-check mr-2"></i>}{tab === 'tasks' && <i className="fa-solid fa-diagram-project mr-2"></i>}{tab === 'history' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}{tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}{tab === 'reactions' && <i className="fa-solid fa-face-smile mr-2"></i>}{tab === 'broadcast' && <i className="fa-solid fa-bullhorn mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
@@ -364,9 +408,129 @@ export default function AdminPanel({
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 relative">
         
-        {/* 👇 NEW BROADCAST TAB 👇 */}
+        {/* 👇 DASHBOARD TAB (NEW) */}
+        {activeTab === 'dashboard' && (
+          <div className="flex flex-col gap-6 h-full overflow-y-auto custom-sidebar-scroll">
+            {/* Time range selector */}
+            <div className="flex items-center gap-2 justify-end">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Show:</span>
+              {['today', 'week', 'month'].map(range => (
+                <button
+                  key={range}
+                  onClick={() => setDashboardTimeRange(range)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    dashboardTimeRange === range
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {range.charAt(0).toUpperCase() + range.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Messages</p>
+                    <p className="text-2xl font-extrabold text-slate-800 mt-1">{dashboardMetrics.totalMessages}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-comments"></i></div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Tasks</p>
+                    <p className="text-2xl font-extrabold text-slate-800 mt-1">{dashboardMetrics.activeTasks}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600"><i className="fa-solid fa-spinner"></i></div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Completed</p>
+                    <p className="text-2xl font-extrabold text-slate-800 mt-1">{dashboardMetrics.completedTasks}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600"><i className="fa-solid fa-check-circle"></i></div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Users</p>
+                    <p className="text-2xl font-extrabold text-slate-800 mt-1">{dashboardMetrics.activeUsersCount}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600"><i className="fa-solid fa-users"></i></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Second row: pending approvals + new user */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Approvals</p>
+                  <p className="text-2xl font-extrabold text-rose-600 mt-1">{dashboardMetrics.pendingApprovals}</p>
+                </div>
+                <button onClick={() => setActiveTab('users')} className="text-xs font-bold text-indigo-600 hover:underline">Manage Users</button>
+              </div>
+              {dashboardMetrics.newestUser && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
+                  <MemoizedAvatar uid={dashboardMetrics.newestUser.uid} url={dashboardMetrics.newestUser.profilePicUrl} name={dashboardMetrics.newestUser.name} sizeClass="w-12 h-12" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Newest User</p>
+                    <p className="text-lg font-bold text-slate-800">{dashboardMetrics.newestUser.name}</p>
+                    <p className="text-xs text-slate-500">{dashboardMetrics.newestUser.email}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Recent Activity Feed */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <i className="fa-solid fa-clock-rotate-left text-indigo-500"></i> Recent Activity
+                </h3>
+              </div>
+              <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto custom-sidebar-scroll">
+                {recentAuditFeed.length === 0 ? (
+                  <p className="px-5 py-4 text-sm text-slate-400 italic">No recent activity.</p>
+                ) : (
+                  recentAuditFeed.map((log, idx) => (
+                    <div key={log.id} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors">
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs ${
+                        log.type?.startsWith('TASK_') ? 'bg-amber-50 text-amber-600' :
+                        log.type === 'LOGIN' ? 'bg-emerald-50 text-emerald-600' :
+                        'bg-indigo-50 text-indigo-600'
+                      }`}>
+                        <i className={`fa-solid ${
+                          log.type?.startsWith('TASK_') ? 'fa-check-square' :
+                          log.type === 'LOGIN' ? 'fa-right-to-bracket' : 'fa-circle'
+                        }`}></i>
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700 truncate">
+                          <span className="font-semibold">{log.userName}</span> {log.content}
+                        </p>
+                        <p className="text-xs text-slate-400">{log.dateString} {log.time}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* BROADCAST TAB (unchanged) */}
         {activeTab === 'broadcast' && (
            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden max-w-4xl mx-auto">
+             {/* ... (keep original broadcast content unchanged) ... */}
              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
                  <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-tower-broadcast text-2xl"></i></div>
                  <div><h2 className="font-bold text-slate-800 text-xl leading-tight">Global Broadcast System</h2><span className="text-[11px] font-bold text-rose-500 uppercase tracking-wider">Push alerts to all active screens</span></div>
@@ -374,7 +538,6 @@ export default function AdminPanel({
              
              <div className="flex-1 flex flex-col gap-6 overflow-y-auto custom-sidebar-scroll">
                 
-                {/* Active Broadcast Monitor */}
                 {globalAnnouncement?.isActive ? (
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500"></div>
@@ -421,8 +584,7 @@ export default function AdminPanel({
            </div>
         )}
 
-        {/* ... (ALL OTHER TABS REMAIN EXACTLY THE SAME) ... */}
-        {/* TAGS STUDIO */}
+        {/* TAGS STUDIO (unchanged) */}
         {activeTab === 'tags' && (
            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
@@ -468,7 +630,7 @@ export default function AdminPanel({
            </div>
         )}
 
-        {/* REACTIONS TAB */}
+        {/* REACTIONS TAB (unchanged) */}
         {activeTab === 'reactions' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100"><h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-face-smile text-indigo-600 mr-2"></i>Tags & Emojis Log</h2></div>
@@ -534,7 +696,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* TASK TREE TAB */}
+        {/* TASK TREE TAB (unchanged) */}
         {activeTab === 'tasks' && (
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
             <div className="flex flex-wrap items-center justify-between mb-6 gap-4 border-b border-slate-100 pb-4 shrink-0">
@@ -579,13 +741,86 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* TEAM MANAGEMENT */}
+        {/* TEAM MANAGEMENT (NOW INLINE – NO OVERLAY) */}
         {activeTab === 'groups' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
               <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Team Management</h2>
-              <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); setLocalOverlay('group_form'); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm"><i className="fa-solid fa-plus mr-2"></i>Create Team</button>
+              <button 
+                onClick={() => { 
+                  setGroupForm({ name: '', members: [], profilePicUrl: null }); 
+                  setEditingGroup(null); 
+                }} 
+                className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm">
+                <i className="fa-solid fa-plus mr-2"></i>Create Team
+              </button>
             </div>
+
+            {/* INLINE FORM PANEL (appears when editingGroup or groupForm has data) */}
+            {(editingGroup || groupForm.name !== '' || groupForm.members?.length > 0) && (
+              <div className="p-5 md:p-6 border-b border-slate-200 bg-slate-50 animate-in fade-in slide-in-from-top-2">
+                <form onSubmit={(e) => { handleGroupSubmit(e); setEditingGroup(null); setGroupForm({name: '', members: [], profilePicUrl: null}); }} className="space-y-6 max-w-3xl">
+                  {/* Team Name */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Name</label>
+                    <input 
+                      value={groupForm.name} 
+                      onChange={e => setGroupForm({...groupForm, name: e.target.value})} 
+                      className="w-full bg-white border border-slate-200 p-3.5 rounded-xl text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-slate-800 font-medium" 
+                      placeholder="e.g. Marketing Team" required 
+                    />
+                  </div>
+
+                  {/* Avatar upload */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Avatar</label>
+                    <div className="flex items-center gap-4 bg-white border border-slate-200 p-3.5 rounded-xl">
+                      <input type="file" onChange={handleGroupPicUpload} className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-all cursor-pointer" />
+                      {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-indigo-600 animate-pulse">{Math.round(groupPicUploadProgress)}%</span>}
+                    </div>
+                  </div>
+
+                  {/* Member selection */}
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Select Members</label>
+                      <div className="flex gap-3">
+                        <button type="button" onClick={() => setGroupForm({...groupForm, members: dbUsers.map(u => u.email)})} className="text-[10px] font-extrabold text-indigo-600 hover:text-indigo-800 hover:underline">Select All</button>
+                        <button type="button" onClick={() => setGroupForm({...groupForm, members: []})} className="text-[10px] font-extrabold text-rose-500 hover:text-rose-700 hover:underline">Clear All</button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-slate-200 p-4 rounded-xl max-h-56 overflow-y-auto bg-white">
+                      {dbUsers.map(u => (
+                        <label key={u.uid} className="flex items-center gap-3 text-sm bg-white p-3 border border-slate-100 rounded-xl shadow-sm cursor-pointer hover:border-indigo-200 hover:shadow transition-all group">
+                          <div className="relative flex items-center justify-center">
+                            <input 
+                              type="checkbox" 
+                              checked={groupForm.members.includes(u.email)} 
+                              onChange={(e) => {
+                                const m = new Set(groupForm.members); 
+                                e.target.checked ? m.add(u.email) : m.delete(u.email); 
+                                setGroupForm({...groupForm, members: Array.from(m)});
+                              }} 
+                              className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:border-indigo-600 checked:bg-indigo-600 transition-all cursor-pointer" 
+                            />
+                            <i className="fa-solid fa-check absolute text-white text-[10px] opacity-0 peer-checked:opacity-100 pointer-events-none"></i>
+                          </div>
+                          <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" extraClasses="group-hover:scale-105 transition-transform" />
+                          <span className="font-semibold text-slate-700 truncate">{u.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    <button type="button" onClick={() => { setEditingGroup(null); setGroupForm({name: '', members: [], profilePicUrl: null}); }} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
+                    <button type="submit" className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition-all hover:-translate-y-0.5">Save Team</button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* Team cards grid (unchanged) */}
             <div className="flex-1 overflow-auto bg-slate-50 custom-sidebar-scroll p-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                      {groups.map((g, idx) => (
@@ -609,7 +844,7 @@ export default function AdminPanel({
                               )}
                            </div>
                            <div className="mt-auto pt-3 border-t border-slate-100">
-                             <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); setLocalOverlay('group_form'); }} className="w-full bg-slate-50 text-slate-600 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-all"><i className="fa-solid fa-pen mr-1"></i>Edit Team</button>
+                             <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); }} className="w-full bg-slate-50 text-slate-600 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-all"><i className="fa-solid fa-pen mr-1"></i>Edit Team</button>
                            </div>
                          </div>
                      ))}
@@ -618,7 +853,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* LOGS TAB */}
+        {/* LOGS TAB (unchanged) */}
         {activeTab === 'logs' && (
           <div className="flex flex-col gap-6">
             <div className="flex gap-2">
@@ -678,7 +913,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* OTHER TABS */}
+        {/* USERS TAB with bulk actions toolbar */}
         {activeTab === 'users' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
@@ -696,6 +931,74 @@ export default function AdminPanel({
                 <button onClick={() => setShowAddUser(false)} className="bg-slate-200 text-slate-600 px-5 py-2 rounded-lg text-sm font-bold hover:bg-slate-300">Cancel</button>
               </div>
             )}
+
+            {/* BULK ACTIONS TOOLBAR (NEW) */}
+            {selectedUsers.size > 0 && (
+              <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center gap-3 flex-wrap animate-in fade-in slide-in-from-top-1">
+                <span className="text-sm font-bold text-indigo-700">
+                  {selectedUsers.size} user{selectedUsers.size > 1 ? 's' : ''} selected
+                </span>
+                <div className="flex-1 flex flex-wrap gap-2">
+                  <button onClick={async () => {
+                      if (!window.confirm(`Approve ${selectedUsers.size} user(s)?`)) return;
+                      const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { isApproved: true }));
+                      await Promise.all(updates);
+                      setSelectedUsers(new Set());
+                    }} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 shadow-sm transition-colors">
+                    <i className="fa-solid fa-check mr-1"></i> Approve
+                  </button>
+                  <button onClick={async () => {
+                      if (!window.confirm(`Grant Admin to ${selectedUsers.size} user(s)?`)) return;
+                      const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { isAdmin: true }));
+                      await Promise.all(updates);
+                      setSelectedUsers(new Set());
+                    }} className="px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600 shadow-sm transition-colors">
+                    <i className="fa-solid fa-crown mr-1"></i> Make Admin
+                  </button>
+                  <button onClick={async () => {
+                      if (!window.confirm(`Grant group creation to ${selectedUsers.size} user(s)?`)) return;
+                      const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { canCreateGroups: true }));
+                      await Promise.all(updates);
+                      setSelectedUsers(new Set());
+                    }} className="px-3 py-1.5 bg-teal-500 text-white text-xs font-bold rounded-lg hover:bg-teal-600 shadow-sm transition-colors">
+                    <i className="fa-solid fa-users-gear mr-1"></i> Allow Groups
+                  </button>
+                  <button onClick={async () => {
+                      if (!window.confirm(`Revoke Admin from ${selectedUsers.size} user(s)?`)) return;
+                      const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { isAdmin: false }));
+                      await Promise.all(updates);
+                      setSelectedUsers(new Set());
+                    }} className="px-3 py-1.5 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600 shadow-sm transition-colors">
+                    <i className="fa-solid fa-user-slash mr-1"></i> Revoke Admin
+                  </button>
+                  <button onClick={async () => {
+                      if (!window.confirm(`Archive ${selectedUsers.size} user(s)?`)) return;
+                      const updates = Array.from(selectedUsers).map(uid => updateDoc(doc(db, "users", uid), { isArchived: true }));
+                      await Promise.all(updates);
+                      setSelectedUsers(new Set());
+                    }} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600 shadow-sm transition-colors">
+                    <i className="fa-solid fa-box-archive mr-1"></i> Archive
+                  </button>
+                  <button onClick={() => {
+                      const selectedUsersList = filteredUsers.filter(u => selectedUsers.has(u.uid));
+                      const csvContent = "data:text/csv;charset=utf-8,Name,Email,Approved,Admin,Can Create Groups\n" +
+                        selectedUsersList.map(u => `"${u.name}","${u.email}","${u.isApproved}","${u.isAdmin}","${u.canCreateGroups}"`).join("\n");
+                      const encodedUri = encodeURI(csvContent);
+                      const link = document.createElement("a");
+                      link.setAttribute("href", encodedUri);
+                      link.setAttribute("download", "selected_users.csv");
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50 shadow-sm transition-colors">
+                    <i className="fa-solid fa-file-csv mr-1"></i> Export CSV
+                  </button>
+                </div>
+                <button onClick={() => setSelectedUsers(new Set())} className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 transition-colors">Clear selection</button>
+              </div>
+            )}
+
+            {/* Users table (unchanged) */}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -721,7 +1024,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* HISTORY TAB WITH 30-DAY LOGINS DOWNLOAD BUTTON */}
+        {/* HISTORY TAB (unchanged) */}
         {activeTab === 'history' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-4">
@@ -759,62 +1062,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* GROUP EDIT OVERLAY */}
-        {localOverlay === 'group_form' && (
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in zoom-in-[0.98] duration-200">
-             <div className="max-w-2xl w-full bg-white border border-slate-100 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
-                <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
-                   <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">{editingGroup ? 'Edit Team Details' : 'Create New Team'}</h3>
-                   <button onClick={() => setLocalOverlay(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors">
-                     <i className="fa-solid fa-xmark"></i>
-                   </button>
-                </div>
-                <div className="p-5 md:p-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 hover:scrollbar-thumb-slate-300 scrollbar-track-transparent custom-sidebar-scroll">
-                   <form onSubmit={(e) => { handleGroupSubmit(e); setLocalOverlay(null); }} className="space-y-6">
-                      <div>
-                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Name</label>
-                         <input value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-slate-800 font-medium" placeholder="e.g. Marketing Team" required />
-                      </div>
-                      <div>
-                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Team Avatar</label>
-                         <div className="flex items-center gap-4 bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
-                           <input type="file" onChange={handleGroupPicUpload} className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-all cursor-pointer" />
-                           {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-indigo-600 animate-pulse">{Math.round(groupPicUploadProgress)}%</span>}
-                         </div>
-                      </div>
-                      
-                      <div>
-                         <div className="flex justify-between items-center mb-3">
-                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Select Members</label>
-                            <div className="flex gap-3">
-                                <button type="button" onClick={() => setGroupForm({...groupForm, members: dbUsers.map(u => u.email)})} className="text-[10px] font-extrabold text-indigo-600 hover:text-indigo-800 hover:underline">Select All</button>
-                                <button type="button" onClick={() => setGroupForm({...groupForm, members: []})} className="text-[10px] font-extrabold text-rose-500 hover:text-rose-700 hover:underline">Clear All</button>
-                            </div>
-                         </div>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-slate-200 p-4 rounded-xl max-h-56 overflow-y-auto bg-slate-50 scrollbar-thin scrollbar-thumb-slate-200 custom-sidebar-scroll">
-                            {dbUsers.map(u => (
-                               <label key={u.uid} className="flex items-center gap-3 text-sm bg-white p-3 border border-slate-100 rounded-xl shadow-sm cursor-pointer hover:border-indigo-200 hover:shadow transition-all group">
-                                  <div className="relative flex items-center justify-center">
-                                    <input type="checkbox" checked={groupForm.members.includes(u.email)} onChange={(e) => {
-                                        const m = new Set(groupForm.members); e.target.checked ? m.add(u.email) : m.delete(u.email); setGroupForm({...groupForm, members: Array.from(m)});
-                                    }} className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:border-indigo-600 checked:bg-indigo-600 transition-all cursor-pointer" />
-                                    <i className="fa-solid fa-check absolute text-white text-[10px] opacity-0 peer-checked:opacity-100 pointer-events-none"></i>
-                                  </div>
-                                  <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" extraClasses="group-hover:scale-105 transition-transform" />
-                                  <span className="font-semibold text-slate-700 truncate">{u.name}</span>
-                               </label>
-                            ))}
-                         </div>
-                      </div>
-                      <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                         <button type="button" onClick={() => setLocalOverlay(null)} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
-                         <button type="submit" className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition-all hover:-translate-y-0.5">Save Team</button>
-                      </div>
-                   </form>
-                </div>
-             </div>
-          </div>
-        )}
+        {/* Old overlay completely removed */}
       </div>
     </div>
   );
