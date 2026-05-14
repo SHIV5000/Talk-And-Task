@@ -397,12 +397,12 @@ export default function AdminPanel({
                        <div className="flex flex-wrap gap-3 mb-6">
                            <label className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${broadcastType === 'emergency' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'}`}>
                                <input type="radio" name="urgency" value="emergency" checked={broadcastType === 'emergency'} onChange={()=>setBroadcastType('emergency')} className="hidden" />
-                               <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm"><i className="fa-solid fa-triangle-exclamation"></i></div>
+                               <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm"><i className="fa-solid fa-bullhorn"></i></div>
                                <div className="flex flex-col"><span className="font-bold text-sm">Emergency (Red)</span><span className="text-[10px] font-semibold opacity-70">Highest visibility</span></div>
                            </label>
                            <label className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${broadcastType === 'warning' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'}`}>
                                <input type="radio" name="urgency" value="warning" checked={broadcastType === 'warning'} onChange={()=>setBroadcastType('warning')} className="hidden" />
-                               <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm"><i className="fa-solid fa-circle-exclamation"></i></div>
+                               <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm"><i class="fa-solid fa-clock"></i></div>
                                <div className="flex flex-col"><span className="font-bold text-sm">Warning (Amber)</span><span className="text-[10px] font-semibold opacity-70">Important updates</span></div>
                            </label>
                            <label className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${broadcastType === 'info' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'}`}>
