@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { EMOJI_LIST, lockExtension } from '../../utils/helpers.js';
 
@@ -12,6 +12,9 @@ export default function InputArea({
   handleSendPendingFiles
 }) {
   
+  // Text Selection State for Formatting Toolbar
+  const [textSelection, setTextSelection] = useState(null);
+
   const lastWord = inputText.split(/\s/).pop();
   const mentionQuery = lastWord.startsWith('@') ? lastWord.substring(1).toLowerCase() : null;
 
@@ -21,6 +24,33 @@ export default function InputArea({
     words[words.length - 1] = `@${mentionName} `;
     setInputText(words.join(' '));
     chatInputRef.current?.focus();
+  };
+
+  // 👇 TASK 16: Check highlighted text on mouse/key up 👇
+  const checkSelection = () => {
+    const el = chatInputRef.current;
+    if (el && el.selectionStart !== el.selectionEnd) {
+      setTextSelection({ start: el.selectionStart, end: el.selectionEnd });
+    } else {
+      setTextSelection(null);
+    }
+  };
+
+  // 👇 TASK 16: Apply HTML tag wraps to selected text 👇
+  const handleFormat = (startTag, endTag) => {
+    if (!textSelection) return;
+    const before = inputText.substring(0, textSelection.start);
+    const selected = inputText.substring(textSelection.start, textSelection.end);
+    const after = inputText.substring(textSelection.end);
+    
+    setInputText(before + startTag + selected + endTag + after);
+    setTextSelection(null);
+    
+    setTimeout(() => {
+        if (chatInputRef.current) {
+            chatInputRef.current.focus();
+        }
+    }, 0);
   };
 
   return (
@@ -33,6 +63,23 @@ export default function InputArea({
             <div className="text-xs text-text-secondary truncate">"{replyingTo.text || replyingTo.fileName}"</div>
           </div>
           <button onClick={()=>setReplyingTo(null)} className="text-primary hover:text-primary-hover"><i className="fa-solid fa-xmark"></i></button>
+        </div>
+      )}
+
+      {/* Floating Rich Text Formatting Toolbar */}
+      {textSelection && (
+        <div className="absolute bottom-full left-4 mb-2 z-50 bg-slate-800 text-white rounded-lg shadow-xl px-2 py-1.5 flex items-center gap-1 animate-in fade-in zoom-in-95">
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<b>', '</b>'); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded font-bold text-sm transition-colors" title="Bold">B</button>
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<i>', '</i>'); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded italic font-serif text-sm transition-colors" title="Italic">I</button>
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<u>', '</u>'); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded underline text-sm transition-colors" title="Underline">U</button>
+           <div className="w-px h-5 bg-slate-600 mx-1"></div>
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<sup>', '</sup>'); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded text-xs transition-colors" title="Superscript">x²</button>
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<sub>', '</sub>'); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded text-xs transition-colors" title="Subscript">x₂</button>
+           <div className="w-px h-5 bg-slate-600 mx-1"></div>
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<span style="color: maroon;">', '</span>'); }} className="w-5 h-5 rounded-full bg-[#800000] hover:scale-110 ml-1 transition-transform border border-white/20 shadow-inner" title="Maroon"></button>
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<span style="color: darkgreen;">', '</span>'); }} className="w-5 h-5 rounded-full bg-[#006400] hover:scale-110 ml-1.5 transition-transform border border-white/20 shadow-inner" title="Dark Green"></button>
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<span style="color: blue;">', '</span>'); }} className="w-5 h-5 rounded-full bg-[#0000FF] hover:scale-110 ml-1.5 transition-transform border border-white/20 shadow-inner" title="Blue"></button>
+           <button onClick={(e) => { e.preventDefault(); handleFormat('<span style="color: darkorange;">', '</span>'); }} className="w-5 h-5 rounded-full bg-[#FF8C00] hover:scale-110 mx-1.5 transition-transform border border-white/20 shadow-inner" title="Dark Orange"></button>
         </div>
       )}
 
@@ -129,23 +176,23 @@ export default function InputArea({
             style={{ minHeight: '42px', maxHeight: '120px' }} 
             value={inputText} 
             onPaste={handlePaste} 
+            onMouseUp={checkSelection}
+            onKeyUp={checkSelection}
             onChange={(e) => { 
               setInputText(e.target.value); 
               handleTypingEvent(); 
               e.target.style.height = 'auto'; 
               e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; 
+              checkSelection();
             }} 
-            // 👇 FIX 18: Precision Input Keybindings
             onKeyDown={(e) => { 
               if (e.key === 'Enter') {
                 if (e.ctrlKey || e.metaKey) {
-                  // Ctrl+Enter or Cmd+Enter -> Insert Newline
                   e.preventDefault();
                   const cursorPosition = e.target.selectionStart;
                   const textBefore = inputText.substring(0, cursorPosition);
                   const textAfter = inputText.substring(cursorPosition, inputText.length);
                   setInputText(textBefore + '\n' + textAfter);
-                  // Push cursor after newline
                   setTimeout(() => {
                     if (chatInputRef.current) {
                       chatInputRef.current.selectionStart = cursorPosition + 1;
@@ -153,7 +200,6 @@ export default function InputArea({
                     }
                   }, 0);
                 } else {
-                  // Standalone Enter -> Submit
                   e.preventDefault(); 
                   handleSendOfflineAware(); 
                 }
