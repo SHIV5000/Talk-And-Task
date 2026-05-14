@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { EMOJI_LIST, lockExtension } from '../../utils/helpers.js';
 
@@ -14,7 +14,6 @@ export default function InputArea({
   
   const [hasSelection, setHasSelection] = useState(false);
 
-  // Extract mention query safely from raw text
   const rawText = chatInputRef.current?.innerText || '';
   const lastWord = rawText.trim() ? rawText.split(/\s/).pop() : '';
   const mentionQuery = lastWord.startsWith('@') ? lastWord.substring(1).toLowerCase() : null;
@@ -40,7 +39,6 @@ export default function InputArea({
     chatInputRef.current.innerHTML = newHtml;
     setInputText(newHtml);
     
-    // Move cursor to end
     const range = document.createRange();
     const sel = window.getSelection();
     range.selectNodeContents(chatInputRef.current);
@@ -145,7 +143,6 @@ export default function InputArea({
                 </div>
                 <textarea rows={1} value={pf.caption} onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)); }} placeholder="Add a caption..." className="w-full text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"></textarea>
                 
-                {/* Secure Download Toggle */}
                 <label className="flex items-center gap-2 mt-2 select-none cursor-pointer w-fit">
                     <input type="checkbox" checked={pf.allowDownload !== false} onChange={(e) => {
                         const isAllowed = e.target.checked;
@@ -161,7 +158,6 @@ export default function InputArea({
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => { setPendingFiles([]); setShowFileRename(false); }} className="text-slate-500 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-slate-100 transition-colors">Cancel</button>
             
-            {/* Themed Button */}
             <button onClick={handleSendPendingFiles} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-600/30 transition-all">
               <i className="fa-solid fa-paper-plane"></i> Send {pendingFiles.length > 1 ? `All (${pendingFiles.length})` : ''}
             </button>
@@ -190,7 +186,7 @@ export default function InputArea({
 
         <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
           
-          {/* ContentEditable WYSIWYG Wrapper */}
+          {/* 👇 UPDATED: Auto-Send intercepted. Native Enter works everywhere 👇 */}
           <div 
             contentEditable 
             ref={chatInputRef} 
@@ -202,17 +198,6 @@ export default function InputArea({
             data-placeholder={isOnline ? "Type or Paste a message..." : "Offline - message will be queued"}
             className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium" 
             style={{ minHeight: '46px', maxHeight: '120px' }} 
-            onKeyDown={(e) => { 
-              if (e.key === 'Enter') {
-                if (e.ctrlKey || e.metaKey) {
-                  e.preventDefault();
-                  document.execCommand('insertHTML', false, '<br><br>');
-                } else {
-                  e.preventDefault(); 
-                  handleSendOfflineAware(); 
-                }
-              }
-            }} 
           />
         </div>
 
@@ -229,8 +214,8 @@ export default function InputArea({
 
         <button 
           onClick={handleSendOfflineAware} 
-          disabled={!inputText.trim()}
-          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+          disabled={!inputText.trim() || inputText === '<br>'}
+          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
           <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
         </button>
