@@ -48,20 +48,20 @@ const MessageBubble = React.memo(({
   const senderName = (msg.sender || '').split('@')[0];
   const senderAvatar = senderUser.profilePicUrl || null;
 
+  // 👇 Visibility Flags
   const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
+  const isAssignee = msg.isTask && msg.taskData?.assignees?.includes(userEmail); // 👈 ONLY assignees
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = !isTaskCompleted || isSuperAdmin;
 
-  // 👇 NEW: Check if proof is attached (any file in trail)
   const hasProofAttached = useMemo(() => {
-    if (!msg.taskData?.requireProof) return true; // not required
+    if (!msg.taskData?.requireProof) return true;
     return (msg.taskData.trail || []).some(t => t.fileUrl);
   }, [msg.taskData]);
 
   const hasReactions = Object.keys(msg.reactions || {}).length > 0;
 
-  // Secure Download Logic
   const isSecure = (msg.fileName || '').startsWith('__SECURE__');
   const displayFileName = isSecure ? msg.fileName.replace('__SECURE__', '') : msg.fileName;
 
@@ -97,7 +97,6 @@ const MessageBubble = React.memo(({
     }
   };
 
-  // 👇 NEW: Acknowledge handler
   const handleAcknowledge = async (e) => {
     e.stopPropagation();
     if (!window.confirm('Acknowledge this task? This confirms you have seen and accepted it.')) return;
@@ -110,10 +109,10 @@ const MessageBubble = React.memo(({
       }];
       await updateDoc(doc(db, "messages", msg.id), {
         "taskData.acknowledged": true,
-        "taskData.status": "Acknowledged", // or "In Progress", you can change later
+        "taskData.status": "Acknowledged",
         "taskData.trail": newTrail
       });
-      notifyTaskChange(`${(userEmail||"").split('@')[0]} acknowledged the task.`);
+      notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} acknowledged the task.`);
     } catch(e) { alert("Failed to acknowledge."); }
   };
 
@@ -128,7 +127,7 @@ const MessageBubble = React.memo(({
         const now = new Date();
         const updatedTrail = [...(msg.taskData.trail || []), { action: "Update Added", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: inlineUpdateText }];
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": updatedTrail });
-        notifyTaskChange(`${(userEmail||"").split('@')[0]} updated the task.`);
+        notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} updated the task.`);
         setInlineUpdateText(""); setIsAddingUpdate(false);
     } catch(e) {}
   };
@@ -159,7 +158,7 @@ const MessageBubble = React.memo(({
       const now = new Date();
       const newTrail = [...msg.taskData.trail, { action: "Marked Completed", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
       await updateDoc(doc(db, "messages", msg.id), { "taskData.status": "Completed", "taskData.trail": newTrail });
-      notifyTaskChange(`${(userEmail||"").split('@')[0]} completed the task ✅`);
+      notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} completed the task ✅`);
     } catch(e) {}
   };
 
@@ -167,9 +166,15 @@ const MessageBubble = React.memo(({
     if (delegateSelection.length === 0) return setIsDelegating(false);
     try {
       const now = new Date();
-      const newTrail = [...msg.taskData.trail, { action: "Delegated", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateSelection.map(a=>(a||"").split('@')[0]).join(', ') }];
+      // 👇 UPDATED: Ensure proper NAMES are mapped to the Trail (Not Email Prefixes)
+      const toNames = delegateSelection.map(email => {
+          const u = dbUsers.find(x => x.email === email);
+          return u ? u.name : email.split('@')[0];
+      }).join(', ');
+
+      const newTrail = [...msg.taskData.trail, { action: "Delegated", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames }];
       await updateDoc(doc(db, "messages", msg.id), { "taskData.assignees": delegateSelection, "taskData.status": "In Progress", "taskData.trail": newTrail });
-      notifyTaskChange(`${(userEmail||"").split('@')[0]} added new assignees 👤`);
+      notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} added new assignees 👤`);
       setIsDelegating(false); setDelegateSelection([]);
     } catch(e) {}
   };
@@ -186,7 +191,7 @@ const MessageBubble = React.memo(({
         const now = new Date();
         const newTrail = [...msg.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": newTrail });
-        notifyTaskChange(`${(userEmail||"").split('@')[0]} attached a file 📎`);
+        notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} attached a file 📎`);
         setTrailFileUploading(false);
       });
     } catch(err) { setTrailFileUploading(false); } finally { if(inlineFileInputRef.current) inlineFileInputRef.current.value = ""; }
@@ -250,7 +255,6 @@ const MessageBubble = React.memo(({
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${msg.taskData.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                             {msg.taskData.status}
                           </span>
-                          {/* 👇 NEW: Escalated badge */}
                           {msg.taskData.escalated && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">🚨 Escalated</span>
                           )}
@@ -273,8 +277,8 @@ const MessageBubble = React.memo(({
                         </p>
                       )}
 
-                      {/* 👇 NEW: Acknowledge button (visible if requireAck and not yet acknowledged, and user is assignee) */}
-                      {isTaskParticipant && !isTaskCompleted && msg.taskData?.requireAck && !msg.taskData?.acknowledged && (
+                      {/* 👇 UPDATED: Acknowledge button visible ONLY to Assignees */}
+                      {isAssignee && !isTaskCompleted && msg.taskData?.requireAck && !msg.taskData?.acknowledged && (
                         <div className="mb-3">
                           <button
                             onClick={handleAcknowledge}
@@ -282,7 +286,6 @@ const MessageBubble = React.memo(({
                           >
                             <i className="fa-solid fa-check mr-1"></i> Acknowledge Task
                           </button>
-                          {/* Show deadline info if set */}
                           {msg.taskData.ackDeadline && (
                             <div className="text-[10px] text-yellow-600 mt-1 text-center">
                               Acknowledge by {new Date(msg.taskData.ackDeadline).toLocaleString()}
@@ -306,7 +309,6 @@ const MessageBubble = React.memo(({
                       </div>
                     </div>
 
-                    {/* 👇 RESTORED: INLINE ACTION CONTROLS 👇 */}
                     {isTaskParticipant && !isTaskCompleted && (
                         <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
@@ -319,7 +321,16 @@ const MessageBubble = React.memo(({
                                     {dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
                                  </select>
                                  <div className="flex items-center gap-1">
-                                    {delegateSelection.map(e => <span key={e} onClick={()=>setDelegateSelection(delegateSelection.filter(x=>x!==e))} className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded cursor-pointer hover:bg-rose-100 hover:text-rose-600 truncate max-w-[60px]">{e.split('@')[0]}</span>)}
+                                    {/* 👇 UPDATED: Display Names instead of Email Prefixes in selection pills */}
+                                    {delegateSelection.map(e => {
+                                        const u = dbUsers.find(x => x.email === e);
+                                        const displayName = u ? u.name : e.split('@')[0];
+                                        return (
+                                            <span key={e} onClick={()=>setDelegateSelection(delegateSelection.filter(x=>x!==e))} className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded cursor-pointer hover:bg-rose-100 hover:text-rose-600 truncate max-w-[60px]">
+                                                @{displayName}
+                                            </span>
+                                        );
+                                    })}
                                  </div>
                                  <button onClick={handleInlineDelegateSubmit} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded font-bold hover:bg-indigo-700">Save</button>
                                  <button onClick={()=>{setIsDelegating(false); setDelegateSelection([]);}} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold">X</button>
@@ -335,7 +346,6 @@ const MessageBubble = React.memo(({
                                  <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Delegate</button>
                                  <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Attach</button>
                                  <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Update</button>
-                                 {/* 👇 UPDATED Resolve button – disabled if proof required but not attached */}
                                  <button 
                                    onClick={handleInlineComplete} 
                                    disabled={!hasProofAttached}
@@ -373,9 +383,9 @@ const MessageBubble = React.memo(({
                                     </div>
                                     <div className="text-[13px] text-slate-600 leading-snug break-words">
                                       <span className="font-semibold">{t.action}</span>
+                                      {/* 👇 UPDATED: 't.to' now renders correctly as names based on DB updates below */}
                                       {t.to && <span> to <span className="font-semibold text-indigo-600">@{t.to}</span></span>}
                                       
-                                      {/* 👇 RESTORED: TRAIL INLINE EDIT/DELETE LOGIC 👇 */}
                                       {t.comment && !t.fileUrl && (
                                          editingTrailIdx === idx ? (
                                             <div className="flex items-center gap-2 mt-2 bg-slate-50 p-1.5 rounded border border-slate-200">
@@ -398,7 +408,6 @@ const MessageBubble = React.memo(({
                                           </div>
                                       )}
 
-                                      {/* Hover Action Buttons for Editor/Admin */}
                                       {isAuthor && editingTrailIdx !== idx && (
                                           <div className="absolute top-1 right-1 hidden group-hover/editbox:flex gap-1.5 bg-white border border-slate-200 shadow-sm rounded-md px-1.5 py-1 z-20">
                                               {t.comment && !t.fileUrl && <i className="fa-solid fa-pen text-[10px] text-indigo-500 cursor-pointer hover:scale-110" onClick={()=>{setEditingTrailIdx(idx); setTrailEditText(t.comment);}}></i>}
@@ -431,7 +440,6 @@ const MessageBubble = React.memo(({
                   </div>
                 )}
 
-                {/* Simultaneous Text and File Rendering with WYSIWYG HTML Support */}
                 {!msg.isTask && !msg.isPrivateForward && msg.text && (
                   <div className={`text-[15px] leading-relaxed break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-3' : ''}`} dangerouslySetInnerHTML={{ __html: msg.text }}></div>
                 )}
