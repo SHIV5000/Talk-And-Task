@@ -92,6 +92,30 @@ export default function AdminPanel({
   const [newTagLabel, setNewTagLabel] = useState('');
   const [newTagTheme, setNewTagTheme] = useState('teal');
 
+  // ----- Organization -----
+  const [orgDetails, setOrgDetails] = useState({
+    orgName: '',
+    address: '',
+    email: '',
+    phone: '',
+    adminName: '',
+    adminDesignation: '',
+    adminEmail: '',
+    adminMobile: '',
+    subscriptionType: 'Free',
+    activeUsersCount: 0,
+  });
+
+  // Listen to organization document
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'workspace', 'org_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        setOrgDetails(docSnap.data());
+      }
+    });
+    return () => unsub();
+  }, []);
+
   // ----- Broadcast read receipts listener -----
   useEffect(() => {
     if (activeTab === 'broadcast') {
@@ -313,14 +337,29 @@ export default function AdminPanel({
     if (!newTagLabel.trim() || !newTagLabel.startsWith('#'))
       return alert("Tag label must begin with '#'");
     const theme = tagThemes[newTagTheme];
-    await addDoc(collection(db, 'workspace_tags'), {
-      label: newTagLabel.trim(),
-      bgClass: theme.bg,
-      textClass: theme.text,
-      themeName: newTagTheme,
-      createdAt: serverTimestamp(),
-    });
-    setNewTagLabel('');
+    try {
+      await addDoc(collection(db, 'workspace_tags'), {
+        label: newTagLabel.trim(),
+        bgClass: theme.bg,
+        textClass: theme.text,
+        themeName: newTagTheme,
+        createdAt: serverTimestamp(),
+      });
+      setNewTagLabel('');
+      alert('Tag created successfully!');
+    } catch (e) {
+      alert('Failed to create tag: ' + e.message);
+    }
+  };
+
+  // ----- Functions for Organization -----
+  const saveOrgDetails = async () => {
+    try {
+      await setDoc(doc(db, 'workspace', 'org_details'), orgDetails, { merge: true });
+      alert('Organization details saved.');
+    } catch (e) {
+      alert('Failed to save: ' + e.message);
+    }
   };
 
   // ----- Print / Export -----
@@ -402,7 +441,7 @@ export default function AdminPanel({
 
       {/* Tabs */}
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll shrink-0 shadow-sm z-10 relative">
-        {['overview', 'people', 'tasks', 'logs', 'broadcast', 'tags'].map((tab) => (
+        {['overview', 'people', 'tasks', 'logs', 'broadcast', 'tags', 'organization'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -418,6 +457,7 @@ export default function AdminPanel({
             {tab === 'logs' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}
             {tab === 'broadcast' && <i className="fa-solid fa-bullhorn mr-2"></i>}
             {tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}
+            {tab === 'organization' && <i className="fa-solid fa-building-columns mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
@@ -622,7 +662,7 @@ export default function AdminPanel({
         {activeTab === 'people' && (
           <div className="flex flex-col gap-6 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             {/* Users Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col max-h-[60%]">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
                 <h2 className="font-bold text-slate-800 text-lg">
                   <i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control
@@ -773,9 +813,9 @@ export default function AdminPanel({
                   </button>
                 </div>
               )}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto flex-1 custom-sidebar-scroll">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0">
                     <tr>
                       <th className="px-3 py-3">
                         <input
@@ -872,7 +912,7 @@ export default function AdminPanel({
             </div>
 
             {/* Groups Section (inline) */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1 min-h-0">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center">
                 <h2 className="font-bold text-slate-800 text-lg">
                   <i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Teams
@@ -949,7 +989,7 @@ export default function AdminPanel({
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-sidebar-scroll">
                         {dbUsers.map((u) => (
                           <label
                             key={u.uid}
@@ -997,7 +1037,7 @@ export default function AdminPanel({
                   </form>
                 </div>
               )}
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto">
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto custom-sidebar-scroll flex-1">
                 {groups.map((g) => (
                   <div
                     key={g.id}
@@ -1109,9 +1149,9 @@ export default function AdminPanel({
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto custom-sidebar-scroll flex-1">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0">
                     <tr>
                       <th className="px-4 py-3">Task</th>
                       <th className="px-4 py-3">Status</th>
@@ -1211,18 +1251,18 @@ export default function AdminPanel({
                                     e.stopPropagation();
                                     startEditTask(task);
                                   }}
-                                  className="text-indigo-600 hover:underline text-xs font-bold"
+                                  className="text-indigo-600 hover:underline text-xs font-bold px-2 py-1 rounded hover:bg-indigo-50"
                                 >
-                                  Edit
+                                  <i className="fa-solid fa-pen-to-square mr-1"></i>Edit
                                 </button>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleDeleteTask(task.id);
                                   }}
-                                  className="text-rose-500 hover:underline text-xs font-bold"
+                                  className="text-rose-500 hover:underline text-xs font-bold px-2 py-1 rounded hover:bg-rose-50"
                                 >
-                                  Delete
+                                  <i className="fa-solid fa-trash-can mr-1"></i>Delete
                                 </button>
                               </div>
                             </td>
@@ -1308,7 +1348,7 @@ export default function AdminPanel({
                           {isExpanded && (
                             <tr>
                               <td colSpan={6} className="bg-slate-50 p-4 border-t border-slate-200">
-                                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                <div className="space-y-2 max-h-[200px] overflow-y-auto custom-sidebar-scroll">
                                   {(task.taskData?.trail || []).map((t, idx) => {
                                     const author =
                                       dbUsers.find((u) => u.email === t.by)?.name ||
@@ -1365,7 +1405,7 @@ export default function AdminPanel({
               )}
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto custom-sidebar-scroll flex-1">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0">
                     <tr>
@@ -1451,11 +1491,11 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ============== BROADCAST TAB ============== */}
+        {/* ============== BROADCAST TAB (Smaller compose, taller vault) ============== */}
         {activeTab === 'broadcast' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full max-w-4xl mx-auto">
-              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
+              <div className="flex items-center gap-4 mb-4 border-b border-slate-100 pb-4 shrink-0">
                 <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shadow-inner">
                   <i className="fa-solid fa-tower-broadcast text-2xl"></i>
                 </div>
@@ -1471,15 +1511,15 @@ export default function AdminPanel({
 
               <div className="flex-1 flex flex-col gap-6 overflow-y-auto custom-sidebar-scroll">
                 {globalAnnouncement?.isActive ? (
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 relative overflow-hidden flex flex-col min-h-0">
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 relative overflow-hidden flex flex-col">
                     <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500"></div>
-                    <div className="shrink-0 mb-4">
-                      <h3 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
+                    <div className="shrink-0 mb-2">
+                      <h3 className="font-bold text-slate-700 mb-1 flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>{' '}
                         LIVE BROADCAST ACTIVE
                       </h3>
                       <div
-                        className={`p-4 rounded-xl text-sm font-bold shadow-sm ${
+                        className={`p-3 rounded-xl text-sm font-bold shadow-sm ${
                           globalAnnouncement.type === 'emergency'
                             ? 'bg-rose-600 text-white'
                             : globalAnnouncement.type === 'warning'
@@ -1499,8 +1539,8 @@ export default function AdminPanel({
                         {stripHtml(globalAnnouncement.message)}
                       </div>
                     </div>
-                    <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col mb-4">
-                      <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 font-bold text-slate-700 text-[11px] uppercase tracking-widest flex justify-between shrink-0">
+                    <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col mb-2">
+                      <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 font-bold text-slate-700 text-[11px] uppercase tracking-widest flex justify-between shrink-0">
                         <span>
                           <i className="fa-solid fa-eye text-indigo-500 mr-1.5"></i> Read
                           Receipts
@@ -1509,7 +1549,7 @@ export default function AdminPanel({
                           {(displayedAcks || []).length} Acknowledged
                         </span>
                       </div>
-                      <div className="overflow-y-auto custom-sidebar-scroll flex-1 p-2">
+                      <div className="overflow-y-auto custom-sidebar-scroll flex-1 p-2 max-h-40">
                         {(displayedAcks || []).length === 0 ? (
                           <div className="text-center text-slate-400 text-xs py-6 font-medium italic">
                             No users have dismissed this broadcast yet.
@@ -1536,32 +1576,32 @@ export default function AdminPanel({
                     </div>
                     <button
                       onClick={revokeBroadcast}
-                      className="w-full shrink-0 px-5 py-3.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold text-sm hover:bg-rose-100 transition-colors shadow-sm"
+                      className="shrink-0 px-4 py-2.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold text-sm hover:bg-rose-100 transition-colors shadow-sm"
                     >
                       <i className="fa-solid fa-power-off mr-2"></i> Revoke & Remove Broadcast
                     </button>
                   </div>
                 ) : (
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner shrink-0">
-                    <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-inner shrink-0">
+                    <h3 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">
                       Draft New Broadcast
                     </h3>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
                       Message Content
                     </label>
                     <textarea
                       value={broadcastMessage}
                       onChange={(e) => setBroadcastMessage(e.target.value)}
                       placeholder="Type the alert message to display to all users..."
-                      rows={3}
-                      className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-5 font-bold text-slate-700 shadow-sm resize-none"
+                      rows={2}
+                      className="w-full p-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 mb-3 font-bold text-slate-700 shadow-sm resize-none"
                     />
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
-                      Urgency Level (Color & Icon)
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+                      Urgency Level
                     </label>
-                    <div className="flex flex-wrap gap-3 mb-6">
+                    <div className="flex flex-wrap gap-2 mb-4">
                       <label
-                        className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                        className={`flex-1 flex items-center gap-2 p-2 rounded-lg border-2 cursor-pointer transition-colors ${
                           broadcastType === 'emergency'
                             ? 'border-rose-500 bg-rose-50 text-rose-700'
                             : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
@@ -1575,18 +1615,13 @@ export default function AdminPanel({
                           onChange={() => setBroadcastType('emergency')}
                           className="hidden"
                         />
-                        <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                          <i className="fa-solid fa-bullhorn"></i>
+                        <div className="w-6 h-6 rounded-full bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <i className="fa-solid fa-bullhorn text-xs"></i>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm">Emergency (Red)</span>
-                          <span className="text-[10px] font-semibold opacity-70">
-                            Highest visibility
-                          </span>
-                        </div>
+                        <span className="font-bold text-xs">Emergency</span>
                       </label>
                       <label
-                        className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                        className={`flex-1 flex items-center gap-2 p-2 rounded-lg border-2 cursor-pointer transition-colors ${
                           broadcastType === 'warning'
                             ? 'border-amber-500 bg-amber-50 text-amber-700'
                             : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
@@ -1600,18 +1635,13 @@ export default function AdminPanel({
                           onChange={() => setBroadcastType('warning')}
                           className="hidden"
                         />
-                        <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-                          <i className="fa-regular fa-clock"></i>
+                        <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <i className="fa-regular fa-clock text-xs"></i>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm">Warning (Amber)</span>
-                          <span className="text-[10px] font-semibold opacity-70">
-                            Important updates
-                          </span>
-                        </div>
+                        <span className="font-bold text-xs">Warning</span>
                       </label>
                       <label
-                        className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                        className={`flex-1 flex items-center gap-2 p-2 rounded-lg border-2 cursor-pointer transition-colors ${
                           broadcastType === 'info'
                             ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                             : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
@@ -1625,21 +1655,16 @@ export default function AdminPanel({
                           onChange={() => setBroadcastType('info')}
                           className="hidden"
                         />
-                        <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                          <i className="fa-solid fa-pen"></i>
+                        <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <i className="fa-solid fa-pen text-xs"></i>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm">Standard Info (Blue)</span>
-                          <span className="text-[10px] font-semibold opacity-70">
-                            General announcements
-                          </span>
-                        </div>
+                        <span className="font-bold text-xs">Info</span>
                       </label>
                     </div>
                     <button
                       onClick={publishBroadcast}
                       disabled={isBroadcasting}
-                      className="w-full bg-rose-600 text-white font-black py-4 rounded-xl hover:bg-rose-700 shadow-lg shadow-rose-600/30 transition-transform hover:scale-[1.01] uppercase tracking-widest"
+                      className="w-full bg-rose-600 text-white font-black py-3 rounded-xl hover:bg-rose-700 shadow-lg shadow-rose-600/30 transition-transform hover:scale-[1.01] uppercase tracking-widest text-sm"
                     >
                       <i className="fa-solid fa-satellite-dish mr-2"></i> Publish Global Broadcast
                     </button>
@@ -1649,7 +1674,7 @@ export default function AdminPanel({
                 {!globalAnnouncement?.isActive &&
                   (uniqueBroadcastIds || []).length > 0 && (
                     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-0 flex-1">
-                      <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between shrink-0">
+                      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between shrink-0">
                         <div>
                           <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider flex items-center gap-2">
                             <i className="fa-solid fa-box-archive text-indigo-400"></i> Historical
@@ -1672,7 +1697,7 @@ export default function AdminPanel({
                           ))}
                         </select>
                       </div>
-                      <div className="flex-1 overflow-y-auto custom-sidebar-scroll p-2">
+                      <div className="flex-1 overflow-y-auto custom-sidebar-scroll p-2 min-h-[200px]">
                         {!selectedBroadcastId ? (
                           <div className="flex flex-col items-center justify-center h-full opacity-50 py-10">
                             <i className="fa-solid fa-folder-open text-4xl text-slate-300 mb-3"></i>
@@ -1814,7 +1839,177 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* That's it – all tabs are rendered */}
+        {/* ============== ORGANIZATION TAB (New) ============== */}
+        {activeTab === 'organization' && (
+          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col max-w-4xl mx-auto h-full min-h-0">
+              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
+                  <i className="fa-solid fa-building-columns text-2xl"></i>
+                </div>
+                <div>
+                  <h2 className="font-bold text-slate-800 text-xl leading-tight">
+                    Organization Details
+                  </h2>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Manage your company profile
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-sidebar-scroll pr-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Organization Name
+                    </label>
+                    <input
+                      type="text"
+                      value={orgDetails.orgName}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, orgName: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Address
+                    </label>
+                    <input
+                      type="text"
+                      value={orgDetails.address}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, address: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={orgDetails.email}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, email: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Phone
+                    </label>
+                    <input
+                      type="text"
+                      value={orgDetails.phone}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, phone: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Admin Name
+                    </label>
+                    <input
+                      type="text"
+                      value={orgDetails.adminName}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, adminName: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Admin Designation
+                    </label>
+                    <input
+                      type="text"
+                      value={orgDetails.adminDesignation}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, adminDesignation: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Admin Email
+                    </label>
+                    <input
+                      type="email"
+                      value={orgDetails.adminEmail}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, adminEmail: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Admin Mobile
+                    </label>
+                    <input
+                      type="text"
+                      value={orgDetails.adminMobile}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, adminMobile: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Subscription Type
+                    </label>
+                    <select
+                      value={orgDetails.subscriptionType}
+                      onChange={(e) =>
+                        setOrgDetails({ ...orgDetails, subscriptionType: e.target.value })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    >
+                      <option>Free</option>
+                      <option>Basic</option>
+                      <option>Premium</option>
+                      <option>Enterprise</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">
+                      Number of Active Users
+                    </label>
+                    <input
+                      type="number"
+                      value={orgDetails.activeUsersCount}
+                      onChange={(e) =>
+                        setOrgDetails({
+                          ...orgDetails,
+                          activeUsersCount: parseInt(e.target.value) || 0,
+                        })
+                      }
+                      className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end mt-6">
+                  <button
+                    onClick={saveOrgDetails}
+                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700"
+                  >
+                    <i className="fa-solid fa-floppy-disk mr-2"></i>Save Details
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
