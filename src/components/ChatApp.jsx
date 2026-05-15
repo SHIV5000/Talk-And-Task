@@ -631,7 +631,10 @@ export default function ChatApp({ user, onLogout }) {
                     action: "Task Created", 
                     by: user.email, 
                     time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), 
-                    to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ') 
+                    to: taskAssignees.map(email => {
+    const u = dbUsers.find(x => x.email === email);
+    return u ? u.name : (email||"").split('@')[0];
+}).join(', ')
                 }],
                 requireAck: requireAck,
                 ackDeadline: ackDeadline ? ackDeadline.toISOString() : null,
@@ -687,7 +690,8 @@ export default function ChatApp({ user, onLogout }) {
         if (!selectedMessage || delegateAssignees.length === 0) return;
         try {
             const now = new Date();
-            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(email => {   const u = dbUsers.find(x => x.email === email);
+    return u ? u.name : (email||"").split('@')[0];}).join(', ') }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
             playMelody('taskUpdated'); 
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
