@@ -17,7 +17,7 @@ import useWorkspaceData from '../hooks/useWorkspaceData.js';
 import useChatEngine from '../hooks/useChatEngine.js';
 
 // Utils & Firebase Core
-import { lockExtension } from '../utils/helpers.js';
+import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
 import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -125,6 +125,11 @@ export default function ChatApp({ user, onLogout }) {
     const [isEditingTaskTitle, setIsEditingTaskTitle] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState("");
     
+    // 👇 NEW STATES for acknowledgment & proof
+    const [requireAck, setRequireAck] = useState(false);
+    const [ackTimeOption, setAckTimeOption] = useState('any'); // 'immediate','30min','1hr','2hr','3hr','eod','any'
+    const [requireProof, setRequireProof] = useState(false);
+
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
     const [pendingFiles, setPendingFiles] = useState([]);
@@ -580,30 +585,91 @@ export default function ChatApp({ user, onLogout }) {
         }
     };
 
+    // 👇 UPDATED convertToTask function with acknowledgment & proof fields
     const convertToTask = async () => {
         if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
         try {
             const now = new Date();
+            let ackDeadline = null;
+
+            // Calculate acknowledgment deadline based on selected option
+            if (requireAck) {
+                switch (ackTimeOption) {
+                    case 'immediate': // no timer, but ack still required
+                        break;
+                    case '30min':
+                        ackDeadline = new Date(now.getTime() + 30 * 60 * 1000);
+                        break;
+                    case '1hr':
+                        ackDeadline = new Date(now.getTime() + 60 * 60 * 1000);
+                        break;
+                    case '2hr':
+                        ackDeadline = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+                        break;
+                    case '3hr':
+                        ackDeadline = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+                        break;
+                    case 'eod':
+                        ackDeadline = getNextWorkingDay9AM(now);
+                        break;
+                    case 'any':
+                        // no automatic escalation, but ack button still required
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            const taskData = {
+                deadline: taskDeadline,
+                assignees: taskAssignees,
+                priority: taskPriority,
+                status: "Pending",
+                isArchived: false,
+                dismissedBy: [],
+                trail: [{ 
+                    action: "Task Created", 
+                    by: user.email, 
+                    time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), 
+                    to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ') 
+                }],
+                requireAck: requireAck,
+                ackDeadline: ackDeadline ? ackDeadline.toISOString() : null,
+                acknowledged: false,
+                requireProof: requireProof,
+                escalated: false
+            };
+
             await setDoc(doc(db, "messages", selectedMessage.id), {
                 isTask: true,
-                taskData: {
-                    deadline: taskDeadline, assignees: taskAssignees, priority: taskPriority, status: "Pending", isArchived: false, dismissedBy: [],
-                    trail: [{ action: "Task Created", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ') }]
-                }
+                taskData: taskData
             }, { merge: true });
 
             taskAssignees.forEach(email => {
                 if (email !== user.email) {
                     const assigneeUser = dbUsers.find(u => u.email === email);
                     if (assigneeUser) {
-                        addDoc(collection(db, "notifications"), { userId: assigneeUser.uid, type: "task", text: `"${stripHtml(selectedMessage.text).substring(0,30)}..." - Assigned to You 🕒`, messageId: selectedMessage.id, groupId: selectedMessage.groupId, timestamp: serverTimestamp(), isRead: false }).catch(() => {});
+                        addDoc(collection(db, "notifications"), { 
+                            userId: assigneeUser.uid, 
+                            type: "task", 
+                            text: `"${stripHtml(selectedMessage.text).substring(0,30)}..." - Assigned to You 🕒`, 
+                            messageId: selectedMessage.id, 
+                            groupId: selectedMessage.groupId, 
+                            timestamp: serverTimestamp(), 
+                            isRead: false 
+                        }).catch(() => {});
                     }
                 }
             });
 
             logImmutableAction("TASK_CREATE", `Converted to Task: "${stripHtml(selectedMessage.text)}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
             playMelody('taskCreated'); 
-            setActiveModal(null); setTaskAssignees([]);
+            setActiveModal(null); 
+            setTaskAssignees([]);
+            // Reset new states
+            setRequireAck(false);
+            setAckTimeOption('any');
+            setRequireProof(false);
         } catch (error) { alert("Failed to create task."); }
     };
 
@@ -823,6 +889,7 @@ export default function ChatApp({ user, onLogout }) {
         return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
     }, [messages, user.uid, user.email]);
 
+    // 👇 modalProps – ADD the new acknowledgment & proof states so they reach TaskConvertModal
     const modalProps = {
         activeModal, setActiveModal, selectedMessage, setSelectedMessage,
         setReplyingTo, chatInputRef, currentUserData, profileForm,
@@ -843,6 +910,10 @@ export default function ChatApp({ user, onLogout }) {
         trailFileInputRef, handleTrailFileUpload, handleAddComment,
         messages, groups, trailComment, setTrailComment, activeReminders, 
         readOnly: viewMode === "admin",
+        // 👇 NEW props
+        requireAck, setRequireAck,
+        ackTimeOption, setAckTimeOption,
+        requireProof, setRequireProof,
     };
 
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
