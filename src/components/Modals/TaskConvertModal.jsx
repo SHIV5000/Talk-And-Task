@@ -6,17 +6,26 @@ export default function TaskConvertModal({
   setTaskAssignees,
   taskDeadline,
   setTaskDeadline,
-  taskPriority,               // new prop
-  setTaskPriority,            // new prop
+  taskPriority,
+  setTaskPriority,
   convertToTask,
   activeGroup,
   dbUsers,
+  // 👇 NEW PROPS
+  requireAck,
+  setRequireAck,
+  ackTimeOption,
+  setAckTimeOption,
+  requireProof,
+  setRequireProof,
 }) {
   const priorityOptions = [
     { value: 'High',   label: '🔴 High',   color: 'text-red-600' },
     { value: 'Medium', label: '🟡 Medium', color: 'text-amber-600' },
     { value: 'Low',    label: '🟢 Low',    color: 'text-green-600' },
   ];
+
+  // No extra state needed – all derived from props
 
   return (
     <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4"
@@ -70,6 +79,50 @@ export default function TaskConvertModal({
             <label className="text-[10px] text-blue-600 font-bold uppercase absolute -top-2.5 left-3 bg-white px-1">Set Deadline</label>
             <input type="datetime-local" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)}
               className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[14px] font-semibold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+          </div>
+
+          {/* 👇 NEW: Require Acknowledgement Toggle */}
+          <div className="pt-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={requireAck}
+                onChange={(e) => setRequireAck(e.target.checked)}
+                className="w-4 h-4 accent-indigo-600"
+              />
+              <span className="text-sm font-bold text-slate-700">Require Acknowledgement</span>
+            </label>
+            {requireAck && (
+              <div className="mt-3 ml-7">
+                <label className="text-xs font-bold text-slate-500 block mb-1">Acknowledge within</label>
+                <select
+                  value={ackTimeOption}
+                  onChange={(e) => setAckTimeOption(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-sm font-bold"
+                >
+                  <option value="immediate">Immediate</option>
+                  <option value="30min">30 minutes</option>
+                  <option value="1hr">1 hour</option>
+                  <option value="2hr">2 hours</option>
+                  <option value="3hr">3 hours</option>
+                  <option value="eod">EOD (Next Working Day 9 AM)</option>
+                  <option value="any">Any Time</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 👇 NEW: Require Proof of Completion Toggle */}
+          <div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={requireProof}
+                onChange={(e) => setRequireProof(e.target.checked)}
+                className="w-4 h-4 accent-indigo-600"
+              />
+              <span className="text-sm font-bold text-slate-700">Require File / Photo to Complete</span>
+            </label>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
