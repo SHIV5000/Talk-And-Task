@@ -18,11 +18,8 @@ export default function AdminPanel({
     const [activeTab, setActiveTab] = useState('overview');
     const [taskStatusFilter, setTaskStatusFilter] = useState('All');
 
-    // 🚀 PHASE 1: PERFORMANCE FOUNDATION - Localized Audit State
-    // By keeping keystrokes local, we prevent the entire ChatApp from re-rendering while you type.
     const [localAuditSearch, setLocalAuditSearch] = useState("");
 
-    // Overview Metrics
     const totalUsers = dbUsers.length;
     const pendingApprovals = dbUsers.filter(u => !u.isApproved).length;
     const totalGroups = groups.length;
@@ -32,14 +29,12 @@ export default function AdminPanel({
     const completedTasks = allTasks.filter(m => m.taskData?.status === "Completed");
     const escalatedTasks = allTasks.filter(m => m.taskData?.escalated === true);
 
-    // 🚀 PHASE 2: OVERVIEW - Recent Activity Aggregation
     const recentActivity = useMemo(() => {
         return [...filteredAuditLogs]
             .sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0))
             .slice(0, 30);
     }, [filteredAuditLogs]);
 
-    // Filter Tasks for Task Tab
     const filteredTasks = useMemo(() => {
         let filtered = allTasks;
         if (taskStatusFilter !== 'All') {
@@ -48,8 +43,6 @@ export default function AdminPanel({
         return filtered.sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
     }, [allTasks, taskStatusFilter]);
 
-    // 🚀 PHASE 1: PERFORMANCE FOUNDATION - Short-circuited SLA Calculation
-    // This heavy math ONLY runs when you are actually looking at the SLA tab.
     const slaMetrics = useMemo(() => {
         if (activeTab !== 'sla') return []; 
         return dbUsers.map(user => {
@@ -67,36 +60,31 @@ export default function AdminPanel({
         }).sort((a, b) => a.complianceScore - b.complianceScore); 
     }, [dbUsers, allTasks, activeTab]);
 
-    // 🚀 PHASE 2: OVERVIEW - Industry Standard PDF Export
     const exportOverviewPDF = () => {
         const doc = new jsPDF();
         const now = new Date();
         const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-        // Header
         doc.setFontSize(18);
-        doc.setTextColor(79, 70, 229); // Indigo 600
+        doc.setTextColor(79, 70, 229); 
         doc.text('Talk & Task Enterprise', 14, 22);
         doc.setFontSize(12);
-        doc.setTextColor(100, 116, 139); // Slate 500
+        doc.setTextColor(100, 116, 139); 
         doc.text('Executive Summary & Recent Activity', 14, 30);
 
-        // Metrics Section
         doc.setFontSize(10);
-        doc.setTextColor(30, 41, 59); // Slate 800
+        doc.setTextColor(30, 41, 59); 
         doc.text(`Total Users: ${totalUsers}    |    Pending Approvals: ${pendingApprovals}`, 14, 45);
         doc.text(`Departments: ${totalGroups}    |    Active Tasks: ${activeTasks.length}    |    Escalated: ${escalatedTasks.length}`, 14, 52);
 
-        // Table Data Generation
         const tableData = recentActivity.map(log => [
             log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A',
             log.userEmail?.split('@')[0] || 'System',
-            log.action,
+            log.action || 'Unknown',
             stripHtml(log.details)
         ]);
 
-        // AutoTable Generation
         doc.autoTable({
             startY: 62,
             head: [['Timestamp', 'Actor', 'Action', 'Details']],
@@ -107,12 +95,11 @@ export default function AdminPanel({
             columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35 }, 2: { cellWidth: 35 }, 3: { cellWidth: 'auto' } }
         });
 
-        // Professional Footer Injection across all pages
         const pageCount = doc.internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
             doc.setFontSize(8);
-            doc.setTextColor(148, 163, 184); // Slate 400
+            doc.setTextColor(148, 163, 184); 
             const footerText = `Downloaded by ${currentUserData?.name || 'Admin'} | at ${timeStr} | on ${dateStr} | Talk & Task — MPGS | Confidential`;
             doc.text(footerText, 14, doc.internal.pageSize.height - 10);
         }
@@ -140,7 +127,6 @@ export default function AdminPanel({
     return (
         <div className="flex flex-col h-full w-full bg-slate-50 relative overflow-hidden">
             
-            {/* Header */}
             <div className="h-[70px] bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-sm z-20">
                 <div className="flex items-center gap-4">
                     <button onClick={() => setViewMode('chat')} className="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
@@ -151,7 +137,6 @@ export default function AdminPanel({
                         <p className="text-[12px] text-slate-500 font-medium">Workspace Management & Telemetry</p>
                     </div>
                 </div>
-                {/* Global Export Button */}
                 {activeTab === 'overview' && (
                     <button onClick={exportOverviewPDF} className="px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-100 transition-colors flex items-center gap-2">
                         <i className="fa-solid fa-file-pdf"></i> Download PDF
@@ -159,7 +144,6 @@ export default function AdminPanel({
                 )}
             </div>
 
-            {/* Navigation Tabs */}
             <div className="bg-white px-6 border-b border-slate-200 flex gap-6 shrink-0 pt-2 z-10 overflow-x-auto">
                 {[
                     { id: 'overview', label: 'Overview', icon: 'fa-chart-pie' },
@@ -175,13 +159,10 @@ export default function AdminPanel({
                 ))}
             </div>
 
-            {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 custom-sidebar-scroll">
                 
-                {/* 🚀 PHASE 2: OVERVIEW TAB */}
                 {activeTab === 'overview' && (
                     <div className="animate-in slide-in-from-bottom-4 space-y-6">
-                        {/* Metrics Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow">
                                 <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg"><i className="fa-solid fa-users"></i></div>
@@ -211,7 +192,6 @@ export default function AdminPanel({
                             </div>
                         </div>
 
-                        {/* Recent Activity Table */}
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
                                 <h3 className="font-bold text-slate-800 flex items-center gap-2"><i className="fa-solid fa-bolt text-amber-500"></i> Workspace Live Pulse (Last 30 Actions)</h3>
@@ -232,8 +212,9 @@ export default function AdminPanel({
                                                 <td className="p-3 pl-6 text-slate-500 font-medium text-xs">{log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A'}</td>
                                                 <td className="p-3 font-bold text-indigo-600">{log.userEmail?.split('@')[0] || 'System'}</td>
                                                 <td className="p-3">
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${log.action.includes('System') || log.action.includes('SECURITY') ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                                        {log.action}
+                                                    {/* 🛡️ SAFELY CHECK .includes WITH ?. TO PREVENT CRASHES ON LEGACY DATA */}
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${log.action?.includes('System') || log.action?.includes('SECURITY') ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                                        {log.action || 'Unknown'}
                                                     </span>
                                                 </td>
                                                 <td className="p-3 pr-6 text-slate-700 truncate max-w-md">{stripHtml(log.details)}</td>
@@ -249,7 +230,6 @@ export default function AdminPanel({
                     </div>
                 )}
 
-                {/* DIRECTORY TAB (Users) */}
                 {activeTab === 'users' && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
@@ -311,7 +291,6 @@ export default function AdminPanel({
                     </div>
                 )}
 
-                {/* DEPARTMENTS TAB (Groups) */}
                 {activeTab === 'groups' && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
@@ -362,7 +341,6 @@ export default function AdminPanel({
                     </div>
                 )}
 
-                {/* TASK MASTER TAB */}
                 {activeTab === 'tasks' && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
@@ -390,7 +368,6 @@ export default function AdminPanel({
                                     {filteredTasks.map(task => (
                                         <tr key={task.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                             <td className="p-4">
-                                                {/* 🚀 PHASE 1 FIX: HTML safe rendering via stripHtml to prevent broken CSS grid layouts */}
                                                 <div className="text-sm font-bold text-slate-800 line-clamp-2 w-64" title={stripHtml(task.text)}>
                                                     {stripHtml(task.text)}
                                                 </div>
@@ -426,7 +403,6 @@ export default function AdminPanel({
                     </div>
                 )}
 
-                {/* SLA COMPLIANCE TAB */}
                 {activeTab === 'sla' && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
@@ -476,11 +452,9 @@ export default function AdminPanel({
                     </div>
                 )}
 
-                {/* AUDIT LOGS TAB */}
                 {activeTab === 'audit' && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in flex flex-col h-[75vh]">
                         
-                        {/* Audit Filters */}
                         <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0">
                             <h3 className="font-bold text-slate-800 mb-3">Immutable Audit Ledger</h3>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -498,7 +472,6 @@ export default function AdminPanel({
                             </div>
                         </div>
 
-                        {/* Audit Table */}
                         <div className="flex-1 overflow-y-auto custom-sidebar-scroll">
                             <table className="w-full text-left border-collapse">
                                 <thead className="sticky top-0 bg-slate-100 shadow-sm z-10">
@@ -517,8 +490,9 @@ export default function AdminPanel({
                                             </td>
                                             <td className="p-4 text-sm font-bold text-slate-700">{log.userEmail?.split('@')[0]}</td>
                                             <td className="p-4">
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${log.action === 'SECURITY' ? 'bg-rose-50 text-rose-700 border-rose-200' : log.action.includes('DELETE') ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                                    {log.action}
+                                                {/* 🛡️ SAFELY CHECK .includes WITH ?. TO PREVENT CRASHES */}
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${log.action === 'SECURITY' ? 'bg-rose-50 text-rose-700 border-rose-200' : log.action?.includes('DELETE') ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                                    {log.action || 'Unknown'}
                                                 </span>
                                             </td>
                                             <td className="p-4">
