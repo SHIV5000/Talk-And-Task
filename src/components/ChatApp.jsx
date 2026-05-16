@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
-// 👇 UPDATED: Slack Sidebar Input uses matching WYSIWYG Editor 👇
+// 👇 Slack Sidebar Input uses matching WYSIWYG Editor 👇
 const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeThread.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
@@ -126,7 +126,7 @@ export default function ChatApp({ user, onLogout }) {
     const [newTaskTitle, setNewTaskTitle] = useState("");
     
     const [requireAck, setRequireAck] = useState(false);
-    const [ackTimeOption, setAckTimeOption] = useState('any');
+    const [ackTimeOption, setAckTimeOption] = useState('any'); 
     const [requireProof, setRequireProof] = useState(false);
 
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -307,21 +307,65 @@ export default function ChatApp({ user, onLogout }) {
         setUnreadHighlightIds([]);
     }, [activeGroup?.id, user.email, messages]);
 
+    // 👇 ESCALATION ENGINE WITH BREACH TELEMETRY 👇
     useEffect(() => {
         const checkerInterval = setInterval(async () => {
             const now = new Date();
+            
+            // Standard Alerts
             const dueTasks = messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && !m.taskData?.deadlineAlerted && m.taskData?.deadline && new Date(m.taskData.deadline) <= now);
             dueTasks.forEach(async (task) => {
                 await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
-                const involved = new Set();
-                if (task.senderEmail) involved.add(task.senderEmail);
-                (task.taskData.assignees || []).forEach(a => involved.add(a));
+                const involved = new Set([task.senderEmail, ...(task.taskData.assignees || [])]);
                 involved.forEach(email => {
                     const u = dbUsers.find(u => u.email === email);
-                    if (u) addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `⏰ DUE NOW: "${task.text}"`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                    if (u) addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `⏰ DUE NOW: "${stripHtml(task.text)}"`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
                 });
             });
 
+            // 🚨 ESCALATION & COMPLIANCE LOGIC
+            const escalatingTasks = messages.filter(m => {
+                if (!m.isTask || m.taskData?.status === "Completed" || m.taskData?.escalated) return false;
+                const deadlinePassed = m.taskData?.deadline && new Date(m.taskData.deadline) <= now;
+                const ackPassed = m.taskData?.requireAck && m.taskData?.ackDeadline && new Date(m.taskData.ackDeadline) <= now && (m.taskData.acknowledgedBy || []).length < (m.taskData.assignees || []).length;
+                return deadlinePassed || ackPassed;
+            });
+
+            for (const task of escalatingTasks) {
+                try {
+                    const isAckBreach = task.taskData?.requireAck && task.taskData?.ackDeadline && new Date(task.taskData.ackDeadline) <= now && (task.taskData.acknowledgedBy || []).length < (task.taskData.assignees || []).length;
+                    
+                    let offenders = [];
+                    if (isAckBreach) {
+                        offenders = (task.taskData.assignees || []).filter(a => !(task.taskData.acknowledgedBy || []).includes(a));
+                    } else {
+                        offenders = task.taskData.assignees || [];
+                    }
+
+                    const existingBreached = task.taskData.breachedBy || [];
+                    const newBreached = [...new Set([...existingBreached, ...offenders])];
+
+                    const offenderNames = offenders.map(e => dbUsers.find(u=>u.email===e)?.name || e.split('@')[0]).join(', ');
+                    const reason = isAckBreach ? `Pending Acknowledgment from: ${offenderNames}` : `Final Deadline Missed`;
+
+                    const trailUpdate = { action: "System Escalation", by: "System", time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: `🚨 SLA Breach. ${reason}` };
+
+                    await updateDoc(doc(db, "messages", task.id), {
+                        "taskData.escalated": true,
+                        "taskData.breachedBy": newBreached,
+                        "taskData.trail": [...(task.taskData.trail||[]), trailUpdate]
+                    });
+
+                    // Notify relevant parties
+                    const notifySet = new Set([task.senderEmail, ...offenders]);
+                    notifySet.forEach(email => {
+                        const u = dbUsers.find(u => u.email === email);
+                        if (u) addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `🚨 ESCALATION ALERT: "${stripHtml(task.text).substring(0,30)}..."`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                    });
+                } catch(e) { console.error("Escalation failed", e) }
+            }
+
+            // Standard Reminders & Scheduled Msgs
             const dueReminders = (activeReminders || []).filter(r => !r.isTriggered && r.remindAt && new Date(r.remindAt) <= now);
             for (const rem of dueReminders) {
                 try {
@@ -590,7 +634,6 @@ export default function ChatApp({ user, onLogout }) {
 
             if (requireAck) {
                 switch (ackTimeOption) {
-                    case 'immediate': break;
                     case '30min': ackDeadline = new Date(now.getTime() + 30 * 60 * 1000); break;
                     case '1hr': ackDeadline = new Date(now.getTime() + 60 * 60 * 1000); break;
                     case '2hr': ackDeadline = new Date(now.getTime() + 2 * 60 * 60 * 1000); break;
@@ -668,27 +711,75 @@ export default function ChatApp({ user, onLogout }) {
         } catch (e) { alert("Failed to update task title."); }
     };
 
-    // 👇 AUTO-ACKNOWLEDGE MODAL DELEGATE
+    // 👇 DELTA-DELEGATION (Partial Transfers) & AUTO-ACK
     const handleDelegateTask = async () => {
         if (!selectedMessage || delegateAssignees.length === 0) return;
         try {
             const now = new Date();
-            const toNames = delegateAssignees.map(email => {
-                const u = dbUsers.find(x => x.email === email);
-                return u ? u.name : email.split('@')[0];
-            }).join(', ');
-            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames }];
+            const oldAssignees = selectedMessage.taskData.assignees || [];
+            const newAssignees = delegateAssignees;
             
-            const updates = { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] };
-            
-            // Auto-Acknowledge Logic
+            // Calculate Deltas
+            const added = newAssignees.filter(u => !oldAssignees.includes(u));
+            const removed = oldAssignees.filter(u => !newAssignees.includes(u));
+            const kept = oldAssignees.filter(u => newAssignees.includes(u));
+
+            // Clean Acknowledged Array (Keep only people who stayed)
             const currentAckBy = selectedMessage.taskData.acknowledgedBy || [];
-            const isAssignee = (selectedMessage.taskData.assignees || []).includes(user.email);
-            if (selectedMessage.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
-                updates["taskData.acknowledgedBy"] = [...currentAckBy, user.email];
-            }
+            const filteredAckBy = currentAckBy.filter(u => kept.includes(u));
+
+            // Generate Audit Strings
+            const addedNames = added.map(e => dbUsers.find(u=>u.email===e)?.name || e.split('@')[0]).join(', ');
+            const removedNames = removed.map(e => dbUsers.find(u=>u.email===e)?.name || e.split('@')[0]).join(', ');
+
+            let actionText = "Delegated / Team Modified";
+            let commentText = "";
+            if (added.length && removed.length) commentText = `Added: ${addedNames} | Removed: ${removedNames}`;
+            else if (added.length) commentText = `Added: ${addedNames}`;
+            else if (removed.length) commentText = `Removed: ${removedNames}`;
+
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: actionText, by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             
+            const updates = { 
+                "taskData.assignees": newAssignees, 
+                "taskData.trail": updatedTrail, 
+                "taskData.acknowledgedBy": filteredAckBy 
+            };
+
+            // Auto-Acknowledge Logic for the Admin performing the action if they are an assignee
+            if (selectedMessage.taskData.requireAck && newAssignees.includes(user.email) && !filteredAckBy.includes(user.email)) {
+                updates["taskData.acknowledgedBy"].push(user.email);
+            }
+
+            // Escaltion Recovery Logic
+            if (selectedMessage.taskData.escalated) {
+                updates["taskData.escalated"] = false;
+                updates["taskData.escalationTransferred"] = true;
+                updates["taskData.trail"].push({ action: "Escalation Intercept", by: "System", time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Task structure modified by Admin to resolve escalation." });
+            }
+
+            // Recalculate Status based on Deltas
+            if (selectedMessage.taskData.requireAck) {
+                if (updates["taskData.acknowledgedBy"].length === newAssignees.length && updates["taskData.status"] !== "Completed") {
+                    updates["taskData.status"] = "Acknowledged";
+                    updates["taskData.acknowledged"] = true; // Legacy support flag
+                } else if (updates["taskData.status"] === "Pending" && updates["taskData.acknowledgedBy"].length > 0) {
+                    updates["taskData.status"] = "In Progress";
+                }
+            }
+
             await updateDoc(doc(db, "messages", selectedMessage.id), updates);
+            
+            // Targeted Push Notifications
+            added.forEach(email => {
+                const u = dbUsers.find(x => x.email === email);
+                if(u) addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `🔔 You were added to an ongoing task by Admin.`, messageId: selectedMessage.id, groupId: selectedMessage.groupId, timestamp: serverTimestamp(), isRead: false });
+            });
+            removed.forEach(email => {
+                const u = dbUsers.find(x => x.email === email);
+                if(u) addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `🚫 You were removed from a task.`, messageId: selectedMessage.id, groupId: selectedMessage.groupId, timestamp: serverTimestamp(), isRead: false });
+            });
+
             playMelody('taskUpdated'); 
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
@@ -703,7 +794,6 @@ export default function ChatApp({ user, onLogout }) {
             
             const updates = { "taskData.status": "Completed", "taskData.trail": updatedTrail };
             
-            // Auto-Acknowledge Logic
             const currentAckBy = selectedMessage.taskData.acknowledgedBy || [];
             const isAssignee = (selectedMessage.taskData.assignees || []).includes(user.email);
             if (selectedMessage.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
@@ -726,7 +816,6 @@ export default function ChatApp({ user, onLogout }) {
             
             const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
             
-            // Auto-Acknowledge Logic
             const currentAckBy = selectedMessage.taskData.acknowledgedBy || [];
             const isAssignee = (selectedMessage.taskData.assignees || []).includes(user.email);
             if (selectedMessage.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
@@ -757,7 +846,6 @@ export default function ChatApp({ user, onLogout }) {
                 
                 const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
                 
-                // Auto-Acknowledge Logic
                 const currentAckBy = selectedMessage.taskData.acknowledgedBy || [];
                 const isAssignee = (selectedMessage.taskData.assignees || []).includes(user.email);
                 if (selectedMessage.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
@@ -797,7 +885,6 @@ export default function ChatApp({ user, onLogout }) {
             
             const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
             
-            // Auto-Acknowledge Logic
             const currentAckBy = targetMsg.taskData.acknowledgedBy || [];
             const isAssignee = (targetMsg.taskData.assignees || []).includes(user.email);
             if (targetMsg.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
