@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
+// Global String Formatter for clean rendering
+const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
+
 export default function AdminPanel({
     setViewMode, setActiveModal, dbUsers, groups, filteredAuditLogs,
     adminFilterUser, setAdminFilterUser, adminFilterDate, setAdminFilterDate,
@@ -128,12 +131,125 @@ export default function AdminPanel({
                     </div>
                 )}
 
+                {/* DIRECTORY TAB (Users) */}
+                {activeTab === 'users' && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
+                        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-slate-800">User Directory</h3>
+                            <div className="text-xs font-bold text-slate-500">{pendingApprovals} Pending Approvals</div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                                        <th className="p-4 font-bold">Employee Profile</th>
+                                        <th className="p-4 font-bold">System Role</th>
+                                        <th className="p-4 font-bold">Group Privileges</th>
+                                        <th className="p-4 font-bold">Access Status</th>
+                                        <th className="p-4 font-bold text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {dbUsers.map(u => (
+                                        <tr key={u.uid} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                            <td className="p-4 flex items-center gap-3">
+                                                <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
+                                                <div>
+                                                    <div className="text-sm font-bold text-slate-800">{u.name}</div>
+                                                    <div className="text-[11px] text-slate-400 font-medium">{u.email}</div>
+                                                </div>
+                                            </td>
+                                            <td className="p-4">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${u.isAdmin ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                                    {u.isAdmin ? 'Administrator' : 'Standard User'}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-xs font-bold text-slate-600">
+                                                {u.canCreateGroups ? <span className="text-emerald-600"><i className="fa-solid fa-check mr-1"></i> Authorized</span> : <span className="text-slate-400"><i className="fa-solid fa-xmark mr-1"></i> Restricted</span>}
+                                            </td>
+                                            <td className="p-4">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${u.isApproved ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse'}`}>
+                                                    {u.isApproved ? 'Approved' : 'Pending Review'}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => handleToggleApprove(u)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${u.isApproved ? 'bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 shadow-sm'}`}>
+                                                        {u.isApproved ? 'Revoke Access' : 'Approve Entry'}
+                                                    </button>
+                                                    <button onClick={() => handleToggleAdmin(u)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors border ${u.isAdmin ? 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200' : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border-purple-200'}`}>
+                                                        {u.isAdmin ? 'Remove Admin' : 'Make Admin'}
+                                                    </button>
+                                                    <button onClick={() => handleToggleCanCreateGroups(u)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
+                                                        Toggle Groups
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* DEPARTMENTS TAB (Groups) */}
+                {activeTab === 'groups' && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
+                        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-slate-800">Department Roster</h3>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                                        <th className="p-4 font-bold">Department Name</th>
+                                        <th className="p-4 font-bold">Member Count</th>
+                                        <th className="p-4 font-bold">Admin Count</th>
+                                        <th className="p-4 font-bold">Created By</th>
+                                        <th className="p-4 font-bold text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {groups.filter(g => !g.isDM).map(g => (
+                                        <tr key={g.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                            <td className="p-4 flex items-center gap-3">
+                                                {g.profilePicUrl ? (
+                                                    <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-8 h-8" />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded-full bg-teal-50 flex items-center justify-center text-teal-600"><i className="fa-solid fa-users text-xs"></i></div>
+                                                )}
+                                                <span className="text-sm font-bold text-slate-800">{g.name}</span>
+                                            </td>
+                                            <td className="p-4 text-sm font-bold text-slate-600">{g.members?.length || 0} Members</td>
+                                            <td className="p-4 text-sm font-bold text-indigo-600">{g.admins?.length || 0} Admins</td>
+                                            <td className="p-4 text-xs font-bold text-slate-500">{g.createdBy?.split('@')[0]}</td>
+                                            <td className="p-4 text-right">
+                                                <button onClick={() => {
+                                                    setEditingGroup(g);
+                                                    setGroupForm({ name: g.name, members: g.members || [], admins: g.admins || [], profilePicUrl: g.profilePicUrl });
+                                                    setActiveModal('group_form_modal');
+                                                }} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-colors shadow-sm">
+                                                    Edit Configuration
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {groups.filter(g => !g.isDM).length === 0 && (
+                                        <tr><td colSpan="5" className="p-8 text-center text-slate-400 font-medium">No active departments found.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
                 {/* TASK MASTER TAB */}
                 {activeTab === 'tasks' && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                             <h3 className="font-bold text-slate-800">Global Task Registry</h3>
-                            <select value={taskStatusFilter} onChange={(e) => setTaskStatusFilter(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium outline-none focus:border-indigo-500">
+                            <select value={taskStatusFilter} onChange={(e) => setTaskStatusFilter(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium outline-none focus:border-indigo-500 shadow-sm text-slate-700 bg-white">
                                 <option value="All">All Statuses</option>
                                 <option value="Pending">Pending</option>
                                 <option value="Acknowledged">Acknowledged</option>
@@ -165,6 +281,11 @@ export default function AdminPanel({
                                                     {(task.taskData?.assignees || []).slice(0, 3).map(email => (
                                                         <MemoizedAvatar key={email} uid={email} name={email.split('@')[0]} sizeClass="w-6 h-6 border-2 border-white" />
                                                     ))}
+                                                    {(task.taskData?.assignees || []).length > 3 && (
+                                                        <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-600 border-2 border-white relative z-10">
+                                                          +{(task.taskData.assignees.length - 3)}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="p-4">
@@ -174,7 +295,7 @@ export default function AdminPanel({
                                                     {task.taskData?.escalated && <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-rose-100 text-rose-700 border-rose-300 animate-pulse">Escalated</span>}
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-xs font-bold text-slate-600">{new Date(task.taskData?.deadline).toLocaleDateString()}</td>
+                                            <td className="p-4 text-xs font-bold text-slate-600">{task.taskData?.deadline ? new Date(task.taskData.deadline).toLocaleDateString() : 'N/A'}</td>
                                         </tr>
                                     ))}
                                     {filteredTasks.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-400 font-medium">No tasks found matching criteria.</td></tr>}
@@ -233,6 +354,67 @@ export default function AdminPanel({
                         </div>
                     </div>
                 )}
+
+                {/* AUDIT LOGS TAB */}
+                {activeTab === 'audit' && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in flex flex-col h-[75vh]">
+                        
+                        {/* Audit Filters */}
+                        <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0">
+                            <h3 className="font-bold text-slate-800 mb-3">Immutable Audit Ledger</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <input type="text" placeholder="Filter by User..." className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm" value={adminFilterUser} onChange={e => setAdminFilterUser(e.target.value)} />
+                                <input type="date" className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={adminFilterDate} onChange={e => setAdminFilterDate(e.target.value)} />
+                                <select className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={adminFilterType} onChange={e => setAdminFilterType(e.target.value)}>
+                                    <option value="">All Action Types</option>
+                                    <option value="TASK_CREATE">Task Creation</option>
+                                    <option value="TASK_EDIT">Task Modification</option>
+                                    <option value="TASK_DELETE">Task Deletion</option>
+                                    <option value="FILE_UPLOAD">File Upload</option>
+                                    <option value="SECURITY">Security/Access</option>
+                                </select>
+                                <input type="text" placeholder="Filter by Context (Group/Task)..." className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm" value={adminFilterGroup} onChange={e => setAdminFilterGroup(e.target.value)} />
+                            </div>
+                        </div>
+
+                        {/* Audit Table */}
+                        <div className="flex-1 overflow-y-auto custom-sidebar-scroll">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="sticky top-0 bg-slate-100 shadow-sm z-10">
+                                    <tr className="text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                                        <th className="p-4 font-bold w-48">Timestamp</th>
+                                        <th className="p-4 font-bold w-48">Actor</th>
+                                        <th className="p-4 font-bold w-48">Action Category</th>
+                                        <th className="p-4 font-bold">Audit Detail / Payload</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredAuditLogs.map(log => (
+                                        <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                            <td className="p-4 text-xs font-medium text-slate-500">
+                                                {log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A'}
+                                            </td>
+                                            <td className="p-4 text-sm font-bold text-slate-700">{log.userEmail?.split('@')[0]}</td>
+                                            <td className="p-4">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${log.action === 'SECURITY' ? 'bg-rose-50 text-rose-700 border-rose-200' : log.action.includes('DELETE') ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                                    {log.action}
+                                                </span>
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="text-sm font-medium text-slate-800 break-words">{log.details}</div>
+                                                {log.groupName && <div className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Context: {log.groupName}</div>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredAuditLogs.length === 0 && (
+                                        <tr><td colSpan="4" className="p-8 text-center text-slate-400 font-medium">No audit logs matching filters.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </div>
     );
