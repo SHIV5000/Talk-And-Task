@@ -620,7 +620,7 @@ export default function ChatApp({ user, onLogout }) {
                 }],
                 requireAck: requireAck,
                 ackDeadline: ackDeadline ? ackDeadline.toISOString() : null,
-                acknowledged: false,
+                acknowledgedBy: [], // 👈 CHANGED: Array to track individual assignees
                 requireProof: requireProof,
                 escalated: false
             };
@@ -656,7 +656,6 @@ export default function ChatApp({ user, onLogout }) {
             setRequireProof(false);
         } catch (error) { alert("Failed to create task."); }
     };
-
     const handleSaveTaskTitle = async () => {
         if (!newTaskTitle.trim() || !selectedMessage) return;
         try {
@@ -668,6 +667,7 @@ export default function ChatApp({ user, onLogout }) {
     };
 
     // 👇 AUTO-ACKNOWLEDGE
+    // 👇 2. UPDATE ALL MODAL ACTIONS to use acknowledgedBy array logic
     const handleDelegateTask = async () => {
         if (!selectedMessage || delegateAssignees.length === 0) return;
         try {
@@ -679,8 +679,12 @@ export default function ChatApp({ user, onLogout }) {
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames }];
             
             const updates = { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] };
-            if (selectedMessage.taskData.requireAck && !selectedMessage.taskData.acknowledged) {
-                updates["taskData.acknowledged"] = true;
+            
+            // Auto-Acknowledge Logic
+            const currentAckBy = selectedMessage.taskData.acknowledgedBy || [];
+            const isAssignee = (selectedMessage.taskData.assignees || []).includes(user.email);
+            if (selectedMessage.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
+                updates["taskData.acknowledgedBy"] = [...currentAckBy, user.email];
             }
             
             await updateDoc(doc(db, "messages", selectedMessage.id), updates);
@@ -689,7 +693,6 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) {}
     };
 
-    // 👇 AUTO-ACKNOWLEDGE
     const handleCompleteTask = async () => {
         if (!selectedMessage) return;
         try {
@@ -697,8 +700,12 @@ export default function ChatApp({ user, onLogout }) {
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
             
             const updates = { "taskData.status": "Completed", "taskData.trail": updatedTrail };
-            if (selectedMessage.taskData.requireAck && !selectedMessage.taskData.acknowledged) {
-                updates["taskData.acknowledged"] = true;
+            
+            // Auto-Acknowledge Logic
+            const currentAckBy = selectedMessage.taskData.acknowledgedBy || [];
+            const isAssignee = (selectedMessage.taskData.assignees || []).includes(user.email);
+            if (selectedMessage.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
+                updates["taskData.acknowledgedBy"] = [...currentAckBy, user.email];
             }
 
             await updateDoc(doc(db, "messages", selectedMessage.id), updates);
@@ -707,7 +714,6 @@ export default function ChatApp({ user, onLogout }) {
         } catch (error) {}
     };
 
-    // 👇 AUTO-ACKNOWLEDGE
     const handleAddComment = async (closeModal = false) => {
         if (!selectedMessage || !trailComment.trim()) return;
         try {
@@ -716,19 +722,22 @@ export default function ChatApp({ user, onLogout }) {
             const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
             
             const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
-            if (selectedMessage.taskData.requireAck && !selectedMessage.taskData.acknowledged) {
-                updates["taskData.acknowledged"] = true;
+            
+            // Auto-Acknowledge Logic
+            const currentAckBy = selectedMessage.taskData.acknowledgedBy || [];
+            const isAssignee = (selectedMessage.taskData.assignees || []).includes(user.email);
+            if (selectedMessage.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
+                updates["taskData.acknowledgedBy"] = [...currentAckBy, user.email];
             }
 
             await updateDoc(doc(db, "messages", selectedMessage.id), updates);
             setTrailComment("");
-            setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus, acknowledged: updates["taskData.acknowledged"] || prev.taskData.acknowledged }}));
+            setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus, acknowledgedBy: updates["taskData.acknowledgedBy"] || prev.taskData.acknowledgedBy }}));
             playMelody('taskUpdated'); 
             if (closeModal) setActiveModal(null);
         } catch (error) {}
     };
 
-    // 👇 AUTO-ACKNOWLEDGE
     const handleTrailFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file || !selectedMessage) return;
@@ -743,17 +752,42 @@ export default function ChatApp({ user, onLogout }) {
                 const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
                 
                 const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
-                if (selectedMessage.taskData.requireAck && !selectedMessage.taskData.acknowledged) {
-                    updates["taskData.acknowledged"] = true;
+                
+                // Auto-Acknowledge Logic
+                const currentAckBy = selectedMessage.taskData.acknowledgedBy || [];
+                const isAssignee = (selectedMessage.taskData.assignees || []).includes(user.email);
+                if (selectedMessage.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
+                    updates["taskData.acknowledgedBy"] = [...currentAckBy, user.email];
                 }
 
                 await updateDoc(doc(db, "messages", selectedMessage.id), updates);
-                setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus, acknowledged: updates["taskData.acknowledged"] || prev.taskData.acknowledged}}));
+                setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus, acknowledgedBy: updates["taskData.acknowledgedBy"] || prev.taskData.acknowledgedBy}}));
                 playMelody('taskFileUpload'); 
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
     };
 
+    const handleAddInlineComment = async (targetMsg, commentText) => {
+        if (!targetMsg || !commentText.trim()) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
+            const newStatus = targetMsg.taskData.status === 'Pending' ? 'In Progress' : targetMsg.taskData.status;
+            
+            const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
+            
+            // Auto-Acknowledge Logic
+            const currentAckBy = targetMsg.taskData.acknowledgedBy || [];
+            const isAssignee = (targetMsg.taskData.assignees || []).includes(user.email);
+            if (targetMsg.taskData.requireAck && isAssignee && !currentAckBy.includes(user.email)) {
+                updates["taskData.acknowledgedBy"] = [...currentAckBy, user.email];
+            }
+
+            await updateDoc(doc(db, "messages", targetMsg.id), updates);
+            await notifyInvolvedInTask(targetMsg, `${currentUserData?.name || (user.email||"").split('@')[0]} updated a task.`);
+            playMelody('taskUpdated'); 
+        } catch (error) {}
+    };
     const setReminder = async () => {
         if (!selectedMessage || !reminderDateTime) return;
         try {
