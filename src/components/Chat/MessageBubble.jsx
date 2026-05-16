@@ -31,7 +31,11 @@ const MessageBubble = React.memo(({ msg, userEmail, currentUserData, activeGroup
   const isEditingThis = editingMessageId === msg.id;
 
   const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
-  const senderName = (msg.sender || '').split('@')[0];
+  const senderNameRaw = senderUser.name || msg.sender || msg.senderEmail || '';
+  const senderName = senderNameRaw
+    .toLowerCase()
+    .replace(/(^\w|\s\w)/g, (m) => m.toUpperCase())
+    .split('@')[0];
   const senderAvatar = senderUser.profilePicUrl || null;
 
   const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
@@ -245,6 +249,13 @@ const MessageBubble = React.memo(({ msg, userEmail, currentUserData, activeGroup
                       </div>
                     </div>
 
+                    <div className="px-2 pb-2">
+                      {!isThreadView && !msg.isTask && (
+                        <button onClick={(e)=>{e.stopPropagation(); setActiveThread(msg);}} className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700">
+                          <i className="fa-solid fa-reply mr-1"></i>Replies {replyCount > 0 ? `(${replyCount})` : ''}
+                        </button>
+                      )}
+                    </div>
                     {isTaskParticipant && !isTaskCompleted && (
                         <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />

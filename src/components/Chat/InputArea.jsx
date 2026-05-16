@@ -143,14 +143,7 @@ export default function InputArea({
                 </div>
                 <textarea rows={1} value={pf.caption} onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)); }} placeholder="Add a caption..." className="w-full text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"></textarea>
                 
-                <label className="flex items-center gap-2 mt-2 select-none cursor-pointer w-fit">
-                    <input type="checkbox" checked={pf.allowDownload !== false} onChange={(e) => {
-                        const isAllowed = e.target.checked;
-                        const cleanedName = pf.customName.replace('__SECURE__', '');
-                        setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, allowDownload: isAllowed, customName: isAllowed ? cleanedName : `__SECURE__${cleanedName}` } : f));
-                    }} className="w-4 h-4 accent-indigo-600 cursor-pointer" />
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{pf.allowDownload !== false ? '✅ Public Download Allowed' : '🔒 Secure (View Only)'}</span>
-                </label>
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">🔒 Secure (View Only)</div>
               </div>
               <button onClick={() => { setPendingFiles(prev => prev.filter(f => f.id !== pf.id)); if (pendingFiles.length === 1) setShowFileRename(false); }} className="text-slate-400 hover:text-rose-500 p-2"><i className="fa-solid fa-trash-can text-lg"></i></button>
             </div>
@@ -218,9 +211,9 @@ export default function InputArea({
         <button 
           onClick={handleSendOfflineAware} 
           disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-700 text-white hover:bg-indigo-800 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
-          <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
+          <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px] text-white"></i>
         </button>
       </div>
     </div>

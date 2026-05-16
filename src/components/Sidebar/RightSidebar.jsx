@@ -5,7 +5,7 @@ export default function RightSidebar({
   showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
   archivedTasks, groups, dbUsers, navigateToMessageFromNotification
 }) {
-  const [filter, setFilter] = useState('All'); 
+  const [filter, setFilter] = useState('PENDING'); 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -25,14 +25,12 @@ export default function RightSidebar({
 
   const filteredTasks = useMemo(() => {
     let res = [];
-    if (filter === 'Archived') res = archivedTasks;
-    else if (filter === 'Assigned To Me') res = tasksAssignedToMe;
-    else if (filter === 'Created By Me') res = tasksAssignedByMe;
-    else {
-        res = allTasks.filter(t => !t.taskData.isArchived); 
-        if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
-        if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
-    }
+    res = allTasks.filter(t => !t.taskData.isArchived);
+    if (filter === 'PENDING') res = res.filter(t => t.taskData.status !== 'Completed');
+    if (filter === 'COMPLETED') res = res.filter(t => t.taskData.status === 'Completed');
+    if (filter === 'BY ME') res = res.filter(t => t.senderEmail && tasksAssignedByMe.some(x => x.id === t.id));
+    if (filter === 'TO ME') res = res.filter(t => tasksAssignedToMe.some(x => x.id === t.id));
+    if (filter === 'ESCALATED ONLY') res = res.filter(t => t.taskData?.escalated);
 
     // Apply Date Range Filter
     if (startDate) {
@@ -76,7 +74,7 @@ export default function RightSidebar({
          </div>
          
          <div className="flex flex-wrap gap-2 mb-4">
-            {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
+            {['ALL', 'PENDING', 'COMPLETED', 'BY ME', 'TO ME', 'ESCALATED ONLY'].map(f => (
                 <button key={f} onClick={()=>setFilter(f)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}>
                   {f}
                 </button>

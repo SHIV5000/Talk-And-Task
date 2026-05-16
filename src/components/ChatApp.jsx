@@ -1170,7 +1170,25 @@ export default function ChatApp({ user, onLogout }) {
                                     <i className="fa-solid fa-comments text-4xl"></i>
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Talk & Task</h2>
-                                <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
+                                <p className="text-slate-500 mb-4 max-w-md">Select a group or staff member from the sidebar to start collaborating, or create a new workspace.</p>
+                                {messages.length > 0 && (() => {
+                                    const latest = [...messages].sort((a,b)=>(b.timestamp?.toMillis?.()||0)-(a.timestamp?.toMillis?.()||0))[0];
+                                    return (
+                                      <button
+                                        onClick={() => {
+                                          const grp = groups.find(g => g.id === latest.groupId);
+                                          if (grp) {
+                                            setActiveGroup(grp);
+                                            setPendingScrollTarget(latest.id);
+                                          }
+                                        }}
+                                        className="mb-6 max-w-2xl w-full bg-white border border-indigo-100 rounded-xl p-3 shadow-sm hover:border-indigo-300"
+                                      >
+                                        <div className="text-[10px] uppercase tracking-widest text-indigo-500 font-bold mb-1">Latest Message</div>
+                                        <div className="text-sm font-semibold text-slate-700 line-clamp-2">{stripHtml(latest.text || latest.fileName || 'New activity')}</div>
+                                      </button>
+                                    );
+                                })()}
                                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                                     <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-all">
                                         <i className="fa-solid fa-layer-group mr-2"></i> Create Department

@@ -135,7 +135,7 @@ export default function ChatView({
                   return <MemoizedAvatar key={t.id} uid={uidPart} url={typist.profilePicUrl} name={t.name} sizeClass="w-7 h-7 typing-avatar-pulse border-2 border-white relative z-10" />
                 })}
               </div>
-              <span className="typing-gradient-text text-sm">... typing</span>
+              <span className="typing-gradient-text text-sm flex items-center gap-1">typing<span className="typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
             </div>
           </div>
         )}
