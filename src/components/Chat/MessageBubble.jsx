@@ -310,7 +310,6 @@ const MessageBubble = React.memo(({
                           <button onClick={()=>{setIsEditingTitle(false); setTempTitle(stripHtml(msg.text));}} className="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded font-semibold hover:bg-slate-300">Cancel</button>
                         </div>
                       ) : (
-                        // 👇 UPDATED: Uses HTML parsing to cleanly display WYSIWYG Task creations
                         <div className={`text-sm font-semibold mb-3 leading-snug relative group/title flex items-start gap-2 ${isTaskCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
                           <div className="flex-1 break-words" dangerouslySetInnerHTML={{ __html: msg.text }}></div>
                           {canEditTask && isTaskParticipant && (
@@ -321,7 +320,7 @@ const MessageBubble = React.memo(({
                         </div>
                       )}
 
-                      {/* 👇 UPDATED: Strict Logic -> Only Assignees, NOT Creator, NOT already acknowledged */}
+                      {/* 👇 Acknowledge button visible ONLY to assignees who haven't ack'd yet */}
                       {showAckButton && (
                         <div className="mb-3">
                           <button
