@@ -187,13 +187,13 @@ export default function AdminPanel({
                                         {recentActivity.map(log => (
                                             <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-sm">
                                                 <td className="p-3 pl-6 text-slate-500 font-medium text-xs">{log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A'}</td>
-                                                <td className="p-3 font-bold text-indigo-600">{log.userEmail?.split('@')[0] || 'System'}</td>
+                                                <td className="p-3 font-bold text-indigo-600">{(log.userEmail || log.user || 'System').split('@')[0]}</td>
                                                 <td className="p-3">
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${log.action?.includes('System') || log.action?.includes('SECURITY') ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                                        {log.action || 'Unknown'}
+                                                        {log.action || log.type || 'Unknown'}
                                                     </span>
                                                 </td>
-                                                <td className="p-3 text-slate-700 truncate max-w-md">{stripHtml(log.details || log.target)}</td><td className="p-3 pr-6"><button onClick={() => navigateToMessageFromNotification && log.messageId && navigateToMessageFromNotification(log.messageId, log.groupId)} className="text-xs text-indigo-600 font-bold">↗ Open</button></td>
+                                                <td className="p-3 text-slate-700 truncate max-w-md">{stripHtml(log.details || log.content || log.target)}</td><td className="p-3 pr-6"><button onClick={() => navigateToMessageFromNotification && (log.messageId || log.targetId) && navigateToMessageFromNotification(log.messageId || log.targetId, log.groupId)} className="text-xs text-indigo-600 font-bold">↗ Open</button></td>
                                             </tr>
                                         ))}
                                         {recentActivity.length === 0 && (
@@ -524,14 +524,14 @@ export default function AdminPanel({
                                             <td className="p-4 text-xs font-medium text-slate-500">
                                                 {log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A'}
                                             </td>
-                                            <td className="p-4 text-sm font-bold text-slate-700">{log.userEmail?.split('@')[0]}</td>
+                                            <td className="p-4 text-sm font-bold text-slate-700">{(log.userEmail || log.user || 'System').split('@')[0]}</td>
                                             <td className="p-4">
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${log.action === 'SECURITY' ? 'bg-rose-50 text-rose-700 border-rose-200' : log.action?.includes('DELETE') ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                                    {log.action || 'Unknown'}
+                                                    {log.action || log.type || 'Unknown'}
                                                 </span>
                                             </td>
                                             <td className="p-4">
-                                                <div className="text-sm font-medium text-slate-800 break-words">{log.details}</div>
+                                                <div className="text-sm font-medium text-slate-800 break-words">{log.details || log.content || log.target}</div>
                                                 {log.groupName && <div className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Context: {log.groupName}</div>}
                                             </td>
                                         </tr>
