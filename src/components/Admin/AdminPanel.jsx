@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import { exportPerformanceReport, exportAuditLog, exportTaskMaster } from '../../utils/pdfExport.js';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
@@ -22,8 +23,11 @@ export default function AdminPanel({
     const [localAuditSearch, setLocalAuditSearch] = useState("");
 
     // 🚀 PHASES 3 & 4: Inline Expansion States
-    const [expandedGroup, setExpandedGroup] = useState(null);
-    const [expandedTask, setExpandedTask] = useState(null);
+    const [expandedGroupId, setExpandedGroupId] = useState(null);
+    const [editingGroupId, setEditingGroupId] = useState(null);
+    const [expandedTaskId, setExpandedTaskId] = useState(null);
+    const [taskPage, setTaskPage] = useState(1);
+    const [auditPage, setAuditPage] = useState(1);
 
     // Overview Metrics
     const totalUsers = dbUsers.length;
@@ -50,7 +54,7 @@ export default function AdminPanel({
     }, [allTasks, taskStatusFilter]);
 
     const slaMetrics = useMemo(() => {
-        if (activeTab !== 'sla') return []; 
+        if (activeTab !== 'performance') return []; 
         return dbUsers.map(user => {
             const userTasks = allTasks.filter(t => t.taskData?.assignees?.includes(user.email));
             const totalAssigned = userTasks.length;
@@ -185,18 +189,18 @@ export default function AdminPanel({
                 </div>
                 
                 {/* Dynamic Global Export Buttons */}
-                {activeTab === 'overview' && (
-                    <button onClick={exportOverviewPDF} className="px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-100 transition-colors flex items-center gap-2">
+                {false && (
+                    <button onClick={() => {}} className="px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-100 transition-colors flex items-center gap-2">
                         <i className="fa-solid fa-file-pdf"></i> Download PDF
                     </button>
                 )}
-                {activeTab === 'groups' && (
-                    <button onClick={exportGroupsPDF} className="px-4 py-2 bg-teal-50 text-teal-600 border border-teal-200 rounded-lg text-sm font-bold shadow-sm hover:bg-teal-100 transition-colors flex items-center gap-2">
+                {false && (
+                    <button onClick={() => {}} className="px-4 py-2 bg-teal-50 text-teal-600 border border-teal-200 rounded-lg text-sm font-bold shadow-sm hover:bg-teal-100 transition-colors flex items-center gap-2">
                         <i className="fa-solid fa-file-pdf"></i> Download PDF
                     </button>
                 )}
                 {activeTab === 'tasks' && (
-                    <button onClick={exportTasksPDF} className="px-4 py-2 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg text-sm font-bold shadow-sm hover:bg-amber-100 transition-colors flex items-center gap-2">
+                    <button onClick={() => exportTaskMaster(filteredTasks, currentUserData?.email)} className="px-4 py-2 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg text-sm font-bold shadow-sm hover:bg-amber-100 transition-colors flex items-center gap-2">
                         <i className="fa-solid fa-file-pdf"></i> Download PDF
                     </button>
                 )}
@@ -207,9 +211,9 @@ export default function AdminPanel({
                 {[
                     { id: 'overview', label: 'Overview', icon: 'fa-chart-pie' },
                     { id: 'users', label: 'Directory', icon: 'fa-users' },
-                    { id: 'groups', label: 'Departments', icon: 'fa-layer-group' },
+                    { id: 'groups', label: 'Groups', icon: 'fa-layer-group' },
                     { id: 'tasks', label: 'Task Master', icon: 'fa-tasks' },
-                    { id: 'sla', label: 'SLA Compliance', icon: 'fa-ranking-star' },
+                    { id: 'performance', label: 'Performance', icon: 'fa-ranking-star' },
                     { id: 'audit', label: 'Audit Logs', icon: 'fa-clipboard-list' }
                 ].map(tab => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`pb-3 text-[13px] font-bold tracking-wide transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'}`}>
@@ -372,14 +376,14 @@ export default function AdminPanel({
                                 <tbody>
                                     {groups.filter(g => !g.isDM).map(g => (
                                         <React.Fragment key={g.id}>
-                                            <tr onClick={() => setExpandedGroup(expandedGroup === g.id ? null : g.id)} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group">
+                                            <tr onClick={() => setExpandedGroupId(expandedGroupId === g.id ? null : g.id)} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group">
                                                 <td className="p-4 flex items-center gap-3">
                                                     {g.profilePicUrl ? (
                                                         <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-8 h-8" />
                                                     ) : (
                                                         <div className="w-8 h-8 rounded-full bg-teal-50 flex items-center justify-center text-teal-600"><i className="fa-solid fa-users text-xs"></i></div>
                                                     )}
-                                                    <span className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{g.name} <i className={`fa-solid fa-chevron-${expandedGroup === g.id ? 'up' : 'down'} text-[10px] text-slate-400 ml-2`}></i></span>
+                                                    <span className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{g.name} <i className={`fa-solid fa-chevron-${expandedGroupId === g.id ? 'up' : 'down'} text-[10px] text-slate-400 ml-2`}></i></span>
                                                 </td>
                                                 <td className="p-4 text-sm font-bold text-slate-600">{g.members?.length || 0} Members</td>
                                                 <td className="p-4 text-sm font-bold text-indigo-600">{g.admins?.length || 0} Admins</td>
@@ -391,12 +395,12 @@ export default function AdminPanel({
                                                         setGroupForm({ name: g.name, members: g.members || [], admins: g.admins || [], profilePicUrl: g.profilePicUrl });
                                                         setActiveModal('group_form_modal');
                                                     }} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-colors shadow-sm">
-                                                        Edit Config
+                                                        Edit
                                                     </button>
                                                 </td>
                                             </tr>
                                             {/* Sub-table for Active Tasks associated with this department */}
-                                            {expandedGroup === g.id && (
+                                            {expandedGroupId === g.id && (
                                                 <tr className="bg-slate-50 border-b border-slate-200 shadow-inner">
                                                     <td colSpan="5" className="p-4">
                                                         <div className="pl-6 border-l-[3px] border-teal-300 py-2">
@@ -458,10 +462,10 @@ export default function AdminPanel({
                                 <tbody>
                                     {filteredTasks.map(task => (
                                         <React.Fragment key={task.id}>
-                                            <tr onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group">
+                                            <tr onClick={() => setExpandedTask(expandedTaskId === task.id ? null : task.id)} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group">
                                                 <td className="p-4">
                                                     <div className="text-sm font-bold text-slate-800 line-clamp-2 w-64 group-hover:text-indigo-600 transition-colors" title={stripHtml(task.text)}>
-                                                        {stripHtml(task.text)} <i className={`fa-solid fa-chevron-${expandedTask === task.id ? 'up' : 'down'} text-[10px] text-slate-400 ml-1`}></i>
+                                                        {stripHtml(task.text)} <i className={`fa-solid fa-chevron-${expandedTaskId === task.id ? 'up' : 'down'} text-[10px] text-slate-400 ml-1`}></i>
                                                     </div>
                                                     <div className="text-[10px] text-slate-400 mt-1">{new Date(task.timestamp?.toDate()).toLocaleString()}</div>
                                                 </td>
@@ -488,7 +492,7 @@ export default function AdminPanel({
                                                 <td className="p-4 text-xs font-bold text-slate-600">{task.taskData?.deadline ? new Date(task.taskData.deadline).toLocaleDateString() : 'N/A'}</td>
                                             </tr>
                                             {/* Sub-table for Task Audit Trail */}
-                                            {expandedTask === task.id && (
+                                            {expandedTaskId === task.id && (
                                                 <tr className="bg-slate-50 border-b border-slate-200 shadow-inner">
                                                     <td colSpan="5" className="p-4">
                                                         <div className="pl-6 border-l-[3px] border-amber-300 py-2">
@@ -519,13 +523,14 @@ export default function AdminPanel({
                     </div>
                 )}
 
-                {/* SLA COMPLIANCE TAB */}
-                {activeTab === 'sla' && (
+                {/* PERFORMANCE TAB */}
+                {activeTab === 'performance' && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
                             <div>
                                 <h3 className="font-bold text-slate-800">Employee Compliance Dashboard</h3>
                                 <p className="text-xs text-slate-500 mt-0.5">Real-time performance and escalation telemetry.</p>
+                            <button onClick={() => exportPerformanceReport(slaMetrics, currentUserData?.email)} className="mt-2 px-3 py-1.5 text-xs rounded border border-indigo-200 text-indigo-600 bg-indigo-50">Export Performance Report</button>
                             </div>
                         </div>
                         <div className="overflow-x-auto">
@@ -574,7 +579,7 @@ export default function AdminPanel({
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in flex flex-col h-[75vh]">
                         
                         <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0">
-                            <h3 className="font-bold text-slate-800 mb-3">Immutable Audit Ledger</h3>
+                            <div className="flex items-center justify-between mb-3"><h3 className="font-bold text-slate-800">Immutable Audit Ledger</h3><button onClick={() => exportAuditLog(filteredAuditLogs, { dateFrom: adminFilterDate, dateTo: adminFilterDate }, currentUserData?.email)} className="px-3 py-1.5 text-xs rounded border border-indigo-200 text-indigo-600 bg-indigo-50">Export Audit Log</button></div>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                 <input type="text" placeholder="Filter by User..." className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm" value={localAuditSearch} onChange={e => setLocalAuditSearch(e.target.value)} />
                                 <input type="date" className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={adminFilterDate} onChange={e => setAdminFilterDate(e.target.value)} />

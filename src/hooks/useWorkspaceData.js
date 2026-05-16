@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { auth, db } from '../firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, serverTimestamp, limit } from 'firebase/firestore';
 
 export default function useWorkspaceData(user, profileForm, setProfileForm) {
     const [isVipAdmin, setIsVipAdmin] = useState(false);
@@ -67,7 +67,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
         if (currentUserData?.isAdmin || isVipAdmin) {
             const qAdmin = query(collection(db, "reminders"), orderBy("remindAt", "desc"));
             unsubAdmin = onSnapshot(qAdmin, (snapshot) => setAllAdminReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
-            const qAudit = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"));
+            const qAudit = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(200));
             unsubAudit = onSnapshot(qAudit, (snapshot) => {
                 setImmutableAuditLogs(snapshot.docs.map(d => {
                     const data = d.data();
