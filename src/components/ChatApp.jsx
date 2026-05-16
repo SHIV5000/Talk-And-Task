@@ -954,8 +954,8 @@ export default function ChatApp({ user, onLogout }) {
         try {
             const finalMembers = [...new Set([...groupForm.members, user.email])];
             const groupData = { name: groupForm.name, members: finalMembers, profilePicUrl: groupForm.profilePicUrl };
-            if (editingGroup) await updateDoc(doc(db, "groups", editingGroup.id), groupData);
-            else await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
+            if (editingGroup) { await updateDoc(doc(db, "groups", editingGroup.id), groupData); await logImmutableAction("GROUP_EDITED", groupForm.name, editingGroup.id);}
+            else { await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false }); await logImmutableAction("GROUP_CREATED", groupForm.name, "groups"); }
             setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
         } catch (error) { alert("Failed to save group."); }
     };
@@ -1139,9 +1139,9 @@ export default function ChatApp({ user, onLogout }) {
                   setAdminFilterType={setAdminFilterType}
                   adminFilterGroup={adminFilterGroup}
                   setAdminFilterGroup={setAdminFilterGroup}
-                  handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
-                  handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
-                  handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
+                  handleToggleApprove={async (u) => { await updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved }); await logImmutableAction(u.isApproved ? "USER_REVOKED" : "USER_APPROVED", `${u.email}`, "admin_console"); }} 
+                  handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); await logImmutableAction(u.isAdmin ? "ADMIN_REVOKED" : "ADMIN_GRANTED", `${u.email}`, "admin_console"); }}
+                  handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); await logImmutableAction("GROUP_EDITED", `${u.email} group-create permission`, "admin_console"); }}
                   setSelectedMessage={setSelectedMessage}
                   setIsEditingTaskTitle={setIsEditingTaskTitle}
                   messages={messages}
@@ -1154,6 +1154,7 @@ export default function ChatApp({ user, onLogout }) {
                   groupPicUploadProgress={groupPicUploadProgress}
                   globalAnnouncement={globalAnnouncement}
                   currentUserData={currentUserData}
+                  navigateToMessageFromNotification={navigateToMessageFromNotification}
                 />
                 ) : (
                     <div className="flex h-full w-full relative">

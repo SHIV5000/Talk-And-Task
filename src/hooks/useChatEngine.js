@@ -236,6 +236,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
                     isTask: false,
                     seenBy: [user.email]
                 });
+                await logImmutableAction("FILE_UPLOADED", `File: ${customName}`, activeGroup?.name || "");
                 resolve();
             }
         );

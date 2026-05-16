@@ -12,7 +12,7 @@ export default function AdminPanel({
     handleToggleApprove, handleToggleAdmin, handleToggleCanCreateGroups,
     setSelectedMessage, setIsEditingTaskTitle, messages, setGroupForm,
     setEditingGroup, groupForm, editingGroup, handleGroupSubmit,
-    handleGroupPicUpload, groupPicUploadProgress, globalAnnouncement, currentUserData
+    handleGroupPicUpload, groupPicUploadProgress, globalAnnouncement, currentUserData, navigateToMessageFromNotification
 }) {
     const [activeTab, setActiveTab] = useState('overview');
     const [taskStatusFilter, setTaskStatusFilter] = useState('All');
@@ -22,7 +22,14 @@ export default function AdminPanel({
 
     // 🚀 PHASES 3 & 4: Inline Expansion States
     const [expandedGroupId, setExpandedGroupId] = useState(null);
+    const [editingGroupId, setEditingGroupId] = useState(null);
     const [expandedTaskId, setExpandedTaskId] = useState(null);
+    const [expandedPerformanceUser, setExpandedPerformanceUser] = useState(null);
+    const [taskPage, setTaskPage] = useState(1);
+    const [auditPage, setAuditPage] = useState(1);
+    const [auditFromDate, setAuditFromDate] = useState("");
+    const [auditToDate, setAuditToDate] = useState("");
+    const [auditSeverity, setAuditSeverity] = useState("");
 
     // Overview Metrics
     const totalUsers = dbUsers.length;
@@ -128,7 +135,7 @@ export default function AdminPanel({
                 {/* OVERVIEW TAB */}
                 {activeTab === 'overview' && (
                     <div className="animate-in slide-in-from-bottom-4 space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow">
                                 <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg"><i className="fa-solid fa-users"></i></div>
                                 <div><p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Total Users</p><h3 className="text-2xl font-extrabold text-slate-800">{totalUsers}</h3></div>
@@ -137,12 +144,12 @@ export default function AdminPanel({
                             <div onClick={() => setActiveTab('users')} className="bg-white p-5 rounded-2xl shadow-sm border border-amber-200 flex items-center gap-4 cursor-pointer hover:shadow-md hover:bg-amber-50 transition-all group relative overflow-hidden">
                                 <div className="absolute right-0 top-0 w-1 h-full bg-amber-400"></div>
                                 <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-lg"><i className="fa-solid fa-user-clock"></i></div>
-                                <div><p className="text-[11px] font-bold text-amber-600 uppercase tracking-widest group-hover:text-amber-700">Approvals</p><h3 className="text-2xl font-extrabold text-amber-700">{pendingApprovals}</h3></div>
+                                <div><p className="text-[11px] font-bold text-amber-600 uppercase tracking-widest group-hover:text-amber-700">Pending Tasks</p><h3 className="text-2xl font-extrabold text-amber-700">{allTasks.filter(t => t.taskData?.status === "Pending").length}</h3></div>
                             </div>
 
                             <div onClick={() => setActiveTab('groups')} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4 cursor-pointer hover:shadow-md hover:bg-slate-50 transition-all">
                                 <div className="w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-lg"><i className="fa-solid fa-layer-group"></i></div>
-                                <div><p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Departments</p><h3 className="text-2xl font-extrabold text-slate-800">{totalGroups}</h3></div>
+                                <div><p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Groups</p><h3 className="text-2xl font-extrabold text-slate-800">{totalGroups}</h3></div>
                             </div>
 
                             <div onClick={() => { setActiveTab('tasks'); setTaskStatusFilter('All'); }} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4 cursor-pointer hover:shadow-md hover:bg-slate-50 transition-all">
@@ -154,7 +161,13 @@ export default function AdminPanel({
                                 <div className="absolute right-0 top-0 w-1 h-full bg-rose-500 animate-pulse"></div>
                                 <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 text-lg"><i className="fa-solid fa-fire"></i></div>
                                 <div><p className="text-[11px] font-bold text-rose-600 uppercase tracking-widest group-hover:text-rose-700">Escalated</p><h3 className="text-2xl font-extrabold text-rose-700">{escalatedTasks.length}</h3></div>
+                            
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-emerald-200 flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 text-lg"><i className="fa-solid fa-check-double"></i></div>
+                                <div><p className="text-[11px] font-bold text-emerald-700 uppercase tracking-widest">Completed Today</p><h3 className="text-2xl font-extrabold text-emerald-700">{completedTasks.filter(t => t.taskData?.completedAt && new Date(t.taskData.completedAt).toDateString() === new Date().toDateString()).length}</h3></div>
                             </div>
+</div>
                         </div>
 
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -168,7 +181,7 @@ export default function AdminPanel({
                                             <th className="p-3 pl-6 font-bold w-48">Timestamp</th>
                                             <th className="p-3 font-bold w-40">Actor</th>
                                             <th className="p-3 font-bold w-40">Action</th>
-                                            <th className="p-3 pr-6 font-bold">Details</th>
+                                            <th className="p-3 font-bold">Target/Context</th><th className="p-3 pr-6 font-bold">Link</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -181,11 +194,11 @@ export default function AdminPanel({
                                                         {log.action || 'Unknown'}
                                                     </span>
                                                 </td>
-                                                <td className="p-3 pr-6 text-slate-700 truncate max-w-md">{stripHtml(log.details)}</td>
+                                                <td className="p-3 text-slate-700 truncate max-w-md">{stripHtml(log.details || log.target)}</td><td className="p-3 pr-6"><button onClick={() => navigateToMessageFromNotification && log.messageId && navigateToMessageFromNotification(log.messageId, log.groupId)} className="text-xs text-indigo-600 font-bold">↗ Open</button></td>
                                             </tr>
                                         ))}
                                         {recentActivity.length === 0 && (
-                                            <tr><td colSpan="4" className="p-8 text-center text-slate-400 font-medium">No recent activity detected.</td></tr>
+                                            <tr><td colSpan="5" className="p-8 text-center text-slate-400 font-medium">No recent activity detected.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -199,7 +212,7 @@ export default function AdminPanel({
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                             <h3 className="font-bold text-slate-800">User Directory</h3>
-                            <div className="text-xs font-bold text-slate-500">{pendingApprovals} Pending Approvals</div>
+                            <div className="text-xs font-bold text-slate-500">{allTasks.filter(t => t.taskData?.status === "Pending").length} Pending Pending Tasks</div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
@@ -260,7 +273,7 @@ export default function AdminPanel({
                 {activeTab === 'groups' && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-slate-800">Department Roster</h3>
+                            <h3 className="font-bold text-slate-800">Groups Roster</h3>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
@@ -293,18 +306,19 @@ export default function AdminPanel({
                                                         e.stopPropagation();
                                                         setEditingGroup(g);
                                                         setGroupForm({ name: g.name, members: g.members || [], admins: g.admins || [], profilePicUrl: g.profilePicUrl });
-                                                        setActiveModal('group_form_modal');
+                                                        setEditingGroupId(g.id);
                                                     }} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-colors shadow-sm">
-                                                        Edit
+                                                        <i className="fa-solid fa-pen"></i>
                                                     </button>
                                                 </td>
                                             </tr>
                                             {/* Sub-table for Active Tasks associated with this department */}
+                                            {editingGroupId === g.id && (<tr className="bg-indigo-50"><td colSpan="5" className="p-3"><div className="flex gap-2 items-center"><input value={groupForm.name} onChange={(e)=>setGroupForm(prev=>({...prev,name:e.target.value}))} className="border rounded px-2 py-1 text-sm" /><button onClick={(e)=>{e.stopPropagation(); handleGroupSubmit(); setEditingGroupId(null);}} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded">Save</button><button onClick={(e)=>{e.stopPropagation(); setEditingGroupId(null);}} className="px-2 py-1 text-xs border rounded">Cancel</button></div></td></tr>)}
                                             {expandedGroupId === g.id && (
                                                 <tr className="bg-slate-50 border-b border-slate-200 shadow-inner">
                                                     <td colSpan="5" className="p-4">
                                                         <div className="pl-6 border-l-[3px] border-teal-300 py-2">
-                                                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i className="fa-solid fa-spinner"></i> Active Department Tasks</h4>
+                                                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i className="fa-solid fa-spinner"></i> Active Group Tasks</h4>
                                                             <div className="space-y-2">
                                                                 {activeTasks.filter(t => t.taskData?.assignees?.some(email => g.members?.includes(email))).length === 0 ? (
                                                                     <div className="text-xs text-slate-500 italic">No active tasks for this department.</div>
@@ -362,7 +376,7 @@ export default function AdminPanel({
                                 <tbody>
                                     {filteredTasks.map(task => (
                                         <React.Fragment key={task.id}>
-                                            <tr onClick={() => setExpandedTask(expandedTaskId === task.id ? null : task.id)} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group">
+                                            <tr onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group">
                                                 <td className="p-4">
                                                     <div className="text-sm font-bold text-slate-800 line-clamp-2 w-64 group-hover:text-indigo-600 transition-colors" title={stripHtml(task.text)}>
                                                         {stripHtml(task.text)} <i className={`fa-solid fa-chevron-${expandedTaskId === task.id ? 'up' : 'down'} text-[10px] text-slate-400 ml-1`}></i>
@@ -480,9 +494,9 @@ export default function AdminPanel({
                         
                         <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0">
                             <div className="flex items-center justify-between mb-3"><h3 className="font-bold text-slate-800">Immutable Audit Ledger</h3><button onClick={() => exportAuditLog(filteredAuditLogs, { dateFrom: adminFilterDate, dateTo: adminFilterDate }, currentUserData?.email)} className="px-3 py-1.5 text-xs rounded border border-indigo-200 text-indigo-600 bg-indigo-50">Export Audit Log</button></div>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                                 <input type="text" placeholder="Filter by User..." className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm" value={localAuditSearch} onChange={e => setLocalAuditSearch(e.target.value)} />
-                                <input type="date" className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={adminFilterDate} onChange={e => setAdminFilterDate(e.target.value)} />
+                                <input type="date" className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={auditFromDate} onChange={e => setAuditFromDate(e.target.value)} /><input type="date" className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={auditToDate} onChange={e => setAuditToDate(e.target.value)} />
                                 <select className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={adminFilterType} onChange={e => setAdminFilterType(e.target.value)}>
                                     <option value="">All Action Types</option>
                                     <option value="TASK_CREATE">Task Creation</option>
@@ -491,7 +505,7 @@ export default function AdminPanel({
                                     <option value="FILE_UPLOAD">File Upload</option>
                                     <option value="SECURITY">Security/Access</option>
                                 </select>
-                                <input type="text" placeholder="Filter by Context (Group/Task)..." className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm" value={adminFilterGroup} onChange={e => setAdminFilterGroup(e.target.value)} />
+                                <select className="text-sm p-2 rounded-lg border border-slate-300" value={auditSeverity} onChange={e=>setAuditSeverity(e.target.value)}><option value="">All Severity</option><option value="Critical">Critical</option><option value="Warning">Warning</option><option value="Info">Info</option></select><input type="text" placeholder="Filter by Context (Group/Task)..." className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm" value={adminFilterGroup} onChange={e => setAdminFilterGroup(e.target.value)} />
                             </div>
                         </div>
 
@@ -524,7 +538,7 @@ export default function AdminPanel({
                                         </tr>
                                     ))}
                                     {filteredAuditLogs.length === 0 && (
-                                        <tr><td colSpan="4" className="p-8 text-center text-slate-400 font-medium">No audit logs matching filters.</td></tr>
+                                        <tr><td colSpan="5" className="p-8 text-center text-slate-400 font-medium">No audit logs matching filters.</td></tr>
                                     )}
                                 </tbody>
                             </table>
