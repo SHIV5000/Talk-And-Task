@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
-import { format } from 'date-fns';
 
 export default function AdminPanel({
     setViewMode, setActiveModal, dbUsers, groups, filteredAuditLogs,
@@ -234,8 +233,6 @@ export default function AdminPanel({
                         </div>
                     </div>
                 )}
-
-                {/* Users, Groups, Audit Tabs rendering ... (Standard Code Retained for brevity) */}
             </div>
         </div>
     );
