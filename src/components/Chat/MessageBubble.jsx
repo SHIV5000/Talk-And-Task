@@ -9,6 +9,9 @@ import 'jspdf-autotable';
 
 const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
+// Helper to clean HTML out of the title when they click Edit
+const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
+
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
   hasReplies, replyCount, isHighlighted, isUnreadHighlight,
@@ -27,7 +30,7 @@ const MessageBubble = React.memo(({
   const [isAddingUpdate, setIsAddingUpdate] = useState(false);
   const [inlineUpdateText, setInlineUpdateText] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [tempTitle, setTempTitle] = useState(msg.text);
+  const [tempTitle, setTempTitle] = useState(stripHtml(msg.text));
   const [isDelegating, setIsDelegating] = useState(false);
   const [delegateSelection, setDelegateSelection] = useState([]);
   const [editingTrailIdx, setEditingTrailIdx] = useState(null);
@@ -48,11 +51,20 @@ const MessageBubble = React.memo(({
   const senderName = (msg.sender || '').split('@')[0];
   const senderAvatar = senderUser.profilePicUrl || null;
 
-  // 👇 Task Roles - Participant means ANY assignee, creator, or admin can act on it
+  // 👇 Exact Task Roles
   const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
+  const isCreator = msg.senderEmail === userEmail;
+  const isAssignee = (msg.taskData?.assignees || []).includes(userEmail);
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = !isTaskCompleted || isSuperAdmin;
+  
+  // Array tracking individual user acknowledgments
+  const currentAckBy = msg.taskData?.acknowledgedBy || [];
+  const hasAcknowledged = currentAckBy.includes(userEmail);
+
+  // STRICT Visibility Rule: Must be Assignee, Must NOT be Creator, Must NOT have acknowledged already
+  const showAckButton = msg.isTask && !isTaskCompleted && msg.taskData?.requireAck && isAssignee && !isCreator && !hasAcknowledged;
 
   const hasProofAttached = useMemo(() => {
     if (!msg.taskData?.requireProof) return true;
@@ -92,10 +104,11 @@ const MessageBubble = React.memo(({
     involved.delete(userEmail);
     const uidsToNotify = dbUsers.filter(u => involved.has(u.email)).map(u => u.uid);
     for (const uid of uidsToNotify) {
-      try { await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `"${msg.text}" - ${actionText}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
+      try { await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `"${stripHtml(msg.text)}" - ${actionText}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
     }
   };
 
+  // 👇 PER-ASSIGNEE ACKNOWLEDGE
   const handleAcknowledge = async (e) => {
     e.stopPropagation();
     if (!window.confirm('Acknowledge this task? This confirms you have seen and accepted it.')) return;
@@ -107,7 +120,7 @@ const MessageBubble = React.memo(({
         time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString()
       }];
       await updateDoc(doc(db, "messages", msg.id), {
-        "taskData.acknowledged": true,
+        "taskData.acknowledgedBy": [...currentAckBy, userEmail],
         "taskData.status": "Acknowledged",
         "taskData.trail": newTrail
       });
@@ -128,8 +141,8 @@ const MessageBubble = React.memo(({
         const updatedTrail = [...(msg.taskData.trail || []), { action: "Update Added", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: inlineUpdateText }];
         
         const updates = { "taskData.trail": updatedTrail };
-        if (msg.taskData.requireAck && !msg.taskData.acknowledged) {
-            updates["taskData.acknowledged"] = true;
+        if (msg.taskData.requireAck && isAssignee && !hasAcknowledged) {
+            updates["taskData.acknowledgedBy"] = [...currentAckBy, userEmail];
         }
 
         await updateDoc(doc(db, "messages", msg.id), updates);
@@ -166,8 +179,8 @@ const MessageBubble = React.memo(({
       const newTrail = [...msg.taskData.trail, { action: "Marked Completed", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
       
       const updates = { "taskData.status": "Completed", "taskData.trail": newTrail };
-      if (msg.taskData.requireAck && !msg.taskData.acknowledged) {
-          updates["taskData.acknowledged"] = true;
+      if (msg.taskData.requireAck && isAssignee && !hasAcknowledged) {
+          updates["taskData.acknowledgedBy"] = [...currentAckBy, userEmail];
       }
 
       await updateDoc(doc(db, "messages", msg.id), updates);
@@ -188,8 +201,8 @@ const MessageBubble = React.memo(({
       const newTrail = [...msg.taskData.trail, { action: "Delegated", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames }];
       
       const updates = { "taskData.assignees": delegateSelection, "taskData.status": "In Progress", "taskData.trail": newTrail };
-      if (msg.taskData.requireAck && !msg.taskData.acknowledged) {
-          updates["taskData.acknowledged"] = true;
+      if (msg.taskData.requireAck && isAssignee && !hasAcknowledged) {
+          updates["taskData.acknowledgedBy"] = [...currentAckBy, userEmail];
       }
 
       await updateDoc(doc(db, "messages", msg.id), updates);
@@ -212,8 +225,8 @@ const MessageBubble = React.memo(({
         const newTrail = [...msg.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
         
         const updates = { "taskData.trail": newTrail };
-        if (msg.taskData.requireAck && !msg.taskData.acknowledged) {
-            updates["taskData.acknowledged"] = true;
+        if (msg.taskData.requireAck && isAssignee && !hasAcknowledged) {
+            updates["taskData.acknowledgedBy"] = [...currentAckBy, userEmail];
         }
 
         await updateDoc(doc(db, "messages", msg.id), updates);
@@ -294,17 +307,22 @@ const MessageBubble = React.memo(({
                         <div className="flex gap-2 mb-3" onClick={e=>e.stopPropagation()}>
                           <input value={tempTitle} onChange={e=>setTempTitle(e.target.value)} className="w-full text-sm font-medium border border-indigo-500 p-1.5 rounded outline-none" autoFocus />
                           <button onClick={handleInlineSaveTitle} className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-semibold hover:bg-indigo-700">Save</button>
-                          <button onClick={()=>{setIsEditingTitle(false); setTempTitle(msg.text);}} className="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded font-semibold hover:bg-slate-300">Cancel</button>
+                          <button onClick={()=>{setIsEditingTitle(false); setTempTitle(stripHtml(msg.text));}} className="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded font-semibold hover:bg-slate-300">Cancel</button>
                         </div>
                       ) : (
-                        <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
-                          {msg.text}
-                          {canEditTask && isTaskParticipant && <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer ml-2 opacity-0 group-hover/title:opacity-100 transition-opacity" onClick={(e)=>{e.stopPropagation(); setIsEditingTitle(true);}}></i>}
-                        </p>
+                        // 👇 UPDATED: Uses HTML parsing to cleanly display WYSIWYG Task creations
+                        <div className={`text-sm font-semibold mb-3 leading-snug relative group/title flex items-start gap-2 ${isTaskCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                          <div className="flex-1 break-words" dangerouslySetInnerHTML={{ __html: msg.text }}></div>
+                          {canEditTask && isTaskParticipant && (
+                            <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer opacity-0 group-hover/title:opacity-100 transition-opacity mt-1" 
+                               onClick={(e)=>{e.stopPropagation(); setTempTitle(stripHtml(msg.text)); setIsEditingTitle(true);}}>
+                            </i>
+                          )}
+                        </div>
                       )}
 
-                      {/* 👇 Acknowledge button visible to ANY participant (creator/admin/assignee) */}
-                      {isTaskParticipant && !isTaskCompleted && msg.taskData?.requireAck && !msg.taskData?.acknowledged && (
+                      {/* 👇 UPDATED: Strict Logic -> Only Assignees, NOT Creator, NOT already acknowledged */}
+                      {showAckButton && (
                         <div className="mb-3">
                           <button
                             onClick={handleAcknowledge}
@@ -324,7 +342,13 @@ const MessageBubble = React.memo(({
                         <div className="flex items-center -space-x-2 relative group/assignees">
                           {(msg.taskData.assignees || []).slice(0, 3).map(email => {
                             const assignee = dbUsers?.find(u => u.email === email);
-                            return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses={`border-2 ${isTaskCompleted ? 'border-slate-50 opacity-70' : 'border-white'} relative z-10`} />;
+                            const hasAcked = currentAckBy.includes(email);
+                            return (
+                                <div key={email} className="relative z-10" title={`${assignee?.name || email} ${hasAcked ? '(Acknowledged)' : '(Pending)'}`}>
+                                    <MemoizedAvatar uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses={`border-2 ${isTaskCompleted ? 'border-slate-50 opacity-70' : 'border-white'}`} />
+                                    {hasAcked && <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border border-white rounded-full flex items-center justify-center"><i className="fa-solid fa-check text-white text-[7px]"></i></div>}
+                                </div>
+                            );
                           })}
                           {(msg.taskData.assignees || []).length > 3 && (
                             <div className={`w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-600 border-2 ${isTaskCompleted ? 'border-slate-50' : 'border-white'} relative z-10`}>
