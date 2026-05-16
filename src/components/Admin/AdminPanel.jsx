@@ -49,6 +49,19 @@ export default function AdminPanel({
         return filtered.sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
     }, [allTasks, taskStatusFilter]);
 
+    const getAckProgress = (task) => {
+        const assignees = task.taskData?.assignees || [];
+        const acknowledgedBy = task.taskData?.acknowledgedBy || [];
+        if (assignees.length === 0) return '0/0';
+        return `${acknowledgedBy.length}/${assignees.length}`;
+    };
+
+    const getTaskComplianceTone = (task) => {
+        if (task.taskData?.escalated) return 'text-rose-700 bg-rose-50 border-rose-200';
+        if (task.taskData?.status === 'Completed') return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+        return 'text-amber-700 bg-amber-50 border-amber-200';
+    };
+
     const slaMetrics = useMemo(() => {
         if (activeTab !== 'sla') return []; 
         return dbUsers.map(user => {
@@ -491,6 +504,59 @@ export default function AdminPanel({
                                             {expandedTask === task.id && (
                                                 <tr className="bg-slate-50 border-b border-slate-200 shadow-inner">
                                                     <td colSpan="5" className="p-4">
+                                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                                                            <div className="bg-white border border-slate-200 rounded-xl p-3">
+                                                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Execution</p>
+                                                                <div className="space-y-2 text-[12px]">
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold text-slate-500">Status</span>
+                                                                        <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${getStatusColor(task.taskData?.status)}`}>{task.taskData?.status || 'Pending'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold text-slate-500">Priority</span>
+                                                                        <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${getPriorityColor(task.taskData?.priority)}`}>{task.taskData?.priority || 'Medium'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold text-slate-500">Deadline</span>
+                                                                        <span className="font-semibold text-slate-700">{task.taskData?.deadline ? new Date(task.taskData.deadline).toLocaleString() : 'N/A'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-white border border-slate-200 rounded-xl p-3">
+                                                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Compliance</p>
+                                                                <div className="space-y-2 text-[12px]">
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold text-slate-500">Ack Required</span>
+                                                                        <span className={`font-bold ${task.taskData?.requireAck ? 'text-amber-700' : 'text-slate-400'}`}>{task.taskData?.requireAck ? 'Yes' : 'No'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold text-slate-500">Ack Progress</span>
+                                                                        <span className="font-bold text-indigo-700">{getAckProgress(task)}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold text-slate-500">Proof Required</span>
+                                                                        <span className={`font-bold ${task.taskData?.requireProof ? 'text-purple-700' : 'text-slate-400'}`}>{task.taskData?.requireProof ? 'Yes' : 'No'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className={`border rounded-xl p-3 ${getTaskComplianceTone(task)}`}>
+                                                                <p className="text-[10px] font-bold uppercase tracking-wider mb-2">SLA Signal</p>
+                                                                <div className="space-y-2 text-[12px]">
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold">Escalated</span>
+                                                                        <span className="font-extrabold">{task.taskData?.escalated ? 'YES' : 'NO'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold">Transferred</span>
+                                                                        <span className="font-extrabold">{task.taskData?.escalationTransferred ? 'YES' : 'NO'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="font-bold">Breached Users</span>
+                                                                        <span className="font-extrabold">{(task.taskData?.breachedBy || []).length}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                         <div className="pl-6 border-l-[3px] border-amber-300 py-2">
                                                             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i className="fa-solid fa-list-check"></i> Immutable Task Trail</h4>
                                                             <div className="space-y-1.5">
