@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
-// Global String Formatter for clean rendering
+// Global String Formatter for clean rendering & PDF export
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 export default function AdminPanel({
@@ -16,6 +18,10 @@ export default function AdminPanel({
     const [activeTab, setActiveTab] = useState('overview');
     const [taskStatusFilter, setTaskStatusFilter] = useState('All');
 
+    // 🚀 PHASE 1: PERFORMANCE FOUNDATION - Localized Audit State
+    // By keeping keystrokes local, we prevent the entire ChatApp from re-rendering while you type.
+    const [localAuditSearch, setLocalAuditSearch] = useState("");
+
     // Overview Metrics
     const totalUsers = dbUsers.length;
     const pendingApprovals = dbUsers.filter(u => !u.isApproved).length;
@@ -26,6 +32,13 @@ export default function AdminPanel({
     const completedTasks = allTasks.filter(m => m.taskData?.status === "Completed");
     const escalatedTasks = allTasks.filter(m => m.taskData?.escalated === true);
 
+    // 🚀 PHASE 2: OVERVIEW - Recent Activity Aggregation
+    const recentActivity = useMemo(() => {
+        return [...filteredAuditLogs]
+            .sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0))
+            .slice(0, 30);
+    }, [filteredAuditLogs]);
+
     // Filter Tasks for Task Tab
     const filteredTasks = useMemo(() => {
         let filtered = allTasks;
@@ -35,8 +48,10 @@ export default function AdminPanel({
         return filtered.sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
     }, [allTasks, taskStatusFilter]);
 
-    // SLA Compliance Telemetry
+    // 🚀 PHASE 1: PERFORMANCE FOUNDATION - Short-circuited SLA Calculation
+    // This heavy math ONLY runs when you are actually looking at the SLA tab.
     const slaMetrics = useMemo(() => {
+        if (activeTab !== 'sla') return []; 
         return dbUsers.map(user => {
             const userTasks = allTasks.filter(t => t.taskData?.assignees?.includes(user.email));
             const totalAssigned = userTasks.length;
@@ -45,15 +60,65 @@ export default function AdminPanel({
             const completedOnTime = userTasks.filter(t => t.taskData?.status === "Completed" && !breachedTasks.includes(t)).length;
             
             let complianceScore = 100;
-            if (totalAssigned > 0) {
-                complianceScore = Math.round(((totalAssigned - totalBreaches) / totalAssigned) * 100);
-            } else {
-                complianceScore = 0; 
-            }
+            if (totalAssigned > 0) complianceScore = Math.round(((totalAssigned - totalBreaches) / totalAssigned) * 100);
+            else complianceScore = 0; 
 
             return { ...user, totalAssigned, completedOnTime, totalBreaches, complianceScore };
-        }).sort((a, b) => a.complianceScore - b.complianceScore); // Sort worst offenders to top
-    }, [dbUsers, allTasks]);
+        }).sort((a, b) => a.complianceScore - b.complianceScore); 
+    }, [dbUsers, allTasks, activeTab]);
+
+    // 🚀 PHASE 2: OVERVIEW - Industry Standard PDF Export
+    const exportOverviewPDF = () => {
+        const doc = new jsPDF();
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(79, 70, 229); // Indigo 600
+        doc.text('Talk & Task Enterprise', 14, 22);
+        doc.setFontSize(12);
+        doc.setTextColor(100, 116, 139); // Slate 500
+        doc.text('Executive Summary & Recent Activity', 14, 30);
+
+        // Metrics Section
+        doc.setFontSize(10);
+        doc.setTextColor(30, 41, 59); // Slate 800
+        doc.text(`Total Users: ${totalUsers}    |    Pending Approvals: ${pendingApprovals}`, 14, 45);
+        doc.text(`Departments: ${totalGroups}    |    Active Tasks: ${activeTasks.length}    |    Escalated: ${escalatedTasks.length}`, 14, 52);
+
+        // Table Data Generation
+        const tableData = recentActivity.map(log => [
+            log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A',
+            log.userEmail?.split('@')[0] || 'System',
+            log.action,
+            stripHtml(log.details)
+        ]);
+
+        // AutoTable Generation
+        doc.autoTable({
+            startY: 62,
+            head: [['Timestamp', 'Actor', 'Action', 'Details']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 3 },
+            columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35 }, 2: { cellWidth: 35 }, 3: { cellWidth: 'auto' } }
+        });
+
+        // Professional Footer Injection across all pages
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(148, 163, 184); // Slate 400
+            const footerText = `Downloaded by ${currentUserData?.name || 'Admin'} | at ${timeStr} | on ${dateStr} | Talk & Task — MPGS | Confidential`;
+            doc.text(footerText, 14, doc.internal.pageSize.height - 10);
+        }
+
+        doc.save(`Executive_Summary_${Date.now()}.pdf`);
+    };
 
     const getStatusColor = (status) => {
         switch(status) {
@@ -86,6 +151,12 @@ export default function AdminPanel({
                         <p className="text-[12px] text-slate-500 font-medium">Workspace Management & Telemetry</p>
                     </div>
                 </div>
+                {/* Global Export Button */}
+                {activeTab === 'overview' && (
+                    <button onClick={exportOverviewPDF} className="px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-100 transition-colors flex items-center gap-2">
+                        <i className="fa-solid fa-file-pdf"></i> Download PDF
+                    </button>
+                )}
             </div>
 
             {/* Navigation Tabs */}
@@ -107,26 +178,73 @@ export default function AdminPanel({
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 custom-sidebar-scroll">
                 
-                {/* OVERVIEW TAB */}
+                {/* 🚀 PHASE 2: OVERVIEW TAB */}
                 {activeTab === 'overview' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in slide-in-from-bottom-4">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-5">
-                            <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 text-xl"><i className="fa-solid fa-users"></i></div>
-                            <div><p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Total Users</p><h3 className="text-3xl font-extrabold text-slate-800">{totalUsers}</h3></div>
+                    <div className="animate-in slide-in-from-bottom-4 space-y-6">
+                        {/* Metrics Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow">
+                                <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg"><i className="fa-solid fa-users"></i></div>
+                                <div><p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Total Users</p><h3 className="text-2xl font-extrabold text-slate-800">{totalUsers}</h3></div>
+                            </div>
+                            
+                            <div onClick={() => setActiveTab('users')} className="bg-white p-5 rounded-2xl shadow-sm border border-amber-200 flex items-center gap-4 cursor-pointer hover:shadow-md hover:bg-amber-50 transition-all group relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-1 h-full bg-amber-400"></div>
+                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-lg"><i className="fa-solid fa-user-clock"></i></div>
+                                <div><p className="text-[11px] font-bold text-amber-600 uppercase tracking-widest group-hover:text-amber-700">Approvals</p><h3 className="text-2xl font-extrabold text-amber-700">{pendingApprovals}</h3></div>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow">
+                                <div className="w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-lg"><i className="fa-solid fa-layer-group"></i></div>
+                                <div><p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Departments</p><h3 className="text-2xl font-extrabold text-slate-800">{totalGroups}</h3></div>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow">
+                                <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-lg"><i className="fa-solid fa-spinner"></i></div>
+                                <div><p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Active Tasks</p><h3 className="text-2xl font-extrabold text-slate-800">{activeTasks.length}</h3></div>
+                            </div>
+
+                            <div onClick={() => { setActiveTab('tasks'); setTaskStatusFilter('All'); }} className="bg-white p-5 rounded-2xl shadow-sm border border-rose-200 flex items-center gap-4 cursor-pointer hover:shadow-md hover:bg-rose-50 transition-all group relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-1 h-full bg-rose-500 animate-pulse"></div>
+                                <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 text-lg"><i className="fa-solid fa-fire"></i></div>
+                                <div><p className="text-[11px] font-bold text-rose-600 uppercase tracking-widest group-hover:text-rose-700">Escalated</p><h3 className="text-2xl font-extrabold text-rose-700">{escalatedTasks.length}</h3></div>
+                            </div>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-5">
-                            <div className="w-14 h-14 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-xl"><i className="fa-solid fa-layer-group"></i></div>
-                            <div><p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Departments</p><h3 className="text-3xl font-extrabold text-slate-800">{totalGroups}</h3></div>
-                        </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-5 relative overflow-hidden">
-                            <div className="absolute right-0 top-0 w-2 h-full bg-amber-400"></div>
-                            <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 text-xl"><i className="fa-solid fa-spinner"></i></div>
-                            <div><p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Active Tasks</p><h3 className="text-3xl font-extrabold text-slate-800">{activeTasks.length}</h3></div>
-                        </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-rose-200 flex items-center gap-5 relative overflow-hidden">
-                            <div className="absolute right-0 top-0 w-2 h-full bg-rose-500 animate-pulse"></div>
-                            <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 text-xl"><i className="fa-solid fa-fire"></i></div>
-                            <div><p className="text-sm font-bold text-rose-500 uppercase tracking-widest">Escalated</p><h3 className="text-3xl font-extrabold text-rose-700">{escalatedTasks.length}</h3></div>
+
+                        {/* Recent Activity Table */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2"><i className="fa-solid fa-bolt text-amber-500"></i> Workspace Live Pulse (Last 30 Actions)</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                                            <th className="p-3 pl-6 font-bold w-48">Timestamp</th>
+                                            <th className="p-3 font-bold w-40">Actor</th>
+                                            <th className="p-3 font-bold w-40">Action</th>
+                                            <th className="p-3 pr-6 font-bold">Details</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {recentActivity.map(log => (
+                                            <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-sm">
+                                                <td className="p-3 pl-6 text-slate-500 font-medium text-xs">{log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A'}</td>
+                                                <td className="p-3 font-bold text-indigo-600">{log.userEmail?.split('@')[0] || 'System'}</td>
+                                                <td className="p-3">
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${log.action.includes('System') || log.action.includes('SECURITY') ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                                        {log.action}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 pr-6 text-slate-700 truncate max-w-md">{stripHtml(log.details)}</td>
+                                            </tr>
+                                        ))}
+                                        {recentActivity.length === 0 && (
+                                            <tr><td colSpan="4" className="p-8 text-center text-slate-400 font-medium">No recent activity detected.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -272,7 +390,10 @@ export default function AdminPanel({
                                     {filteredTasks.map(task => (
                                         <tr key={task.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                             <td className="p-4">
-                                                <div className="text-sm font-bold text-slate-800 line-clamp-2 w-64" dangerouslySetInnerHTML={{__html: task.text}}></div>
+                                                {/* 🚀 PHASE 1 FIX: HTML safe rendering via stripHtml to prevent broken CSS grid layouts */}
+                                                <div className="text-sm font-bold text-slate-800 line-clamp-2 w-64" title={stripHtml(task.text)}>
+                                                    {stripHtml(task.text)}
+                                                </div>
                                                 <div className="text-[10px] text-slate-400 mt-1">{new Date(task.timestamp?.toDate()).toLocaleString()}</div>
                                             </td>
                                             <td className="p-4 text-xs font-bold text-slate-600">{task.sender.split('@')[0]}</td>
@@ -363,7 +484,7 @@ export default function AdminPanel({
                         <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0">
                             <h3 className="font-bold text-slate-800 mb-3">Immutable Audit Ledger</h3>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                                <input type="text" placeholder="Filter by User..." className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm" value={adminFilterUser} onChange={e => setAdminFilterUser(e.target.value)} />
+                                <input type="text" placeholder="Filter by User..." className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm" value={localAuditSearch} onChange={e => setLocalAuditSearch(e.target.value)} />
                                 <input type="date" className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={adminFilterDate} onChange={e => setAdminFilterDate(e.target.value)} />
                                 <select className="text-sm p-2 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 shadow-sm text-slate-600" value={adminFilterType} onChange={e => setAdminFilterType(e.target.value)}>
                                     <option value="">All Action Types</option>
@@ -389,7 +510,7 @@ export default function AdminPanel({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredAuditLogs.map(log => (
+                                    {filteredAuditLogs.filter(l => !localAuditSearch || l.userEmail?.toLowerCase().includes(localAuditSearch.toLowerCase())).map(log => (
                                         <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                             <td className="p-4 text-xs font-medium text-slate-500">
                                                 {log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A'}
