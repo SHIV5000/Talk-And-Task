@@ -52,10 +52,10 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
                        <div key={u.uid} onClick={() => { setActiveGroup({ id: dmIdStr, isDM: true, name: u.name, members: [user.email, u.email], profilePicUrl: u.profilePicUrl }); setMobileSidebarOpen(false); setShowRightSidebar(false); }} className={`p-2.5 rounded-xl cursor-pointer flex items-center justify-between transition-all ${isActive ? 'bg-indigo-50 border border-indigo-100 shadow-sm' : 'hover:bg-slate-50 border border-transparent'}`}>
                           <div className="flex items-center gap-3 min-w-0">
                               <div className="relative">
-                                <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name || u.email?.split('@')[0]} sizeClass="w-9 h-9 shrink-0" />
+                                <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name || u.email?.split('@')[0]} sizeClass="w-10 h-10 shrink-0" />
                                 {u.lastActive && (Date.now() - new Date(u.lastActive?.toDate?.() || u.lastActive).getTime()) < 180000 && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-7 h-[3px] rounded-full bg-emerald-500"></div>}
                               </div>
-                              <span className={`text-[14px] truncate ${isActive ? 'font-bold text-indigo-700' : 'font-medium text-slate-700'}`}>{(u.name || u.email?.split('@')[0] || 'Unknown').split(' ')[0]}</span>
+                              <span className={`text-[14px] truncate ${isActive ? 'font-bold text-indigo-700' : 'font-medium text-slate-700'}`}>{(u.name || u.email?.split('@')[0] || 'Unknown')}</span>
                           </div>
                           <div className="flex gap-1.5">
                              {unreadCount > 0 && <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-white"></span>{unreadCount}</span>}
@@ -86,7 +86,7 @@ export default function LeftSidebar({ user, currentUserData, myGroups, dmUsers, 
                    return (
                        <div key={g.id} onClick={() => { setActiveGroup(g); setMobileSidebarOpen(false); setShowRightSidebar(false); }} className={`p-2.5 rounded-xl cursor-pointer flex items-center justify-between transition-all ${isActive ? 'bg-indigo-50 border border-indigo-100 shadow-sm' : 'hover:bg-slate-50 border border-transparent'}`}>
                           <div className="flex items-center gap-3 min-w-0">
-                              {g.profilePicUrl ? <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-9 h-9 shrink-0" /> : <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 shrink-0"><i className="fa-solid fa-users text-[12px]"></i></div>}
+                              {g.profilePicUrl ? <MemoizedAvatar uid={g.id} url={g.profilePicUrl} name={g.name} sizeClass="w-10 h-10 shrink-0" /> : <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 shrink-0"><i className="fa-solid fa-users text-[12px]"></i></div>}
                               <span className={`text-[14px] truncate ${isActive ? 'font-bold text-indigo-700' : 'font-medium text-slate-700'}`}>{g.name}</span>
                           </div>
                           <div className="flex gap-1.5">

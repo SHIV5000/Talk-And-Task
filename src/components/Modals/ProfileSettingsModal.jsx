@@ -47,14 +47,21 @@ export default function ProfileSettingsModal({
               placeholder="Enter your full name"
             />
           </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-2 ml-1">Email</label>
+            <input type="email" disabled value={currentUserData?.email || ''} className="w-full p-3.5 border border-slate-200 rounded-xl text-[15px] outline-none bg-slate-100 text-slate-500 font-semibold" />
+          </div>
 
-          <button 
-            onClick={handleProfileSubmit} 
-            disabled={profileUploadProgress > 0} 
-            className="w-full bg-indigo-600 text-white py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold tracking-wide hover:-translate-y-0.5 active:translate-y-0"
-          >
-            {profileUploadProgress > 0 ? `Uploading Photo ${Math.round(profileUploadProgress)}%` : 'Save Changes'}
-          </button>
+          <div className="flex gap-3">
+            <button onClick={() => setActiveModal(null)} className="flex-1 bg-slate-100 text-slate-700 py-3.5 rounded-xl font-bold hover:bg-slate-200">Cancel</button>
+            <button 
+              onClick={handleProfileSubmit} 
+              disabled={profileUploadProgress > 0} 
+              className="flex-1 bg-indigo-600 text-white py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold tracking-wide hover:-translate-y-0.5 active:translate-y-0"
+            >
+              {profileUploadProgress > 0 ? `Uploading Photo ${Math.round(profileUploadProgress)}%` : 'Save'}
+            </button>
+          </div>
         </div>
 
       </div>

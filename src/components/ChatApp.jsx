@@ -30,6 +30,8 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
     const threadMessages = messages.filter(m => m.replyToId === activeThread.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
     const threadInputRef = useRef(null);
+    const [threadFile, setThreadFile] = useState(null);
+    const threadFileRef = useRef(null);
     
     const handleSend = async () => {
         if(!text.trim() || text === '<br>') return;
@@ -37,6 +39,17 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
         setText('');
         if(threadInputRef.current) threadInputRef.current.innerHTML = '';
     }
+    const handleThreadFileSend = async () => {
+        if (!threadFile) return;
+        const uniqueFileName = `${Date.now()}_${threadFile.name}`;
+        const uploadTask = uploadBytesResumable(ref(storage, `chat_files/${uniqueFileName}`), threadFile);
+        uploadTask.on('state_changed', null, null, async () => {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            await addDoc(collection(db, "messages"), { text: text || threadFile.name, fileUrl: downloadURL, fileName: threadFile.name, fileType: threadFile.type, senderUid: user.uid, senderEmail: user.email, sender: currentUserData?.name || user.email.split('@')[0], timestamp: serverTimestamp(), isTask: false, seenBy: [user.email], groupId: activeThread.groupId, reactions: {}, replyToId: activeThread.id, originalText: activeThread.text || activeThread.fileName || 'Attachment', originalSender: (activeThread.sender || "").split('@')[0] });
+            setThreadFile(null);
+            if (threadFileRef.current) threadFileRef.current.value = '';
+        });
+    };
 
     return (
         <div className="w-80 md:w-96 bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative">
@@ -72,6 +85,13 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
                 ))}
             </div>
             <div className="p-3 border-t border-slate-200 bg-white shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                <div className="mb-2 flex items-center gap-2">
+                    <button onMouseDown={(e)=>{e.preventDefault(); document.execCommand('bold', false, null);}} className="px-2 py-1 text-xs rounded bg-slate-100">B</button>
+                    <button onMouseDown={(e)=>{e.preventDefault(); document.execCommand('italic', false, null);}} className="px-2 py-1 text-xs rounded bg-slate-100 italic">I</button>
+                    <input type="file" ref={threadFileRef} className="hidden" onChange={(e)=>setThreadFile(e.target.files?.[0] || null)} />
+                    <button onClick={() => threadFileRef.current?.click()} className="px-2 py-1 text-xs rounded bg-indigo-50 text-indigo-600"><i className="fa-solid fa-paperclip mr-1"></i>Attach</button>
+                    {threadFile && <span className="text-[11px] text-slate-500 truncate">{threadFile.name}</span>}
+                </div>
                 <div className="flex gap-2 items-end bg-slate-50 rounded-xl border border-slate-200 focus-within:border-indigo-400 focus-within:bg-white transition-all shadow-sm p-1.5 pr-2">
                    <div 
                       contentEditable 
@@ -82,7 +102,7 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
                       className="custom-wysiwyg bg-transparent flex-1 outline-none text-[13px] text-slate-800 py-2 px-3 overflow-y-auto font-medium"
                       style={{ minHeight: '38px', maxHeight: '120px' }}
                    />
-                   <button onClick={handleSend} disabled={!text.trim() || text === '<br>'} className="w-[36px] h-[36px] rounded-full bg-indigo-600 text-white flex items-center justify-center disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-sm shrink-0 mb-0.5"><i className="fa-solid fa-paper-plane text-xs ml-[-2px]"></i></button>
+                   <button onClick={() => threadFile ? handleThreadFileSend() : handleSend()} disabled={(!text.trim() || text === '<br>') && !threadFile} className="w-[36px] h-[36px] rounded-full bg-indigo-700 text-white flex items-center justify-center disabled:opacity-50 hover:bg-indigo-800 transition-colors shadow-sm shrink-0 mb-0.5"><i className="fa-solid fa-paper-plane text-xs ml-[-2px] text-white"></i></button>
                 </div>
             </div>
         </div>
@@ -166,6 +186,7 @@ export default function ChatApp({ user, onLogout }) {
     const highlightTimerRef = useRef(null);
     const lastMessageTrackerId = useRef(null);
     const lastNotifId = useRef(null);
+    const lastReplyNotifRef = useRef(null);
 
     const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
     const [currentTip, setCurrentTip] = useState("Type '@' to instantly mention peers.");
@@ -268,6 +289,14 @@ export default function ChatApp({ user, onLogout }) {
                 if (latestMsg.senderUid !== user.uid && !latestMsg.isTask) playMelody('messageReceived');
             }
             lastMessageTrackerId.current = latestMsg.id;
+        }
+    }, [messages, user.uid, playMelody]);
+
+    useEffect(() => {
+        const latestReply = [...messages].filter(m => m.replyToId && m.senderUid !== user.uid).sort((a,b)=>(b.timestamp?.toMillis?.()||0)-(a.timestamp?.toMillis?.()||0))[0];
+        if (latestReply && latestReply.id !== lastReplyNotifRef.current) {
+            lastReplyNotifRef.current = latestReply.id;
+            playMelody('messageReceived');
         }
     }, [messages, user.uid, playMelody]);
 
@@ -1180,6 +1209,12 @@ export default function ChatApp({ user, onLogout }) {
                                           if (grp) {
                                             setActiveGroup(grp);
                                             setPendingScrollTarget(latest.id);
+                                          } else {
+                                            const dmOther = dbUsers.find(u => [user.uid, u.uid].sort().join('_') === latest.groupId);
+                                            if (dmOther) {
+                                                setActiveGroup({ id: latest.groupId, isDM: true, name: dmOther.name, members: [user.email, dmOther.email], profilePicUrl: dmOther.profilePicUrl });
+                                                setPendingScrollTarget(latest.id);
+                                            }
                                           }
                                         }}
                                         className="mb-6 max-w-2xl w-full bg-white border border-indigo-100 rounded-xl p-3 shadow-sm hover:border-indigo-300"
@@ -1296,6 +1331,7 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                     
                                     <div className="flex items-center gap-1 shrink-0 relative">
+                                      <button onClick={() => setActiveModal('edit_profile')} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-slate-500 hover:bg-slate-100" title="Profile Settings"><i className="fa-solid fa-gear"></i></button>
                                       <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50" title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
                                       {showFilterMenu && (
                                         <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-200">

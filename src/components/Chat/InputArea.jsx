@@ -209,9 +209,9 @@ export default function InputArea({
         )}
 
         <button 
-          onClick={handleSendOfflineAware} 
-          disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-700 text-white hover:bg-indigo-800 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+          onClick={() => { if (pendingFiles.length > 0) handleSendPendingFiles(); else handleSendOfflineAware(); }} 
+          disabled={pendingFiles.length === 0 && (!inputText.trim() || inputText === '<br>')}
+          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${(inputText.trim() && inputText !== '<br>') || pendingFiles.length > 0 ? 'bg-indigo-700 text-white hover:bg-indigo-800 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
           <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px] text-white"></i>
         </button>
