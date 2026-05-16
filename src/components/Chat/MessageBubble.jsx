@@ -78,6 +78,10 @@ const MessageBubble = React.memo(({ msg, userEmail, currentUserData, activeGroup
       const now = new Date();
       const newTrail = [...(msg.taskData.trail || []), { action: "Acknowledged", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString() }];
       await updateDoc(doc(db, "messages", msg.id), { "taskData.acknowledgedBy": [...currentAckBy, userEmail], "taskData.status": "Acknowledged", "taskData.trail": newTrail });
+      (msg.taskData.assignees || []).forEach(async (email) => {
+        const u = dbUsers.find(x => x.email === email);
+        if (u && email !== userEmail) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Task acknowledged by ${userEmail.split('@')[0]}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
+      });
     } catch(e) {}
   };
 
@@ -107,6 +111,10 @@ const MessageBubble = React.memo(({ msg, userEmail, currentUserData, activeGroup
       const updates = { "taskData.status": "Completed", "taskData.trail": newTrail };
       if (msg.taskData.requireAck && isAssignee && !hasAcknowledged) updates["taskData.acknowledgedBy"] = [...currentAckBy, userEmail];
       await updateDoc(doc(db, "messages", msg.id), updates);
+      (msg.taskData.assignees || []).forEach(async (email) => {
+        const u = dbUsers.find(x => x.email === email);
+        if (u && email !== userEmail) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Task marked completed by ${userEmail.split('@')[0]}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
+      });
     } catch(e) {}
   };
 
@@ -137,9 +145,21 @@ const MessageBubble = React.memo(({ msg, userEmail, currentUserData, activeGroup
         const updates = { "taskData.trail": newTrail };
         if (msg.taskData.requireAck && isAssignee && !hasAcknowledged) updates["taskData.acknowledgedBy"] = [...currentAckBy, userEmail];
         await updateDoc(doc(db, "messages", msg.id), updates);
+        (msg.taskData.assignees || []).forEach(async (email) => {
+          const u = dbUsers.find(x => x.email === email);
+          if (u && email !== userEmail) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Task file uploaded by ${userEmail.split('@')[0]}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
+        });
         setTrailFileUploading(false);
       });
     } catch(err) { setTrailFileUploading(false); } finally { if(inlineFileInputRef.current) inlineFileInputRef.current.value = ""; }
+  };
+  const handleApplyTag = async (tag) => {
+    const tagObj = { label: tag.label || '#Tag', bgClass: tag.bgClass || 'bg-indigo-100', textClass: tag.textClass || 'text-indigo-700' };
+    const currentTags = msg.isTask ? (msg.taskData?.tags || []) : (msg.tags || []);
+    if (currentTags.find(t => t.label === tagObj.label)) return setTagPickerOpen(false);
+    if (msg.isTask) await updateDoc(doc(db, "messages", msg.id), { "taskData.tags": [...currentTags, tagObj] });
+    else await updateDoc(doc(db, "messages", msg.id), { tags: [...currentTags, tagObj] });
+    setTagPickerOpen(false);
   };
 
   return (
@@ -249,11 +269,26 @@ const MessageBubble = React.memo(({ msg, userEmail, currentUserData, activeGroup
                       </div>
                     </div>
 
-                    <div className="px-2 pb-2">
+                    <div className="px-2 pb-2 relative">
                       {!isThreadView && !msg.isTask && (
-                        <button onClick={(e)=>{e.stopPropagation(); setActiveThread(msg);}} className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700">
-                          <i className="fa-solid fa-reply mr-1"></i>Replies {replyCount > 0 ? `(${replyCount})` : ''}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={(e)=>{e.stopPropagation(); setActiveThread(msg);}} className="text-[11px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 px-2 py-1 rounded">
+                            <i className="fa-solid fa-reply mr-1"></i>Replies {replyCount > 0 ? `(${replyCount})` : ''}
+                          </button>
+                          <button onClick={(e)=>{e.stopPropagation(); setTagPickerOpen(v=>!v);}} className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">+</button>
+                        </div>
+                      )}
+                      {tagPickerOpen && (
+                        <div ref={tagPickerRef} className="absolute bottom-9 left-2 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 w-64">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Tags</div>
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {customTags.map((t, i) => <button key={i} onClick={()=>handleApplyTag(t)} className={`px-2 py-1 rounded text-[10px] font-bold ${t.bgClass || 'bg-indigo-100'} ${t.textClass || 'text-indigo-700'}`}>{t.label}</button>)}
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Emoji</div>
+                          <div className="flex flex-wrap gap-1">
+                            {STANDARD_EMOJIS.slice(0,16).map(e => <button key={e} onClick={()=>handleReaction(msg,e)} className="text-sm hover:bg-slate-100 rounded px-1">{e}</button>)}
+                          </div>
+                        </div>
                       )}
                     </div>
                     {isTaskParticipant && !isTaskCompleted && (
@@ -292,7 +327,7 @@ const MessageBubble = React.memo(({ msg, userEmail, currentUserData, activeGroup
                                  <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Delegate</button>
                                  <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Attach</button>
                                  <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Update</button>
-                                 <button onClick={handleInlineComplete} disabled={!hasProofAttached} className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`} title={!hasProofAttached ? 'You must attach a file to complete this task' : ''}>Resolve</button>
+                                 <button onClick={handleInlineComplete} disabled={!hasProofAttached} className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`} title={!hasProofAttached ? 'You must attach a file to complete this task' : ''}>Completed</button>
                               </>
                            )}
                         </div>

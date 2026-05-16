@@ -128,10 +128,8 @@ button:hover:where(.hover\:bg-black\/5) {
     background-color: rgba(79,70,229,0.08) !important;
 }
 
-/* Ensure send button when active is clearly visible */
-button:has(.fa-paper-plane) {
-    color: #4F46E5 !important;
-}
+/* Ensure paper-plane icon remains high contrast on dark send buttons */
+.fa-paper-plane { color: inherit !important; }
 
 /* Input area focus ring override */
 textarea:focus {
