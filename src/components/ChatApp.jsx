@@ -125,7 +125,6 @@ export default function ChatApp({ user, onLogout }) {
     const [isEditingTaskTitle, setIsEditingTaskTitle] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState("");
     
-    // 👇 NEW STATES for acknowledgment & proof
     const [requireAck, setRequireAck] = useState(false);
     const [ackTimeOption, setAckTimeOption] = useState('any'); // 'immediate','30min','1hr','2hr','3hr','eod','any'
     const [requireProof, setRequireProof] = useState(false);
@@ -236,7 +235,6 @@ export default function ChatApp({ user, onLogout }) {
         } catch(e) {}
     }, []);
 
-    // 👇 NEW: Trigger sound when a new generic notification lands (e.g. Reply, Task Edit)
     useEffect(() => {
         if (genericNotifications.length > 0 && genericNotifications[0].id !== lastNotifId.current) {
             if (lastNotifId.current !== null) playMelody('messageReceived');
@@ -244,7 +242,6 @@ export default function ChatApp({ user, onLogout }) {
         }
     }, [genericNotifications, playMelody]);
 
-    // 👇 NEW: Trigger Banner Sound when Global Announcement Drops
     useEffect(() => {
         if (globalAnnouncement?.isActive && globalAnnouncement.id !== dismissedBroadcastId) {
             playMelody('broadcast');
@@ -435,7 +432,6 @@ export default function ChatApp({ user, onLogout }) {
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); triggerHighlight(msgId); }
     }, [triggerHighlight]);
 
-    // 👇 UPDATED: Universal Router now handles slack-threads auto-opening 👇
     const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId, replyToId = null) => {
         setChatFilter('all');
         setSearchQuery('');
@@ -581,44 +577,33 @@ export default function ChatApp({ user, onLogout }) {
         involved.delete(user.email);
         const uidsToNotify = dbUsers.filter(u => involved.has(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
-            try { await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `"${stripHtml(taskMsg.text).substring(0,30)}..." - ${(user.email || "").split('@')[0]} updated ✅`, messageId: taskMsg.id, groupId: taskMsg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
+            try { await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `"${stripHtml(taskMsg.text).substring(0,30)}..." - ${actionText}`, messageId: taskMsg.id, groupId: taskMsg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
         }
     };
 
-    // 👇 UPDATED convertToTask function with acknowledgment & proof fields
     const convertToTask = async () => {
         if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
         try {
             const now = new Date();
             let ackDeadline = null;
 
-            // Calculate acknowledgment deadline based on selected option
             if (requireAck) {
                 switch (ackTimeOption) {
-                    case 'immediate': // no timer, but ack still required
-                        break;
-                    case '30min':
-                        ackDeadline = new Date(now.getTime() + 30 * 60 * 1000);
-                        break;
-                    case '1hr':
-                        ackDeadline = new Date(now.getTime() + 60 * 60 * 1000);
-                        break;
-                    case '2hr':
-                        ackDeadline = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-                        break;
-                    case '3hr':
-                        ackDeadline = new Date(now.getTime() + 3 * 60 * 60 * 1000);
-                        break;
-                    case 'eod':
-                        ackDeadline = getNextWorkingDay9AM(now);
-                        break;
-                    case 'any':
-                        // no automatic escalation, but ack button still required
-                        break;
-                    default:
-                        break;
+                    case 'immediate': break;
+                    case '30min': ackDeadline = new Date(now.getTime() + 30 * 60 * 1000); break;
+                    case '1hr': ackDeadline = new Date(now.getTime() + 60 * 60 * 1000); break;
+                    case '2hr': ackDeadline = new Date(now.getTime() + 2 * 60 * 60 * 1000); break;
+                    case '3hr': ackDeadline = new Date(now.getTime() + 3 * 60 * 60 * 1000); break;
+                    case 'eod': ackDeadline = getNextWorkingDay9AM(now); break;
+                    case 'any': break;
+                    default: break;
                 }
             }
+
+            const toNames = taskAssignees.map(email => {
+                const u = dbUsers.find(x => x.email === email);
+                return u ? u.name : (email||"").split('@')[0];
+            }).join(', ');
 
             const taskData = {
                 deadline: taskDeadline,
@@ -631,10 +616,7 @@ export default function ChatApp({ user, onLogout }) {
                     action: "Task Created", 
                     by: user.email, 
                     time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), 
-                    to: taskAssignees.map(email => {
-    const u = dbUsers.find(x => x.email === email);
-    return u ? u.name : (email||"").split('@')[0];
-}).join(', ')
+                    to: toNames 
                 }],
                 requireAck: requireAck,
                 ackDeadline: ackDeadline ? ackDeadline.toISOString() : null,
@@ -669,7 +651,6 @@ export default function ChatApp({ user, onLogout }) {
             playMelody('taskCreated'); 
             setActiveModal(null); 
             setTaskAssignees([]);
-            // Reset new states
             setRequireAck(false);
             setAckTimeOption('any');
             setRequireProof(false);
@@ -686,43 +667,68 @@ export default function ChatApp({ user, onLogout }) {
         } catch (e) { alert("Failed to update task title."); }
     };
 
+    // 👇 AUTO-ACKNOWLEDGE
     const handleDelegateTask = async () => {
         if (!selectedMessage || delegateAssignees.length === 0) return;
         try {
             const now = new Date();
-            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(email => {   const u = dbUsers.find(x => x.email === email);
-    return u ? u.name : (email||"").split('@')[0];}).join(', ') }];
-            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
+            const toNames = delegateAssignees.map(email => {
+                const u = dbUsers.find(x => x.email === email);
+                return u ? u.name : email.split('@')[0];
+            }).join(', ');
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames }];
+            
+            const updates = { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] };
+            if (selectedMessage.taskData.requireAck && !selectedMessage.taskData.acknowledged) {
+                updates["taskData.acknowledged"] = true;
+            }
+            
+            await updateDoc(doc(db, "messages", selectedMessage.id), updates);
             playMelody('taskUpdated'); 
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
     };
 
+    // 👇 AUTO-ACKNOWLEDGE
     const handleCompleteTask = async () => {
         if (!selectedMessage) return;
         try {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
-            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
+            
+            const updates = { "taskData.status": "Completed", "taskData.trail": updatedTrail };
+            if (selectedMessage.taskData.requireAck && !selectedMessage.taskData.acknowledged) {
+                updates["taskData.acknowledged"] = true;
+            }
+
+            await updateDoc(doc(db, "messages", selectedMessage.id), updates);
             playMelody('taskUpdated'); 
             setActiveModal(null);
         } catch (error) {}
     };
 
+    // 👇 AUTO-ACKNOWLEDGE
     const handleAddComment = async (closeModal = false) => {
         if (!selectedMessage || !trailComment.trim()) return;
         try {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: trailComment }];
             const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
-            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            
+            const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
+            if (selectedMessage.taskData.requireAck && !selectedMessage.taskData.acknowledged) {
+                updates["taskData.acknowledged"] = true;
+            }
+
+            await updateDoc(doc(db, "messages", selectedMessage.id), updates);
             setTrailComment("");
-            setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
+            setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus, acknowledged: updates["taskData.acknowledged"] || prev.taskData.acknowledged }}));
             playMelody('taskUpdated'); 
             if (closeModal) setActiveModal(null);
         } catch (error) {}
     };
 
+    // 👇 AUTO-ACKNOWLEDGE
     const handleTrailFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file || !selectedMessage) return;
@@ -733,10 +739,16 @@ export default function ChatApp({ user, onLogout }) {
             try {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 const now = new Date();
-                const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
+                const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
-                await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
-                setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
+                
+                const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
+                if (selectedMessage.taskData.requireAck && !selectedMessage.taskData.acknowledged) {
+                    updates["taskData.acknowledged"] = true;
+                }
+
+                await updateDoc(doc(db, "messages", selectedMessage.id), updates);
+                setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus, acknowledged: updates["taskData.acknowledged"] || prev.taskData.acknowledged}}));
                 playMelody('taskFileUpload'); 
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
@@ -758,14 +770,21 @@ export default function ChatApp({ user, onLogout }) {
         setActiveModal(null);
     };
 
+    // 👇 AUTO-ACKNOWLEDGE
     const handleAddInlineComment = async (targetMsg, commentText) => {
         if (!targetMsg || !commentText.trim()) return;
         try {
             const now = new Date();
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             const newStatus = targetMsg.taskData.status === 'Pending' ? 'In Progress' : targetMsg.taskData.status;
-            await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
-            await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
+            
+            const updates = { "taskData.trail": updatedTrail, "taskData.status": newStatus };
+            if (targetMsg.taskData.requireAck && !targetMsg.taskData.acknowledged) {
+                updates["taskData.acknowledged"] = true;
+            }
+
+            await updateDoc(doc(db, "messages", targetMsg.id), updates);
+            await notifyInvolvedInTask(targetMsg, `${currentUserData?.name || (user.email||"").split('@')[0]} updated a task.`);
             playMelody('taskUpdated'); 
         } catch (error) {}
     };
@@ -893,7 +912,6 @@ export default function ChatApp({ user, onLogout }) {
         return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
     }, [messages, user.uid, user.email]);
 
-    // 👇 modalProps – ADD the new acknowledgment & proof states so they reach TaskConvertModal
     const modalProps = {
         activeModal, setActiveModal, selectedMessage, setSelectedMessage,
         setReplyingTo, chatInputRef, currentUserData, profileForm,
@@ -914,7 +932,6 @@ export default function ChatApp({ user, onLogout }) {
         trailFileInputRef, handleTrailFileUpload, handleAddComment,
         messages, groups, trailComment, setTrailComment, activeReminders, 
         readOnly: viewMode === "admin",
-        // 👇 NEW props
         requireAck, setRequireAck,
         ackTimeOption, setAckTimeOption,
         requireProof, setRequireProof,
@@ -970,7 +987,6 @@ export default function ChatApp({ user, onLogout }) {
                             <span dangerouslySetInnerHTML={{__html: globalAnnouncement.message}}></span>
                         </div>
                     </div>
-                    {/* 👇 "Got It" Acknowledgement Button 👇 */}
                     <button onClick={handleAckBroadcast} className="ml-4 px-4 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors whitespace-nowrap shadow-sm border border-white/20">
                         Got It
                     </button>
@@ -1123,7 +1139,6 @@ export default function ChatApp({ user, onLogout }) {
                                                     {globalSearchResults.messages.length > 0 && (
                                                         <div className="mb-2">
                                                             <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
-                                                            {/* 👇 UPDATED: Universal Click Routing routes directly to threads 👇 */}
                                                             {globalSearchResults.messages.map(m => (
                                                                 <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
                                                                     <div className="flex justify-between items-center">
