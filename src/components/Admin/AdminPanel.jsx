@@ -161,14 +161,13 @@ export default function AdminPanel({
                                 <div className="absolute right-0 top-0 w-1 h-full bg-rose-500 animate-pulse"></div>
                                 <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 text-lg"><i className="fa-solid fa-fire"></i></div>
                                 <div><p className="text-[11px] font-bold text-rose-600 uppercase tracking-widest group-hover:text-rose-700">Escalated</p><h3 className="text-2xl font-extrabold text-rose-700">{escalatedTasks.length}</h3></div>
-                            
+                            </div>
 
                             <div className="bg-white p-5 rounded-2xl shadow-sm border border-emerald-200 flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 text-lg"><i className="fa-solid fa-check-double"></i></div>
                                 <div><p className="text-[11px] font-bold text-emerald-700 uppercase tracking-widest">Completed Today</p><h3 className="text-2xl font-extrabold text-emerald-700">{completedTasks.filter(t => t.taskData?.completedAt && new Date(t.taskData.completedAt).toDateString() === new Date().toDateString()).length}</h3></div>
                             </div>
 </div>
-                        </div>
 
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
@@ -212,7 +211,7 @@ export default function AdminPanel({
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
                         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                             <h3 className="font-bold text-slate-800">User Directory</h3>
-                            <div className="text-xs font-bold text-slate-500">{allTasks.filter(t => t.taskData?.status === "Pending").length} Pending Pending Tasks</div>
+                            <div className="text-xs font-bold text-slate-500">{allTasks.filter(t => t.taskData?.status === "Pending").length} Pending Tasks</div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
