@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { exportPerformanceReport, exportAuditLog, exportTaskMaster } from '../../utils/pdfExport.js';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 // Global String Formatter for clean rendering & PDF export
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
@@ -24,10 +22,7 @@ export default function AdminPanel({
 
     // 🚀 PHASES 3 & 4: Inline Expansion States
     const [expandedGroupId, setExpandedGroupId] = useState(null);
-    const [editingGroupId, setEditingGroupId] = useState(null);
     const [expandedTaskId, setExpandedTaskId] = useState(null);
-    const [taskPage, setTaskPage] = useState(1);
-    const [auditPage, setAuditPage] = useState(1);
 
     // Overview Metrics
     const totalUsers = dbUsers.length;
@@ -70,91 +65,6 @@ export default function AdminPanel({
         }).sort((a, b) => a.complianceScore - b.complianceScore); 
     }, [dbUsers, allTasks, activeTab]);
 
-    // --- 🚀 PDF GENERATION ENGINE ---
-    const generatePDFHeaderFooter = (doc, title) => {
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        doc.setFontSize(18);
-        doc.setTextColor(79, 70, 229); 
-        doc.text('Talk & Task Enterprise', 14, 22);
-        doc.setFontSize(12);
-        doc.setTextColor(100, 116, 139); 
-        doc.text(title, 14, 30);
-
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(148, 163, 184); 
-            const footerText = `Downloaded by ${currentUserData?.name || 'Admin'} | at ${timeStr} | on ${dateStr} | Talk & Task — MPGS | Confidential`;
-            doc.text(footerText, 14, doc.internal.pageSize.height - 10);
-        }
-    };
-
-    const exportOverviewPDF = () => {
-        const doc = new jsPDF();
-        generatePDFHeaderFooter(doc, 'Executive Summary & Recent Activity');
-
-        doc.setFontSize(10);
-        doc.setTextColor(30, 41, 59); 
-        doc.text(`Total Users: ${totalUsers}    |    Pending Approvals: ${pendingApprovals}`, 14, 45);
-        doc.text(`Departments: ${totalGroups}    |    Active Tasks: ${activeTasks.length}    |    Escalated: ${escalatedTasks.length}`, 14, 52);
-
-        const tableData = recentActivity.map(log => [
-            log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A',
-            log.userEmail?.split('@')[0] || 'System',
-            log.action || 'Unknown',
-            stripHtml(log.details)
-        ]);
-
-        doc.autoTable({
-            startY: 62, head: [['Timestamp', 'Actor', 'Action', 'Details']], body: tableData,
-            theme: 'grid', headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
-            styles: { fontSize: 8, cellPadding: 3 }, columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35 }, 2: { cellWidth: 35 }, 3: { cellWidth: 'auto' } }
-        });
-        generatePDFHeaderFooter(doc, 'Executive Summary & Recent Activity');
-        doc.save(`Executive_Summary_${Date.now()}.pdf`);
-    };
-
-    const exportGroupsPDF = () => {
-        const doc = new jsPDF();
-        const tableData = groups.filter(g => !g.isDM).map(g => [
-            g.name,
-            g.members?.length || 0,
-            g.admins?.length || 0,
-            g.createdBy?.split('@')[0] || 'Unknown'
-        ]);
-
-        doc.autoTable({
-            startY: 40, head: [['Department Name', 'Members', 'Admins', 'Created By']], body: tableData,
-            theme: 'grid', headStyles: { fillColor: [20, 184, 166], textColor: [255, 255, 255], fontStyle: 'bold' },
-            styles: { fontSize: 9, cellPadding: 4 }
-        });
-        generatePDFHeaderFooter(doc, 'Department Roster Report');
-        doc.save(`Department_Roster_${Date.now()}.pdf`);
-    };
-
-    const exportTasksPDF = () => {
-        const doc = new jsPDF();
-        const tableData = filteredTasks.map(t => [
-            stripHtml(t.text).substring(0, 60) + (stripHtml(t.text).length > 60 ? '...' : ''),
-            t.sender.split('@')[0],
-            (t.taskData?.assignees || []).map(a => a.split('@')[0]).join(', '),
-            t.taskData?.status || 'Unknown',
-            t.taskData?.deadline ? new Date(t.taskData.deadline).toLocaleDateString() : 'N/A'
-        ]);
-
-        doc.autoTable({
-            startY: 40, head: [['Task Detail', 'Creator', 'Assignees', 'Status', 'Deadline']], body: tableData,
-            theme: 'grid', headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255], fontStyle: 'bold' },
-            styles: { fontSize: 8, cellPadding: 3 }, columnStyles: { 0: { cellWidth: 70 } }
-        });
-        generatePDFHeaderFooter(doc, 'Master Task Ledger');
-        doc.save(`Task_Master_Report_${Date.now()}.pdf`);
-    };
-
     // --- UI HELPERS ---
     const getStatusColor = (status) => {
         switch(status) {
@@ -189,16 +99,6 @@ export default function AdminPanel({
                 </div>
                 
                 {/* Dynamic Global Export Buttons */}
-                {false && (
-                    <button onClick={() => {}} className="px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-100 transition-colors flex items-center gap-2">
-                        <i className="fa-solid fa-file-pdf"></i> Download PDF
-                    </button>
-                )}
-                {false && (
-                    <button onClick={() => {}} className="px-4 py-2 bg-teal-50 text-teal-600 border border-teal-200 rounded-lg text-sm font-bold shadow-sm hover:bg-teal-100 transition-colors flex items-center gap-2">
-                        <i className="fa-solid fa-file-pdf"></i> Download PDF
-                    </button>
-                )}
                 {activeTab === 'tasks' && (
                     <button onClick={() => exportTaskMaster(filteredTasks, currentUserData?.email)} className="px-4 py-2 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg text-sm font-bold shadow-sm hover:bg-amber-100 transition-colors flex items-center gap-2">
                         <i className="fa-solid fa-file-pdf"></i> Download PDF
