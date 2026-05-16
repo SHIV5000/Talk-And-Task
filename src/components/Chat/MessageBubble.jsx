@@ -48,9 +48,8 @@ const MessageBubble = React.memo(({
   const senderName = (msg.sender || '').split('@')[0];
   const senderAvatar = senderUser.profilePicUrl || null;
 
-  // 👇 Visibility Flags
+  // 👇 Task Roles - Participant means ANY assignee, creator, or admin can act on it
   const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
-  const isAssignee = msg.isTask && msg.taskData?.assignees?.includes(userEmail); // 👈 ONLY assignees
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = !isTaskCompleted || isSuperAdmin;
@@ -121,12 +120,19 @@ const MessageBubble = React.memo(({
     try { await updateDoc(doc(db, "messages", msg.id), { text: tempTitle }); setIsEditingTitle(false); } catch(e) {}
   };
 
+  // 👇 AUTO-ACKNOWLEDGE ON UPDATE
   const submitInlineUpdate = async () => {
     if (!inlineUpdateText.trim()) return setIsAddingUpdate(false);
     try {
         const now = new Date();
         const updatedTrail = [...(msg.taskData.trail || []), { action: "Update Added", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: inlineUpdateText }];
-        await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": updatedTrail });
+        
+        const updates = { "taskData.trail": updatedTrail };
+        if (msg.taskData.requireAck && !msg.taskData.acknowledged) {
+            updates["taskData.acknowledged"] = true;
+        }
+
+        await updateDoc(doc(db, "messages", msg.id), updates);
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} updated the task.`);
         setInlineUpdateText(""); setIsAddingUpdate(false);
     } catch(e) {}
@@ -151,34 +157,48 @@ const MessageBubble = React.memo(({
     } catch(e) {}
   };
 
+  // 👇 AUTO-ACKNOWLEDGE ON COMPLETE
   const handleInlineComplete = async (e) => {
     e.stopPropagation();
     if (!isTaskParticipant) return alert("You don't have permission to complete this.");
     try {
       const now = new Date();
       const newTrail = [...msg.taskData.trail, { action: "Marked Completed", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
-      await updateDoc(doc(db, "messages", msg.id), { "taskData.status": "Completed", "taskData.trail": newTrail });
+      
+      const updates = { "taskData.status": "Completed", "taskData.trail": newTrail };
+      if (msg.taskData.requireAck && !msg.taskData.acknowledged) {
+          updates["taskData.acknowledged"] = true;
+      }
+
+      await updateDoc(doc(db, "messages", msg.id), updates);
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} completed the task ✅`);
     } catch(e) {}
   };
 
+  // 👇 AUTO-ACKNOWLEDGE ON DELEGATE
   const handleInlineDelegateSubmit = async () => {
     if (delegateSelection.length === 0) return setIsDelegating(false);
     try {
       const now = new Date();
-      // 👇 UPDATED: Ensure proper NAMES are mapped to the Trail (Not Email Prefixes)
       const toNames = delegateSelection.map(email => {
           const u = dbUsers.find(x => x.email === email);
           return u ? u.name : email.split('@')[0];
       }).join(', ');
 
       const newTrail = [...msg.taskData.trail, { action: "Delegated", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames }];
-      await updateDoc(doc(db, "messages", msg.id), { "taskData.assignees": delegateSelection, "taskData.status": "In Progress", "taskData.trail": newTrail });
+      
+      const updates = { "taskData.assignees": delegateSelection, "taskData.status": "In Progress", "taskData.trail": newTrail };
+      if (msg.taskData.requireAck && !msg.taskData.acknowledged) {
+          updates["taskData.acknowledged"] = true;
+      }
+
+      await updateDoc(doc(db, "messages", msg.id), updates);
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} added new assignees 👤`);
       setIsDelegating(false); setDelegateSelection([]);
     } catch(e) {}
   };
 
+  // 👇 AUTO-ACKNOWLEDGE ON FILE UPLOAD
   const handleInlineFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -190,7 +210,13 @@ const MessageBubble = React.memo(({
         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
         const now = new Date();
         const newTrail = [...msg.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
-        await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": newTrail });
+        
+        const updates = { "taskData.trail": newTrail };
+        if (msg.taskData.requireAck && !msg.taskData.acknowledged) {
+            updates["taskData.acknowledged"] = true;
+        }
+
+        await updateDoc(doc(db, "messages", msg.id), updates);
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} attached a file 📎`);
         setTrailFileUploading(false);
       });
@@ -277,17 +303,17 @@ const MessageBubble = React.memo(({
                         </p>
                       )}
 
-                      {/* 👇 UPDATED: Acknowledge button visible ONLY to Assignees */}
-                      {isAssignee && !isTaskCompleted && msg.taskData?.requireAck && !msg.taskData?.acknowledged && (
+                      {/* 👇 Acknowledge button visible to ANY participant (creator/admin/assignee) */}
+                      {isTaskParticipant && !isTaskCompleted && msg.taskData?.requireAck && !msg.taskData?.acknowledged && (
                         <div className="mb-3">
                           <button
                             onClick={handleAcknowledge}
-                            className="w-full px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs font-bold text-yellow-700 hover:bg-yellow-100 transition-colors"
+                            className="w-full px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs font-bold text-yellow-700 hover:bg-yellow-100 transition-colors shadow-sm"
                           >
                             <i className="fa-solid fa-check mr-1"></i> Acknowledge Task
                           </button>
                           {msg.taskData.ackDeadline && (
-                            <div className="text-[10px] text-yellow-600 mt-1 text-center">
+                            <div className="text-[10px] text-yellow-600 mt-1 text-center font-semibold tracking-wide">
                               Acknowledge by {new Date(msg.taskData.ackDeadline).toLocaleString()}
                             </div>
                           )}
@@ -321,7 +347,6 @@ const MessageBubble = React.memo(({
                                     {dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
                                  </select>
                                  <div className="flex items-center gap-1">
-                                    {/* 👇 UPDATED: Display Names instead of Email Prefixes in selection pills */}
                                     {delegateSelection.map(e => {
                                         const u = dbUsers.find(x => x.email === e);
                                         const displayName = u ? u.name : e.split('@')[0];
@@ -383,7 +408,6 @@ const MessageBubble = React.memo(({
                                     </div>
                                     <div className="text-[13px] text-slate-600 leading-snug break-words">
                                       <span className="font-semibold">{t.action}</span>
-                                      {/* 👇 UPDATED: 't.to' now renders correctly as names based on DB updates below */}
                                       {t.to && <span> to <span className="font-semibold text-indigo-600">@{t.to}</span></span>}
                                       
                                       {t.comment && !t.fileUrl && (
