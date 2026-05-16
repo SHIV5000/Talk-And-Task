@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { auth, db } from '../firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { db } from '../firebase.js';
+import { collection, onSnapshot, doc } from 'firebase/firestore';
 
 export default function useWorkspaceData(user, profileForm, setProfileForm) {
     const [isVipAdmin, setIsVipAdmin] = useState(false);
@@ -11,109 +11,81 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
     const [genericNotifications, setGenericNotifications] = useState([]);
     const [allAdminReminders, setAllAdminReminders] = useState([]);
     const [immutableAuditLogs, setImmutableAuditLogs] = useState([]);
-    const [customTags, setCustomTags] = useState([]); 
-    const [globalAnnouncement, setGlobalAnnouncement] = useState(null); 
-    const [toolPreferences, setToolPreferences] = useState({
-        reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
+    const [globalAnnouncement, setGlobalAnnouncement] = useState(null);
+    const [toolPreferences, setToolPreferences] = useState({ 
+        reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic' 
     });
-
-    const verifyAdminStatus = useCallback(async () => {
-        if (!auth.currentUser) return false;
-        try {
-            const idTokenResult = await auth.currentUser.getIdTokenResult();
-            return !!idTokenResult.claims.admin;
-        } catch (e) { return false; }
-    }, []);
-
-    useEffect(() => { 
-        verifyAdminStatus().then(res => setIsVipAdmin(res)); 
-    }, [verifyAdminStatus]);
+    
+    // 🆕 NEW: Custom Tags State
+    const [customTags, setCustomTags] = useState([]);
 
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user) return;
 
-        const qPersonal = query(collection(db, "reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false));
-        const unsubPersonal = onSnapshot(qPersonal, (snapshot) => setActiveReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-        const qAlerts = query(collection(db, "notifications"), where("userId", "==", user.uid), where("isRead", "==", false));
-        const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
-            const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
-            setGenericNotifications(sorted);
-        });
-
-        const unsubTags = onSnapshot(collection(db, "workspace_tags"), (snapshot) => {
-            if (snapshot.empty) {
-                setCustomTags([
-                    { id: '1', label: '#Approved', shortCode: 'APP', bgClass: 'bg-teal-50', textClass: 'text-teal-700' },
-                    { id: '2', label: '#Reviewing', shortCode: 'REV', bgClass: 'bg-indigo-50', textClass: 'text-indigo-700' },
-                    { id: '3', label: '#ActionRequired', shortCode: 'ACT', bgClass: 'bg-rose-50', textClass: 'text-rose-700' },
-                    { id: '4', label: '#Noted', shortCode: 'NOTE', bgClass: 'bg-slate-100', textClass: 'text-slate-600' }
-                ]);
-            } else {
-                setCustomTags(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)));
-            }
-        });
-
-        // 👇 UPDATED: Now fetches the ID for Broadcast Acknowledgements 👇
-        const unsubAnnouncement = onSnapshot(doc(db, "workspace", "announcement"), (docSnap) => {
+        // User Data Listener
+        const unsubUser = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
             if (docSnap.exists()) {
-                setGlobalAnnouncement({ id: docSnap.id, ...docSnap.data() });
-            } else {
-                setGlobalAnnouncement(null);
-            }
-        });
-
-        let unsubAdmin = () => {}; let unsubAudit = () => {};
-        if (currentUserData?.isAdmin || isVipAdmin) {
-            const qAdmin = query(collection(db, "reminders"), orderBy("remindAt", "desc"));
-            unsubAdmin = onSnapshot(qAdmin, (snapshot) => setAllAdminReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
-            const qAudit = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"));
-            unsubAudit = onSnapshot(qAudit, (snapshot) => {
-                setImmutableAuditLogs(snapshot.docs.map(d => {
-                    const data = d.data();
-                    return { 
-                        id: d.id, 
-                        ...data, 
-                        time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '', 
-                        dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '' 
-                    };
-                }));
-            });
-        }
-        return () => { unsubPersonal(); unsubAlerts(); unsubAdmin(); unsubAudit(); unsubTags(); unsubAnnouncement(); };
-    }, [user?.uid, currentUserData?.isAdmin, isVipAdmin]);
-
-    useEffect(() => {
-        if (!user?.uid) return;
-
-        const heartbeatInterval = setInterval(() => { 
-            updateDoc(doc(db, "users", user.uid), { lastActive: serverTimestamp() }).catch(() => {}); 
-        }, 60000);
-
-        const unsubCurrent = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
-            if (docSnapshot.exists()) {
-                const data = docSnapshot.data(); 
+                const data = docSnap.data();
                 setCurrentUserData(data);
-                if (!profileForm.name && data.name) {
-                    setProfileForm({ name: (data.name || "").split('@')[0], fontSize: data.fontSize || "text-[14.2px]", fontFamily: data.fontFamily || "font-sans" });
-                }
-                if (data.toolPreferences) setToolPreferences(prev => ({ ...prev, ...data.toolPreferences }));
+                setIsVipAdmin(data.email === 'shivsuri1@gmail.com');
+                setProfileForm({ 
+                    name: data.name || "", 
+                    fontSize: data.fontSize || "text-[14.2px]", 
+                    fontFamily: data.fontFamily || "font-sans" 
+                });
+                if (data.toolPreferences) setToolPreferences(data.toolPreferences);
             }
         });
 
-        const unsubUsers = onSnapshot(query(collection(db, "users"), orderBy("email", "asc")), (snapshot) => setDbUsers(snapshot.docs.map(document => document.data())));
-        
-        const unsubGroups = onSnapshot(collection(db, "groups"), (snapshot) => {
-            setGroups(snapshot.docs.map(document => ({ id: document.id, ...document.data() })));
+        // All Users Directory
+        const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+            setDbUsers(snapshot.docs.map(d => ({ uid: d.id, ...d.data() })));
         });
 
-        return () => { clearInterval(heartbeatInterval); unsubCurrent(); unsubUsers(); unsubGroups(); };
-    }, [user, currentUserData?.isAdmin, isVipAdmin, profileForm.name, setProfileForm]);
+        // Departments / Groups
+        const unsubGroups = onSnapshot(collection(db, "groups"), (snapshot) => {
+            setGroups(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
 
-    return {
-        isVipAdmin, currentUserData, dbUsers, groups,
-        activeReminders, genericNotifications, allAdminReminders,
-        immutableAuditLogs, toolPreferences, setToolPreferences, customTags,
-        globalAnnouncement 
+        // Personal Notifications
+        const unsubNotifs = onSnapshot(collection(db, "notifications"), (snapshot) => {
+            const notifs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            setGenericNotifications(notifs.filter(n => n.userId === user.uid && !n.isRead));
+        });
+
+        // Reminders
+        const unsubReminders = onSnapshot(collection(db, "reminders"), (snapshot) => {
+            const rems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            setActiveReminders(rems.filter(r => r.userId === user.uid));
+            setAllAdminReminders(rems);
+        });
+
+        // Immutable Audit Logs
+        const unsubLogs = onSnapshot(collection(db, "audit_logs"), (snapshot) => {
+            setImmutableAuditLogs(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
+        });
+
+        // Global Announcement Broadcasts
+        const unsubBroadcasts = onSnapshot(collection(db, "broadcasts"), (snapshot) => {
+            const activeBroadcast = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).find(b => b.isActive);
+            setGlobalAnnouncement(activeBroadcast || null);
+        });
+
+        // 🆕 NEW: Workspace Custom Tags Listener
+        const unsubTags = onSnapshot(collection(db, "workspace_tags"), (snapshot) => {
+            setCustomTags(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        return () => {
+            unsubUser(); unsubUsers(); unsubGroups(); unsubNotifs(); 
+            unsubReminders(); unsubLogs(); unsubBroadcasts(); unsubTags();
+        };
+    }, [user, setProfileForm]);
+
+    return { 
+        isVipAdmin, currentUserData, dbUsers, groups, 
+        activeReminders, genericNotifications, allAdminReminders, 
+        immutableAuditLogs, toolPreferences, setToolPreferences,
+        globalAnnouncement, customTags 
     };
 }
