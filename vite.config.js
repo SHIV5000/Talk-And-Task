@@ -3,33 +3,25 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  plugins: [
+  plugins:[
     react(),
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
+        // This glob pattern is more reliable for Vercel builds
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         cleanupOutdatedCaches: true,
-        skipWaiting: true,
-        clientsClaim: true,
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.googleapis\.com\/.*/,
-            handler: 'NetworkOnly',
-          },
-        ],
       },
       manifest: {
         name: 'Talk & Task Enterprise',
         short_name: 'Talk&Task',
         description: 'Corporate Coordination Portal',
-        theme_color: '#4F46E5',
-        background_color: '#f0f2f5',
+        theme_color: '#1e293b',
+        background_color: '#f8fafc',
         display: 'standalone',
-        orientation: 'portrait',
-        icons: [
+        icons:[
           { src: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icon-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: '/icon-512x512.png', sizes: '512x512', type: 'image/png' }
         ]
       }
     })
