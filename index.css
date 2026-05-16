@@ -7,13 +7,12 @@
 :root {
     --safe-area-inset-top: env(safe-area-inset-top, 0px);
     --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
-    --color-ink: #1e293b;
 }
 
 body {
     font-family: 'Inter', system-ui, sans-serif !important;
     background-color: #f8fafc;
-    color: #0f172a;
+    color: #1e293b;
     overscroll-behavior: none;
 }
 
@@ -23,26 +22,3 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(30,41,59,0.4); }
 
 .wa-bg { background-color: #f8fafc; }
-
-/* Theme Icons & Colors */
-button .fa-plus, button .fa-sliders, button .fa-bell, 
-button .fa-clipboard-list, button .fa-chart-pie, 
-button .fa-paper-plane, button .fa-clock, 
-button .fa-face-smile, button .fa-gear, button .fa-power-off {
-    color: var(--color-ink);
-}
-
-.text-primary { color: var(--color-ink); }
-.hover\:bg-primary\/10:hover { background-color: rgba(30,41,59,0.1); }
-.custom-checkbox input:checked + div { background-color: var(--color-ink); border-color: var(--color-ink); }
-
-/* Animations */
-@keyframes liquidWave { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-.typing-gradient-text {
-    background: linear-gradient(270deg, #1e293b, #334155, #475569);
-    background-size: 300% 300%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: liquidWave 3s ease infinite;
-    font-weight: bold;
-}
