@@ -1,26 +1,18 @@
-/** @type {import('tailwindcss').Config} */
+// tailwind.config.js
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content:["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        primary: {
-          DEFAULT: '#4F46E5',
-          hover: '#4338CA',
-          light: '#E0E7FF',
+        ink: '#1e293b',       // For buttons/active states
+        offwhite: '#f8fafc',  // For main background
+        surface: '#ffffff',   // For cards/modals
+        text: {
+          main: '#0f172a',
+          muted: '#64748b',
         },
-        success: '#0D9488',
-        warning: '#D97706',
-        danger: '#DC2626',
-        surface: '#F8F7F4',
-        card: '#FFFFFF',
-        'text-primary': '#1E1B4B',
-        'text-secondary': '#6B7280',
+        border: '#e2e8f0',
       },
     },
   },
-  plugins: [],
-}
+  plugins:
