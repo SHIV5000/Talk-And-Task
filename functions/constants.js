@@ -1,0 +1,13 @@
+module.exports = {
+  TASKS_COLLECTION: 'tasks',
+  ASSIGNMENTS_SUBCOLLECTION: 'assignments',
+  ESCALATION_LOGS_COLLECTION: 'escalationLogs',
+  USERS_COLLECTION: 'users',
+  STAGES: {
+    MISSED_ACK: 1,
+    OVERDUE: 2,
+    CRITICAL: 3
+  },
+  CRITICAL_HOURS_THRESHOLD: 24,
+  COOLDOWN_HOURS: 24
+};
