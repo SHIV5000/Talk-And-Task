@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-
+import NotificationToast from './NotificationToast';
 // UI Components
 import RightSidebar from './Sidebar/RightSidebar.jsx';
 import AdminPanel from './Admin/AdminPanel.jsx';
@@ -1224,10 +1224,13 @@ export default function ChatApp({ user, onLogout }) {
                             navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
                           />
                         ) : null}
-                        <ModalManager {...modalProps} />
-                        <Toast toasts={toasts} removeToast={removeToast} />
-                    </div>
-                )}
+                         <ModalManager {...modalProps} />
+        <Toast toasts={toasts} removeToast={removeToast} />
+        <NotificationToast currentUser={user} />   {/* ✅ add this line */}
+      </div>
+    </div>
+  );
+}
             </div>
         </div>
     );
