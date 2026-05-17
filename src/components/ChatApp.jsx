@@ -907,6 +907,10 @@ const convertToTask = async () => {
         trailFileInputRef, handleTrailFileUpload, handleAddComment,
         messages, groups, trailComment, setTrailComment, activeReminders, 
         readOnly: viewMode === "admin",
+        requireAck, setRequireAck,
+        ackTimeOption, setAckTimeOption,
+        
+        
     };
 
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
