@@ -955,6 +955,7 @@ export default function ChatApp({ user, onLogout }) {
                   groupPicUploadProgress={groupPicUploadProgress}
                   globalAnnouncement={globalAnnouncement}
                   currentUserData={currentUserData}
+                   authUser={user}   // add this
                 />
                 ) : (
                     <div className="flex h-full w-full relative">
