@@ -1224,14 +1224,10 @@ export default function ChatApp({ user, onLogout }) {
                             navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
                           />
                         ) : null}
-                         <ModalManager {...modalProps} />
+                                 <ModalManager {...modalProps} />
         <Toast toasts={toasts} removeToast={removeToast} />
-        <NotificationToast currentUser={user} />   {/* ✅ add this line */}
+        <NotificationToast currentUser={user} />
       </div>
     </div>
   );
-}
-            </div>
-        </div>
-    );
 }
