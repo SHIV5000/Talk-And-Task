@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import { formatToDDMMMYY } from '../../utils/helpers.js';
 
 export default function ChatView({
   messagesToRender, messages, activeGroup, user, currentUserData, isVipAdmin,
@@ -30,97 +31,95 @@ export default function ChatView({
           clearInterval(scrollPoller);
           setTimeout(() => {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            el.classList.add('ring-4', 'ring-indigo-400', 'bg-indigo-50', 'transition-all', 'duration-500');
-            setTimeout(() => {
-                el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50');
-            }, 4000);
-            
-            setPendingScrollTarget(null);
-          }, 150); 
+            el.classList.add('highlight-flash');
+            setTimeout(() => el.classList.remove('highlight-flash'), 3000);
+          }, 100);
+          setPendingScrollTarget(null);
         } else {
           attempts++;
-          if (attempts > 30) { 
+          if (attempts > 20) {
             clearInterval(scrollPoller);
             setPendingScrollTarget(null);
           }
         }
-      }, 500);
-
-      return () => clearInterval(scrollPoller);
+      }, 100);
     }
-  }, [pendingScrollTarget, setPendingScrollTarget]);
+  }, [pendingScrollTarget, messagesToRender, setPendingScrollTarget]);
 
   return (
-    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] bg-slate-50 relative">
-      <div className="flex flex-col min-h-full justify-end py-4 pb-10">
-        
-        {toolPreferences?.showWatermark !== false && (
-          <div className="doodle-watermark">
-            {Array.from({ length: 15 }).map((_, rowIdx) => (
-              <div key={rowIdx} className="doodle-row">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <span key={i} className="doodle-item" style={{ fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif', fontSize: '20pt', transform: 'rotate(-20deg)', opacity: 0.7 }}>
-                    {currentUserData?.name || user.email.split('@')[0]}
-                  </span>
-                ))}
+    <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll wa-bg relative" onScroll={handleChatScroll} ref={chatContainerRef}>
+      
+      {pinnedMessages && pinnedMessages.length > 0 && (
+        <div className="sticky top-0 z-30 mb-4 flex flex-col gap-2">
+          {pinnedMessages.map(pm => (
+            <div key={`pin-${pm.id}`} onClick={() => scrollToMessageDirect(pm.id)} className="bg-white/95 backdrop-blur-md border border-indigo-200 p-3 rounded-xl shadow-md cursor-pointer hover:bg-indigo-50 transition-colors flex items-center gap-3 animate-in slide-in-from-top-2">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0"><i className="fa-solid fa-thumbtack"></i></div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest mb-0.5">Pinned Message</div>
+                <div className="text-[13px] text-slate-700 truncate font-medium">{pm.text || pm.fileName}</div>
               </div>
-            ))}
-          </div>
-        )}
+              <button onClick={(e) => { e.stopPropagation(); handleTogglePin(pm.id, true); }} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 text-slate-400 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+            </div>
+          ))}
+        </div>
+      )}
 
-        <div className="text-center mb-6 mt-4 relative z-[1]">
-          <span className="text-[12.5px] text-slate-500 bg-slate-200/50 px-4 py-1.5 rounded-lg shadow-sm font-medium border border-slate-200">
-            <i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.
+      <div className="max-w-4xl mx-auto flex flex-col">
+        <div className="text-center my-6">
+          <span className="bg-[#ffeecd] text-[#54656f] text-[12px] px-4 py-1.5 rounded-lg shadow-sm font-medium inline-flex items-center gap-2">
+            <i className="fa-solid fa-lock text-[10px]"></i> Messages and tasks are end-to-end encrypted. No one outside of this workspace can read or listen to them.
           </span>
         </div>
 
-        {pinnedMessages.length > 0 && (
-          <div className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
-            <div className="flex justify-between items-center text-xs text-slate-500 font-medium mb-1">
-              <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
-            </div>
-            <div className="text-sm text-slate-800 line-clamp-1 truncate font-medium">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
-          </div>
-        )}
+        <div className="flex flex-col flex-1">
+          {messagesToRender.map((msg, index) => {
+            const currentMsgDate = msg.timestamp?.toDate ? new Date(msg.timestamp.toDate()) : new Date(msg.dateString || Date.now());
+            const prevMsg = index > 0 ? messagesToRender[index - 1] : null;
+            const prevMsgDate = prevMsg ? (prevMsg.timestamp?.toDate ? new Date(prevMsg.timestamp.toDate()) : new Date(prevMsg.dateString || Date.now())) : null;
+            const showDivider = !prevMsg || currentMsgDate.toDateString() !== prevMsgDate.toDateString();
 
-        <div className="relative z-[1] flex flex-col justify-end">
-          {messagesToRender.map(msg => {
-            const threadReplyCount = messages.filter(m => m.replyToId === msg.id).length;
             return (
-                <MessageBubble
-                key={msg.id}
-                msg={msg}
-                userEmail={user.email}
-                currentUserData={currentUserData}
-                activeGroup={activeGroup}
-                isVipAdmin={isVipAdmin}
-                hasReplies={threadReplyCount > 0}
-                replyCount={threadReplyCount}
-                isHighlighted={highlightedMsgId === msg.id}
-                isUnreadHighlight={unreadHighlightIds?.includes(msg.id)}
-                editingMessageId={editingMessageId}
-                editMessageText={editMessageText}
-                setEditingMessageId={setEditingMessageId}
-                setEditMessageText={setEditMessageText}
-                handleSaveEdit={handleSaveEdit}
-                scrollToMessageDirect={scrollToMessageDirect}
-                handleReaction={handleReaction}
-                handleToggleBookmark={handleToggleBookmark}
-                handleTogglePin={handleTogglePin}
-                handleDeleteMessage={handleDeleteMessage}
-                chatInputRef={chatInputRef}
-                toolPreferences={toolPreferences}
-                setReplyingTo={setReplyingTo}
-                setSelectedMessage={setSelectedMessage}
-                setIsEditingTaskTitle={setIsEditingTaskTitle}
-                setActiveModal={setActiveModal}
-                dbUsers={dbUsers}
-                jumpToPrivateSource={jumpToPrivateSource} 
-                handleAddInlineComment={handleAddInlineComment} 
-                customTags={customTags || []} 
-                setActiveThread={setActiveThread}
-                />
+                <React.Fragment key={msg.id}>
+                    {showDivider && (
+                        <div className="flex items-center justify-center my-5 opacity-90 z-10 relative">
+                            <div className="bg-slate-200/60 px-4 py-1.5 rounded-full shadow-sm border border-slate-200">
+                                <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest">{formatToDDMMMYY(currentMsgDate)}</span>
+                            </div>
+                        </div>
+                    )}
+                    <MessageBubble 
+                      msg={msg}
+                      userEmail={user.email}
+                      currentUserData={currentUserData}
+                      activeGroup={activeGroup}
+                      isVipAdmin={isVipAdmin}
+                      hasReplies={messages.some(m => m.replyToId === msg.id)}
+                      replyCount={messages.filter(m => m.replyToId === msg.id).length}
+                      isHighlighted={highlightedMsgId === msg.id}
+                      isUnreadHighlight={unreadHighlightIds.includes(msg.id)}
+                      editingMessageId={editingMessageId}
+                      editMessageText={editMessageText}
+                      setEditingMessageId={setEditingMessageId}
+                      setEditMessageText={setEditMessageText}
+                      handleSaveEdit={handleSaveEdit}
+                      scrollToMessageDirect={scrollToMessageDirect}
+                      handleReaction={handleReaction}
+                      handleToggleBookmark={handleToggleBookmark}
+                      handleTogglePin={handleTogglePin}
+                      handleDeleteMessage={handleDeleteMessage}
+                      chatInputRef={chatInputRef}
+                      toolPreferences={toolPreferences}
+                      setReplyingTo={setReplyingTo}
+                      setSelectedMessage={setSelectedMessage}
+                      setIsEditingTaskTitle={setIsEditingTaskTitle}
+                      setActiveModal={setActiveModal}
+                      dbUsers={dbUsers}
+                      jumpToPrivateSource={jumpToPrivateSource} 
+                      handleAddInlineComment={handleAddInlineComment} 
+                      customTags={customTags || []} 
+                      setActiveThread={setActiveThread}
+                    />
+                </React.Fragment>
             );
           })}
         </div>
