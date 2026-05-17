@@ -1210,24 +1210,45 @@ export default function ChatApp({ user, onLogout }) {
                             </div>
                         )}
 
-                        {activeThread ? (
-                            <ThreadSidebar 
-                                activeThread={activeThread} setActiveThread={setActiveThread} messages={messages} user={user} 
-                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} handleReactionIntercept={handleReactionIntercept} 
-                                deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} customTags={customTags} 
-                                toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
-                            />
-                        ) : showRightSidebar ? (
-                          <RightSidebar
-                            showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
-                            tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                            navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
-                          />
-                        ) : null}
-                                 <ModalManager {...modalProps} />
-        <Toast toasts={toasts} removeToast={removeToast} />
-        <NotificationToast currentUser={user} />
-      </div>
-    </div>
-  );
+                          
+
+                            {activeThread ? (
+                                <ThreadSidebar 
+                                    activeThread={activeThread} setActiveThread={setActiveThread} messages={messages} user={user} 
+                                    currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} handleReactionIntercept={handleReactionIntercept} 
+                                    deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} customTags={customTags} 
+                                    toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
+                                />
+                            ) : showRightSidebar ? (
+                                <RightSidebar
+                                    showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
+                                    tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
+                                    navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
+                                />
+                            ) : null}
+                            <ModalManager {...modalProps} />
+                            <Toast toasts={toasts} removeToast={removeToast} />
+                            <NotificationToast currentUser={user} />
+                        )}   {/* ✅ now close the fragment and conditional */}
+                    </div>   {/* closes the outer flex-1 min-w-0 div */}
+                )}           {/* closes the activeGroup ternary */}
+            </div>           {/* closes the flex-1 flex overflow-hidden div */}
+        </div>               {/* closes the main flex h-screen container */}
+    );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
