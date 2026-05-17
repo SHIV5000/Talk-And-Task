@@ -26,7 +26,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 // Thread Sidebar (unchanged)
-const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
+    const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeThread.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
     const threadInputRef = useRef(null);
@@ -91,6 +91,10 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
 
 export default function ChatApp({ user, onLogout }) {
     const [activeModal, setActiveModal] = useState(null);
+    
+    const [requireAck, setRequireAck] = useState(false);
+    const [ackTimeOption, setAckTimeOption] = useState('any');
+    
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [viewMode, setViewMode] = useState("chat");
     const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -580,33 +584,93 @@ export default function ChatApp({ user, onLogout }) {
         }
     };
 
-    const convertToTask = async () => {
-        if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
-        try {
-            const now = new Date();
-            await setDoc(doc(db, "messages", selectedMessage.id), {
-                isTask: true,
-                taskData: {
-                    deadline: taskDeadline, assignees: taskAssignees, priority: taskPriority, status: "Pending", isArchived: false, dismissedBy: [],
-                    trail: [{ action: "Task Created", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ') }]
-                }
-            }, { merge: true });
+const convertToTask = async () => {
+    if (!selectedMessage || !taskDeadline || taskAssignees.length === 0)
+        return alert("Please select Assignees, Priority, and Deadline.");
+    try {
+        const now = new Date();
+        let ackDeadline = null;
 
-            taskAssignees.forEach(email => {
-                if (email !== user.email) {
-                    const assigneeUser = dbUsers.find(u => u.email === email);
-                    if (assigneeUser) {
-                        addDoc(collection(db, "notifications"), { userId: assigneeUser.uid, type: "task", text: `"${stripHtml(selectedMessage.text).substring(0,30)}..." - Assigned to You 🕒`, messageId: selectedMessage.id, groupId: selectedMessage.groupId, timestamp: serverTimestamp(), isRead: false }).catch(() => {});
+        if (requireAck) {
+            switch (ackTimeOption) {
+                case '30min': ackDeadline = new Date(now.getTime() + 30 * 60 * 1000); break;
+                case '1hr':   ackDeadline = new Date(now.getTime() + 60 * 60 * 1000); break;
+                case '2hr':   ackDeadline = new Date(now.getTime() + 2 * 60 * 60 * 1000); break;
+                case '3hr':   ackDeadline = new Date(now.getTime() + 3 * 60 * 60 * 1000); break;
+                case 'eod':   ackDeadline = getNextWorkingDay9AM(now); break;
+                default:      ackDeadline = null;
+            }
+        }
+
+        // Update the message document to be a task
+        await setDoc(doc(db, "messages", selectedMessage.id), {
+            isTask: true,
+            ackDeadline: ackDeadline ? Timestamp.fromDate(ackDeadline) : null,
+            deadlineTime: Timestamp.fromDate(new Date(taskDeadline)),
+            taskData: {
+                deadline: taskDeadline,
+                assignees: taskAssignees,
+                priority: taskPriority,
+                status: "Pending",
+                isArchived: false,
+                dismissedBy: [],
+                requireAck: requireAck,
+                acknowledgedBy: [],
+                trail: [{
+                    action: "Task Created",
+                    by: user.email,
+                    time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + now.toLocaleDateString(),
+                    to: taskAssignees.map(a => (a || "").split('@')[0]).join(', ')
+                }]
+            }
+        }, { merge: true });
+
+        // Create per‑assignee documents for tracking
+        const taskRef = doc(db, "messages", selectedMessage.id);
+        for (const email of taskAssignees) {
+            const assigneeUser = dbUsers.find(u => u.email === email);
+            if (assigneeUser) {
+                await setDoc(
+                    doc(collection(taskRef, "assignments"), assigneeUser.uid),
+                    {
+                        assigneeId: assigneeUser.uid,
+                        managerId: assigneeUser.managerId || null, // set later if known
+                        isAcknowledged: false,
+                        acknowledgedAt: null,
+                        completed: false,
+                        completedAt: null,
+                        escalationLevel: 0,
+                        lastEscalatedAt: null,
+                        resolvedAt: null,
+                        resolvedBy: null
                     }
-                }
-            });
+                );
 
-            logImmutableAction("TASK_CREATE", `Converted to Task: "${stripHtml(selectedMessage.text)}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
-            playMelody('taskCreated'); 
-            setActiveModal(null); setTaskAssignees([]);
-        } catch (error) { alert("Failed to create task."); }
-    };
+                // Notify assignee
+                await addDoc(collection(db, "notifications"), {
+                    userId: assigneeUser.uid,
+                    type: "task",
+                    text: `"${stripHtml(selectedMessage.text).substring(0, 30)}..." - Assigned to You 🕒`,
+                    messageId: selectedMessage.id,
+                    groupId: selectedMessage.groupId,
+                    timestamp: serverTimestamp(),
+                    isRead: false
+                }).catch(() => {});
+            }
+        }
 
+        logImmutableAction("TASK_CREATE", `Converted to Task: "${stripHtml(selectedMessage.text)}"`, 
+            `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
+        playMelody('taskCreated');
+        setActiveModal(null);
+        setTaskAssignees([]);
+        setRequireAck(false);
+        setAckTimeOption('any');
+    } catch (error) {
+        alert("Failed to create task.");
+    }
+};
+    
     const handleSaveTaskTitle = async () => {
         if (!newTaskTitle.trim() || !selectedMessage) return;
         try {
