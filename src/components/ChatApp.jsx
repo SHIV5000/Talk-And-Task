@@ -22,6 +22,7 @@ import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
+// Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 // Thread Sidebar (unchanged)
@@ -89,10 +90,6 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
 };
 
 export default function ChatApp({ user, onLogout }) {
-    // ... all your state and hooks (unchanged from your provided code) ...
-    // I will only show the corrected return statement to keep the answer focused.
-    // You already have the full state/hooks above – they remain identical.
-
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [viewMode, setViewMode] = useState("chat");
@@ -102,11 +99,14 @@ export default function ChatApp({ user, onLogout }) {
     const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
     const MAX_FILE_SIZE_MB = 10;
     const [inputText, setInputText] = useState("");
+    
     const [searchQuery, setSearchQuery] = useState(""); 
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchWrapperRef = useRef(null);
+
     const [activeThread, setActiveThread] = useState(null);
     const [dismissedBroadcastId, setDismissedBroadcastId] = useState(null);
+
     const [sidebarSearch, setSidebarSearch] = useState("");
     const [chatFilter, setChatFilter] = useState("all");
     const [selectedMessage, setSelectedMessage] = useState(null);
@@ -114,6 +114,7 @@ export default function ChatApp({ user, onLogout }) {
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editMessageText, setEditMessageText] = useState("");
     const [activeGroup, setActiveGroup] = useState(null);
+    
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
     const [taskPriority, setTaskPriority] = useState("Medium");
@@ -123,6 +124,7 @@ export default function ChatApp({ user, onLogout }) {
     const [reminderDateTime, setReminderDateTime] = useState("");
     const [isEditingTaskTitle, setIsEditingTaskTitle] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState("");
+    
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
     const [pendingFiles, setPendingFiles] = useState([]);
@@ -130,6 +132,7 @@ export default function ChatApp({ user, onLogout }) {
     const [trailFileUploading, setTrailFileUploading] = useState(false);
     const [profileUploadProgress, setProfileUploadProgress] = useState(0);
     const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
+    
     const [adminForm, setAdminForm] = useState({ uid: '', name: '', email: '', isAdmin: false, canCreateGroups: false });
     const [profileForm, setProfileForm] = useState({ name: "", fontSize: "text-[14.2px]", fontFamily: "font-sans" });
     const [groupForm, setGroupForm] = useState({ name: "", members: [], admins: [], profilePicUrl: null });
@@ -138,6 +141,7 @@ export default function ChatApp({ user, onLogout }) {
     const [adminFilterDate, setAdminFilterDate] = useState("");
     const [adminFilterType, setAdminFilterType] = useState("");
     const [adminFilterGroup, setAdminFilterGroup] = useState("");
+
     const [toasts, setToasts] = useState([]);
     const addToast = useCallback((message, type = 'message') => {
         const id = Date.now() + Math.random();
@@ -145,6 +149,7 @@ export default function ChatApp({ user, onLogout }) {
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
     }, []);
     const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+    
     const messagesEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const chatInputRef = useRef(null);
@@ -157,6 +162,7 @@ export default function ChatApp({ user, onLogout }) {
     const highlightTimerRef = useRef(null);
     const lastMessageTrackerId = useRef(null);
     const lastNotifId = useRef(null);
+
     const [pendingScrollTarget, setPendingScrollTarget] = useState(null);
     const [currentTip, setCurrentTip] = useState("Type '@' to instantly mention peers.");
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -165,7 +171,7 @@ export default function ChatApp({ user, onLogout }) {
     const [unreadHighlightIds, setUnreadHighlightIds] = useState([]);
     const [scheduleDateTime, setScheduleDateTime] = useState("");
     const [pendingScheduledText, setPendingScheduledText] = useState("");
-    const [activeReminderAlert, setActiveReminderAlert] = useState(null);
+    const [activeReminderAlert, setActiveReminderAlert] = useState(null); 
 
     const { 
         isVipAdmin, currentUserData, dbUsers, groups, customTags,
@@ -183,10 +189,661 @@ export default function ChatApp({ user, onLogout }) {
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
     });
 
-    // ... (all useEffect, handlers, etc. – I'll omit them here for brevity, but they remain exactly as in your provided code) ...
-    // Please keep all the existing functions and hooks from your original file.
+    useEffect(() => {
+        if (toolPreferences?.darkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [toolPreferences?.darkMode]);
 
-    // I will now present the return statement with the corrected ending.
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target)) {
+                setIsSearchFocused(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const playMelody = useCallback((type) => {
+        try {
+            const incomingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FINCOMING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=413e00ca-6dc0-41e1-85d9-3d02e53ca526';
+            const outgoingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FOUTGOING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=4f357d75-c496-4f53-8f6a-fd0e6e81b41d';
+            const bannerSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FBANNER.mp3?alt=media&token=b3463c11-1f70-4450-8efc-049e04f33a0a';
+            
+            let soundUrl = outgoingSound; 
+            switch (type) {
+                case 'messageReceived':
+                case 'taskCreated':
+                case 'taskUpdated':
+                case 'taskFileUpload':
+                    soundUrl = incomingSound; break;
+                case 'broadcast':
+                    soundUrl = bannerSound; break;
+                default: soundUrl = outgoingSound; break;
+            }
+            const audio = new Audio(soundUrl);
+            audio.volume = 1.0;
+            const playPromise = audio.play();
+            if (playPromise !== undefined) playPromise.catch(err => console.warn("Audio blocked:", err));
+        } catch(e) {}
+    }, []);
+
+    // 👇 NEW: Trigger sound when a new generic notification lands (e.g. Reply, Task Edit)
+    useEffect(() => {
+        if (genericNotifications.length > 0 && genericNotifications[0].id !== lastNotifId.current) {
+            if (lastNotifId.current !== null) playMelody('messageReceived');
+            lastNotifId.current = genericNotifications[0].id;
+        }
+    }, [genericNotifications, playMelody]);
+
+    // 👇 NEW: Trigger Banner Sound when Global Announcement Drops
+    useEffect(() => {
+        if (globalAnnouncement?.isActive && globalAnnouncement.id !== dismissedBroadcastId) {
+            playMelody('broadcast');
+        }
+    }, [globalAnnouncement?.isActive, globalAnnouncement?.id, dismissedBroadcastId, playMelody]);
+
+    const handleAckBroadcast = async () => {
+        if (!globalAnnouncement) return;
+        setDismissedBroadcastId(globalAnnouncement.id);
+        try {
+            await addDoc(collection(db, "broadcast_acks"), {
+                broadcastId: globalAnnouncement.id,
+                userEmail: user.email,
+                userName: currentUserData?.name || user.email.split('@')[0],
+                timestamp: serverTimestamp()
+            });
+        } catch(e){}
+    };
+
+    useEffect(() => {
+        if (messages.length > 0) {
+            const latestMsg = messages[messages.length - 1];
+            if (lastMessageTrackerId.current !== null && latestMsg.id !== lastMessageTrackerId.current) {
+                if (latestMsg.senderUid !== user.uid && !latestMsg.isTask) playMelody('messageReceived');
+            }
+            lastMessageTrackerId.current = latestMsg.id;
+        }
+    }, [messages, user.uid, playMelody]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setIsWorkspaceLoading(false), 4000);
+        return () => clearTimeout(timer);
+    }, []);
+
+    useEffect(() => {
+        if (isWorkspaceLoading || !groups.length || activeGroup) return;
+        const savedGroupId = currentUserData?.lastActiveGroupId;
+        if (savedGroupId) {
+            const g = groups.find(gr => gr.id === savedGroupId && gr.members?.includes(user.email));
+            if (g) setActiveGroup(g);
+        }
+    }, [isWorkspaceLoading, groups, currentUserData?.lastActiveGroupId, user.email, activeGroup]);
+
+    useEffect(() => {
+        if (!activeGroup?.id || !user.uid) return;
+        updateDoc(doc(db, "users", user.uid), { lastActiveGroupId: activeGroup.id }).catch(() => {});
+        setTimeout(() => {
+            if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                setIsAtBottom(true);
+            }
+        }, 300);
+    }, [activeGroup?.id, user.uid]);
+
+    useEffect(() => {
+        if (!activeGroup?.id || !user.email) return;
+        const unread = messages.filter(m => m.groupId === activeGroup.id && !m.isMine && !(m.seenBy || []).includes(user.email)).map(m => m.id);
+        if (unread.length > 0) {
+            setUnreadHighlightIds(unread);
+            const timer = setTimeout(() => setUnreadHighlightIds([]), 4000);
+            return () => clearTimeout(timer);
+        }
+        setUnreadHighlightIds([]);
+    }, [activeGroup?.id, user.email, messages]);
+
+    useEffect(() => {
+        const checkerInterval = setInterval(async () => {
+            const now = new Date();
+            const dueTasks = messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && !m.taskData?.deadlineAlerted && m.taskData?.deadline && new Date(m.taskData.deadline) <= now);
+            dueTasks.forEach(async (task) => {
+                await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
+                const involved = new Set();
+                if (task.senderEmail) involved.add(task.senderEmail);
+                (task.taskData.assignees || []).forEach(a => involved.add(a));
+                involved.forEach(email => {
+                    const u = dbUsers.find(u => u.email === email);
+                    if (u) addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `⏰ DUE NOW: "${task.text}"`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                });
+            });
+
+            const dueReminders = (activeReminders || []).filter(r => !r.isTriggered && r.remindAt && new Date(r.remindAt) <= now);
+            for (const rem of dueReminders) {
+                try {
+                    await updateDoc(doc(db, "reminders", rem.id), { isTriggered: true });
+                    await addDoc(collection(db, "notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
+                    playMelody('taskCreated'); 
+                    setActiveReminderAlert(rem); 
+                } catch(e) {}
+            }
+
+            try {
+                const q = query(collection(db, "scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
+                const snap = await getDocs(q);
+                for (const document of snap.docs) {
+                    const data = document.data();
+                    if (new Date(data.scheduledFor) <= now) {
+                        const payload = {
+                            text: data.text,
+                            groupId: data.groupId,
+                            sender: currentUserData?.name || user.email.split('@')[0],
+                            senderEmail: user.email,
+                            senderUid: user.uid,
+                            timestamp: serverTimestamp(),
+                            dateString: new Date().toISOString().split('T')[0],
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            isTask: data.isTask || false,
+                            taskData: data.taskData || null,
+                            seenBy: [user.email]
+                        };
+                        await addDoc(collection(db, "messages"), payload);
+                        await updateDoc(doc(db, "scheduled_messages", document.id), { status: "sent" });
+                        playMelody('messageSent'); 
+                    }
+                }
+            } catch(e) { console.error(e); }
+
+        }, 15000); 
+        return () => clearInterval(checkerInterval);
+    }, [messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
+
+    const myGroups = useMemo(() => {
+        let filtered = groups.filter(g => g.members?.includes(user.email) && !g.isArchived);
+        if (sidebarSearch) filtered = filtered.filter(g => g.name.toLowerCase().includes(sidebarSearch.toLowerCase()));
+        return filtered;
+    }, [groups, user.email, sidebarSearch]);
+
+    const dmUsers = useMemo(() => {
+        return dbUsers.filter(u => u.uid !== user.uid && (!sidebarSearch || u.name.toLowerCase().includes(sidebarSearch.toLowerCase())));
+    }, [dbUsers, user.uid, sidebarSearch]);
+
+    const activeActionableTasks = useMemo(() => {
+        return messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid));
+    }, [messages, user.email, user.uid]);
+    
+    const totalNotifications = genericNotifications.length + activeActionableTasks.length;
+
+    const pinnedMessages = useMemo(() => activeGroup ? messages.filter(m => m.groupId === activeGroup.id && m.isPinned) : [], [messages, activeGroup]);
+
+    const globalSearchResults = useMemo(() => {
+        if (!searchQuery.trim()) return null;
+        const q = searchQuery.toLowerCase();
+        
+        const matchedUsers = dbUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q));
+        const matchedTags = (customTags || []).filter(t => (t.label||'').toLowerCase().includes(q) || (t.shortCode||'').toLowerCase().includes(q));
+        
+        const matchedMessages = messages.filter(m => {
+            if (m.isPrivateMention && !m.allowedUsers?.includes(user.email) && m.senderEmail !== user.email) return false;
+            
+            const strippedText = stripHtml(m.text).toLowerCase();
+            const textMatch = strippedText.includes(q);
+            const fileMatch = (m.fileName || '').toLowerCase().includes(q);
+            const trailMatch = m.isTask && (m.taskData?.trail || []).some(t => (t.comment || '').toLowerCase().includes(q));
+            
+            return textMatch || fileMatch || trailMatch;
+        }).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).slice(0, 50);
+
+        return { users: matchedUsers, tags: matchedTags, messages: matchedMessages };
+    }, [searchQuery, dbUsers, customTags, messages, user.email]);
+
+    const messagesToRender = useMemo(() => {
+        if(!activeGroup) return [];
+        let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
+
+        if (chatFilter === 'tasks-pending') filtered = filtered.filter(m => m.isTask && m.taskData?.status !== "Completed");
+        else if (chatFilter === 'tasks-completed') filtered = filtered.filter(m => m.isTask && m.taskData?.status === "Completed");
+        else if (chatFilter === 'messages') filtered = filtered.filter(m => !m.isTask);
+        else if (chatFilter === 'today') filtered = filtered.filter(m => m.dateString === new Date().toISOString().split('T')[0]);
+        else if (chatFilter === 'bookmarked') filtered = filtered.filter(m => m.bookmarkedBy?.includes(user.email));
+
+        if (!searchQuery.trim() && (chatFilter === 'all' || chatFilter === 'messages')) {
+            return filtered.filter(m => !m.replyToId).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
+        }
+
+        return filtered;
+    }, [messages, activeGroup, user.email, chatFilter, searchQuery]);
+
+    const tasksAssignedToMe = useMemo(() => messages.filter(m => m.isTask && m.taskData?.assignees?.includes(user.email)).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
+    const tasksAssignedByMe = useMemo(() => messages.filter(m => m.isTask && m.senderEmail === user.email).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
+
+    const triggerHighlight = useCallback((msgId) => {
+        setHighlightedMsgId(msgId);
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 4000);
+    }, []);
+
+    const scrollToMessageDirect = useCallback((msgId) => {
+        const el = document.getElementById(`msg-${msgId}`);
+        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); triggerHighlight(msgId); }
+    }, [triggerHighlight]);
+
+    // 👇 UPDATED: Universal Router now handles slack-threads auto-opening 👇
+    const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId, replyToId = null) => {
+        setChatFilter('all');
+        setSearchQuery('');
+        let targetGroup = groups.find(g => g.id === targetGroupId);
+        if (!targetGroup && targetGroupId) {
+            const otherUid = targetGroupId.split('_').find(id => id !== user.uid);
+            if (otherUid) {
+                const otherUser = dbUsers.find(u => u.uid === otherUid);
+                if (otherUser) {
+                    targetGroup = { id: targetGroupId, isDM: true, name: otherUser.name, members: [user.email, otherUser.email], profilePicUrl: otherUser.profilePicUrl };
+                }
+            }
+        }
+
+        if (targetGroup) {
+            setActiveGroup(targetGroup);
+            setShowRightSidebar(false);
+            setMobileSidebarOpen(false);
+            setShowNotifications(false);
+            setActiveModal(null);
+            
+            if (replyToId) {
+                const parentMsg = messages.find(m => m.id === replyToId);
+                if (parentMsg) setActiveThread(parentMsg);
+            }
+            
+            setTimeout(() => { setPendingScrollTarget(msgId); }, 50);
+        }
+    }, [groups, dbUsers, user.uid, user.email, messages]);
+
+    const handleSendOfflineAware = async () => {
+        if (!inputText.trim() || inputText === '<br>' || !activeGroup) return;
+        if (!isOnline) {
+            await saveOfflineDraft(inputText.trim(), activeGroup.id, activeGroup.name);
+            setInputText(""); alert("📥 You are offline. Message saved as draft and will be sent when you reconnect."); return;
+        }
+        await handleSendMessage();
+    };
+
+    const handleTypingEvent = useCallback(() => {
+        const now = Date.now();
+        if (now - lastTypingTime.current > 1500) {
+            lastTypingTime.current = now;
+            triggerTypingEvent(currentUserData?.name);
+        }
+    }, [triggerTypingEvent, currentUserData?.name]);
+
+    const handleSendMessage = async () => {
+        if (!inputText.trim() || !activeGroup) return;
+        const msgText = inputText.trim();
+        await sendMessageToDB(msgText, replyingTo);
+        playMelody('messageSent'); 
+        if(chatInputRef.current) chatInputRef.current.innerHTML = '';
+        setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
+        
+        const otherMembers = (activeGroup.members || []).filter(email => email !== user.email);
+        const uidsToNotify = dbUsers.filter(u => otherMembers.includes(u.email)).map(u => u.uid);
+        for (const uid of uidsToNotify) {
+            addDoc(collection(db, "notifications"), { 
+                userId: uid, type: "message", 
+                text: `New Message in ${activeGroup.name}: "${stripHtml(msgText).substring(0,40)}..."`, 
+                groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false 
+            }).catch(()=>{});
+        }
+
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            setIsAtBottom(true);
+        }
+    };
+
+    const handleSaveEdit = async (msg) => {
+        if (!editMessageText.trim()) return setEditingMessageId(null);
+        await editMessageDB(msg.id, msg.text, editMessageText);
+        setEditingMessageId(null);
+    };
+
+    const handleSendPendingFiles = async () => {
+        if (pendingFiles.length === 0) return;
+        const currentText = inputText.trim();
+        const filesToProcess = [...pendingFiles];
+        setPendingFiles([]); setShowFileRename(false); setIsUploading(true); setUploadProgress(0); setInputText(""); 
+        if(chatInputRef.current) chatInputRef.current.innerHTML = '';
+        for (let i = 0; i < filesToProcess.length; i++) {
+            let pf = filesToProcess[i];
+            let finalCaption = pf.caption || "";
+            if (i === 0 && currentText && currentText !== '<br>') finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText;
+            pf.caption = finalCaption; pf.text = finalCaption; 
+            
+            if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
+            
+            try { await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); }
+        }
+        playMelody('fileUpload');
+        setIsUploading(false); setUploadProgress(0);
+    };
+
+    const handleFileUpload = (e) => {
+        const files = Array.from(e.target.files).slice(0, 3);
+        if (files.length === 0) return;
+        e.target.value = '';
+        const currentInput = inputText.trim();
+        const newPending = files.map((file, index) => ({ id: Date.now() + Math.random(), file, customName: file.name, caption: index === 0 ? currentInput : '' }));
+        setPendingFiles(prev => [...prev, ...newPending].slice(0, 3));
+        setShowFileRename(true);
+        if (currentInput) { setInputText(''); if(chatInputRef.current) chatInputRef.current.innerHTML = ''; }
+    };
+
+    const handlePaste = (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let index in items) {
+            const item = items[index];
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                const blob = item.getAsFile();
+                if (blob) {
+                    const pastedName = `pasted_image_${Date.now()}.png`;
+                    const currentInput = inputText.trim();
+                    setPendingFiles(prev => [...prev, { id: Date.now() + Math.random(), file: blob, customName: pastedName, caption: currentInput }].slice(0, 3));
+                    setShowFileRename(true);
+                    if (currentInput) { setInputText(''); if(chatInputRef.current) chatInputRef.current.innerHTML = ''; }
+                }
+            }
+        }
+    };
+
+    const handleScheduleMessage = async (isTask = false, taskData = null) => {
+        const text = pendingScheduledText || inputText.trim();
+        if (!text || text === '<br>' || !scheduleDateTime || !activeGroup) return alert("Enter message text and a future date/time.");
+        if (new Date(scheduleDateTime) <= new Date()) return alert("Scheduled time must be in the future.");
+        try {
+            await scheduleMessageDB(text, scheduleDateTime, isTask, taskData);
+            setInputText(""); setPendingScheduledText(""); setScheduleDateTime(""); setActiveModal(null);
+            if(chatInputRef.current) chatInputRef.current.innerHTML = '';
+            addToast(`✅ Scheduled for ${new Date(scheduleDateTime).toLocaleString()}`, 'success');
+        } catch(e) { alert("Failed to schedule."); }
+    };
+
+    const notifyInvolvedInTask = async (taskMsg, actionText) => {
+        const involved = new Set();
+        if (taskMsg.senderEmail) involved.add(taskMsg.senderEmail);
+        (taskMsg.taskData?.assignees || []).forEach(a => involved.add(a));
+        (taskMsg.taskData?.trail || []).forEach(t => { if (t.by) involved.add(t.by); });
+        involved.delete(user.email);
+        const uidsToNotify = dbUsers.filter(u => involved.has(u.email)).map(u => u.uid);
+        for (const uid of uidsToNotify) {
+            try { await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `"${stripHtml(taskMsg.text).substring(0,30)}..." - ${(user.email || "").split('@')[0]} updated ✅`, messageId: taskMsg.id, groupId: taskMsg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
+        }
+    };
+
+    const convertToTask = async () => {
+        if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
+        try {
+            const now = new Date();
+            await setDoc(doc(db, "messages", selectedMessage.id), {
+                isTask: true,
+                taskData: {
+                    deadline: taskDeadline, assignees: taskAssignees, priority: taskPriority, status: "Pending", isArchived: false, dismissedBy: [],
+                    trail: [{ action: "Task Created", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: taskAssignees.map(a=>(a||"").split('@')[0]).join(', ') }]
+                }
+            }, { merge: true });
+
+            taskAssignees.forEach(email => {
+                if (email !== user.email) {
+                    const assigneeUser = dbUsers.find(u => u.email === email);
+                    if (assigneeUser) {
+                        addDoc(collection(db, "notifications"), { userId: assigneeUser.uid, type: "task", text: `"${stripHtml(selectedMessage.text).substring(0,30)}..." - Assigned to You 🕒`, messageId: selectedMessage.id, groupId: selectedMessage.groupId, timestamp: serverTimestamp(), isRead: false }).catch(() => {});
+                    }
+                }
+            });
+
+            logImmutableAction("TASK_CREATE", `Converted to Task: "${stripHtml(selectedMessage.text)}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
+            playMelody('taskCreated'); 
+            setActiveModal(null); setTaskAssignees([]);
+        } catch (error) { alert("Failed to create task."); }
+    };
+
+    const handleSaveTaskTitle = async () => {
+        if (!newTaskTitle.trim() || !selectedMessage) return;
+        try {
+            await updateDoc(doc(db, "messages", selectedMessage.id), { text: newTaskTitle });
+            setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
+            playMelody('taskUpdated');
+            setIsEditingTaskTitle(false);
+        } catch (e) { alert("Failed to update task title."); }
+    };
+
+    const handleDelegateTask = async () => {
+        if (!selectedMessage || delegateAssignees.length === 0) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(a=>(a||"").split('@')[0]).join(', ') }];
+            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
+            playMelody('taskUpdated'); 
+            setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
+        } catch (error) {}
+    };
+
+    const handleCompleteTask = async () => {
+        if (!selectedMessage) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
+            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
+            playMelody('taskUpdated'); 
+            setActiveModal(null);
+        } catch (error) {}
+    };
+
+    const handleAddComment = async (closeModal = false) => {
+        if (!selectedMessage || !trailComment.trim()) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...selectedMessage.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: trailComment }];
+            const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
+            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            setTrailComment("");
+            setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
+            playMelody('taskUpdated'); 
+            if (closeModal) setActiveModal(null);
+        } catch (error) {}
+    };
+
+    const handleTrailFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !selectedMessage) return;
+        setTrailFileUploading(true);
+        const uniqueFileName = `${Date.now()}_${file.name}`;
+        const uploadTask = uploadBytesResumable(ref(storage, `task_updates/${uniqueFileName}`), file);
+        uploadTask.on('state_changed', null, () => { setTrailFileUploading(false); alert("Upload failed."); }, async () => {
+            try {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                const now = new Date();
+                const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
+                const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
+                await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+                setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
+                playMelody('taskFileUpload'); 
+            } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
+        });
+    };
+
+    const setReminder = async () => {
+        if (!selectedMessage || !reminderDateTime) return;
+        try {
+            await addDoc(collection(db, "reminders"), { userId: user.uid, userEmail: user.email, messageId: selectedMessage.id, messageText: stripHtml(selectedMessage.text) || selectedMessage.fileName || "File Attachment", remindAt: reminderDateTime, isTriggered: false });
+            await updateDoc(doc(db, "messages", selectedMessage.id), { hasReminder: true });
+            setActiveModal(null); setReminderDateTime("");
+            addToast("Reminder set successfully!", "success");
+        } catch (error) { alert("Failed to save reminder."); }
+    };
+
+    const handleEditUserSubmit = async (e) => {
+        e.preventDefault();
+        await updateDoc(doc(db, "users", adminForm.uid), { name: adminForm.name, isAdmin: adminForm.isAdmin, canCreateGroups: adminForm.canCreateGroups });
+        setActiveModal(null);
+    };
+
+    const handleAddInlineComment = async (targetMsg, commentText) => {
+        if (!targetMsg || !commentText.trim()) return;
+        try {
+            const now = new Date();
+            const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
+            const newStatus = targetMsg.taskData.status === 'Pending' ? 'In Progress' : targetMsg.taskData.status;
+            await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
+            playMelody('taskUpdated'); 
+        } catch (error) {}
+    };
+
+    const handleReactionIntercept = async (msgId, tagLabel) => {
+        await reactToMessageDB(msgId, tagLabel);
+        const msg = messages.find(m => m.id === msgId);
+        if (msg && msg.senderEmail !== user.email) {
+            const sender = dbUsers.find(u => u.email === msg.senderEmail);
+            if (sender) {
+                addDoc(collection(db, "notifications"), { 
+                    userId: sender.uid, type: "reaction", 
+                    text: `${currentUserData?.name || user.email.split('@')[0]} affixed ${tagLabel} to your message.`, 
+                    messageId: msgId, groupId: activeGroup?.id || '', timestamp: serverTimestamp(), isRead: false 
+                }).catch(()=>{});
+            }
+        }
+    };
+
+    const handleWipeAllTasks = async () => {
+        if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
+        try {
+            const q = query(collection(db, "messages"), where("isTask", "==", true));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) return alert("No tasks found! You are already clean.");
+            await Promise.all(snapshot.docs.map(document => deleteDoc(doc(db, "messages", document.id))));
+            alert(`🧹 Successfully wiped ${snapshot.docs.length} tasks! Clean slate ready.`);
+        } catch (error) { alert("Failed to clean database."); }
+    };
+
+    const handleGroupPicUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setGroupPicUploadProgress(10);
+        const uniqueFileName = `group_${Date.now()}_${file.name}`;
+        const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
+        uploadTask.on('state_changed', (snapshot) => setGroupPicUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100), (error) => { setGroupPicUploadProgress(0); alert("Upload failed."); }, async () => {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            setGroupForm(prev => ({...prev, profilePicUrl: url}));
+            setGroupPicUploadProgress(0);
+        });
+    };
+
+    const handleUpdateGroupMembers = async (e) => {
+        e.preventDefault();
+        try {
+            const finalMembers = [...new Set([...groupForm.members, ...(activeGroup?.admins || [])])];
+            await updateDoc(doc(db, "groups", activeGroup.id), { members: finalMembers });
+            setActiveModal(null); 
+            setActiveGroup(prev => ({...prev, members: finalMembers}));
+        } catch (error) { 
+            alert("Failed to update members."); 
+        }
+    };
+    
+    const handleGroupSubmit = async (e) => {
+        if(e && e.preventDefault) e.preventDefault();
+        if(!groupForm.name.trim()) return;
+        try {
+            const finalMembers = [...new Set([...groupForm.members, user.email])];
+            const groupData = { name: groupForm.name, members: finalMembers, profilePicUrl: groupForm.profilePicUrl };
+            if (editingGroup) await updateDoc(doc(db, "groups", editingGroup.id), groupData);
+            else await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
+            setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
+        } catch (error) { alert("Failed to save group."); }
+    };
+
+    const onGroupUpdate = useCallback(async (updates) => {
+        if (!activeGroup || !activeGroup.id) return;
+        setActiveModal(null);
+        if (updates.profilePicFile) {
+            const file = updates.profilePicFile;
+            const uniqueFileName = `group_${Date.now()}_${file.name}`;
+            const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
+            uploadTask.on('state_changed', null, null, async () => {
+                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
+                setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
+            });
+            return;
+        }
+        const cleanUpdates = {};
+        if (updates.name) cleanUpdates.name = updates.name;
+        if (updates.members) { cleanUpdates.members = updates.members; cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a)); }
+        if (Object.keys(cleanUpdates).length === 0) return;
+        setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
+        await updateDoc(doc(db, "groups", activeGroup.id), cleanUpdates);
+    }, [activeGroup, storage, db, setActiveModal]);
+
+    const handleProfileSubmit = async (e) => {
+        e.preventDefault();
+        const file = profilePicInputRef.current?.files[0];
+        try {
+            let updateData = { name: profileForm.name, fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily };
+            if (file) {
+                setProfileUploadProgress(10);
+                const uniqueFileName = `${user.uid}_${Date.now()}_avatar`;
+                const uploadTask = uploadBytesResumable(ref(storage, `avatars/${uniqueFileName}`), file);
+                await new Promise((resolve, reject) => {
+                    uploadTask.on('state_changed', (snapshot) => setProfileUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100), reject, async () => {
+                        updateData.profilePicUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                        resolve();
+                    });
+                });
+            }
+            await updateDoc(doc(db, "users", user.uid), updateData);
+            setActiveModal(null); setProfileUploadProgress(0);
+        } catch (error) { alert("Profile update failed."); setProfileUploadProgress(0); }
+    };
+
+    const getUnreadInfoForUser = useCallback((otherUserEmail, otherUserUid) => {
+        const dmIdList = [user.uid, otherUserUid].sort();
+        const dmIdStr = dmIdList.join('_');
+        const dmMessages = messages.filter(m => m.groupId === dmIdStr);
+        const unreadMsgs = dmMessages.filter(m => m.senderUid !== user.uid && !(m.seenBy || []).includes(user.email));
+        const pendingTasks = dmMessages.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid) && m.senderEmail === otherUserEmail);
+        return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
+    }, [messages, user.uid, user.email]);
+
+    const getUnreadInfoForGroup = useCallback((groupId) => {
+        const groupMsgs = messages.filter(m => m.groupId === groupId);
+        const visibleMsgs = groupMsgs.filter(m => !m.isPrivateMention || m.allowedUsers?.includes(user.email));
+        const unreadMsgs = visibleMsgs.filter(m => m.senderUid !== user.uid && !(m.seenBy || []).includes(user.email));
+        const pendingTasks = visibleMsgs.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid));
+        return { unreadCount: unreadMsgs.length, pendingTaskCount: pendingTasks.length, total: unreadMsgs.length + pendingTasks.length };
+    }, [messages, user.uid, user.email]);
+
+    const modalProps = {
+        activeModal, setActiveModal, selectedMessage, setSelectedMessage,
+        setReplyingTo, chatInputRef, currentUserData, profileForm,
+        setProfileForm, profilePicInputRef, profileUploadProgress,
+        setProfileUploadProgress, handleProfileSubmit, toolPreferences,
+        setToolPreferences, user, groupForm, setGroupForm, editingGroup,
+        handleGroupSubmit, groupPicInputRef, handleGroupPicUpload,
+        groupPicUploadProgress, dbUsers, activeGroup, isVipAdmin, customTags,
+        handleUpdateGroupMembers, onGroupUpdate, isEditingTaskTitle,
+        setIsEditingTaskTitle, newTaskTitle, setNewTaskTitle, handleSaveTaskTitle,
+        delegateAssignees, setDelegateAssignees, showDelegateDropdown,
+        setShowDelegateDropdown, convertToTask, taskAssignees, setTaskAssignees,
+        taskDeadline, setTaskDeadline, taskPriority, setTaskPriority,
+        reminderDateTime, setReminderDateTime, scheduleDateTime, setScheduleDateTime,
+        pendingScheduledText, handleScheduleMessage, adminForm, setAdminForm,
+        isUploading, uploadProgress, setReminder,
+        handleDelegateTask, handleCompleteTask,
+        trailFileInputRef, handleTrailFileUpload, handleAddComment,
+        messages, groups, trailComment, setTrailComment, activeReminders, 
+        readOnly: viewMode === "admin",
+    };
 
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
         return (
@@ -238,6 +895,7 @@ export default function ChatApp({ user, onLogout }) {
                             <span dangerouslySetInnerHTML={{__html: globalAnnouncement.message}}></span>
                         </div>
                     </div>
+                    {/* 👇 "Got It" Acknowledgement Button 👇 */}
                     <button onClick={handleAckBroadcast} className="ml-4 px-4 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors whitespace-nowrap shadow-sm border border-white/20">
                         Got It
                     </button>
@@ -391,6 +1049,7 @@ export default function ChatApp({ user, onLogout }) {
                                                         {globalSearchResults.messages.length > 0 && (
                                                             <div className="mb-2">
                                                                 <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
+                                                                {/* 👇 UPDATED: Universal Click Routing routes directly to threads 👇 */}
                                                                 {globalSearchResults.messages.map(m => (
                                                                     <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
                                                                         <div className="flex justify-between items-center">
