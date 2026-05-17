@@ -1,3 +1,6 @@
+// 🆕 ADDED: Global stripHtml function for cleaning text formatting
+export const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
+
 export const lockExtension = (originalName, newName) => {
   const originalExt = originalName.split('.').pop().toLowerCase();
   const baseName = newName.replace(/\.[^/.]+$/, '');
