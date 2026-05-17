@@ -72,6 +72,37 @@ export default function TaskConvertModal({
               className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[14px] font-semibold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
           </div>
 
+  <div className="flex items-center gap-2 mt-3">
+      <input
+    type="checkbox"
+    id="requireAck"
+    checked={requireAck}
+    onChange={(e) => setRequireAck(e.target.checked)}
+  />
+  <label htmlFor="requireAck" className="text-sm font-medium">
+    Require Acknowledgment
+  </label>
+</div>
+
+{requireAck && (
+  <div className="mt-2">
+    <label className="text-sm font-medium block mb-1">Acknowledge Within</label>
+    <select
+      value={ackTimeOption}
+      onChange={(e) => setAckTimeOption(e.target.value)}
+      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+    >
+      <option value="30min">30 Minutes</option>
+      <option value="1hr">1 Hour</option>
+      <option value="2hr">2 Hours</option>
+      <option value="3hr">3 Hours</option>
+      <option value="eod">End of Day</option>
+      <option value="any">No strict deadline</option>
+    </select>
+  </div>
+)}
+
+        
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl">Cancel</button>
             <button onClick={convertToTask} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg hover:bg-primary-hover transition-all">Assign Task</button>
