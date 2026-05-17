@@ -24,10 +24,15 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
-const ThreadSidebar = ({ width, activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
+// 🚀 REPLIES / THREAD SIDEBAR ENGINE WITH FILE UPLOAD
+const ThreadSidebar = ({ width, activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage, uploadAndSendFileDB }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeThread.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    
     const threadInputRef = useRef(null);
+    const threadFileInputRef = useRef(null);
     
     const handleSend = async () => {
         if(!text.trim() || text === '<br>') return;
@@ -36,16 +41,32 @@ const ThreadSidebar = ({ width, activeThread, setActiveThread, messages, user, c
         if(threadInputRef.current) threadInputRef.current.innerHTML = '';
     }
 
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        e.target.value = '';
+        setIsUploading(true);
+        const pf = { id: Date.now(), file, customName: file.name, caption: text.trim(), text: text.trim() };
+        try {
+            await uploadAndSendFileDB(pf, setUploadProgress, { replyToId: activeThread.id });
+            setText('');
+            if(threadInputRef.current) threadInputRef.current.innerHTML = '';
+        } catch(err) { alert("Upload failed."); }
+        setIsUploading(false);
+        setUploadProgress(0);
+    }
+
     return (
         <div style={{ width: width || 350 }} className="bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative">
             <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
                 <div>
-                    <h3 className="font-bold text-slate-800 leading-tight">Thread</h3>
-                    <span className="text-[11px] text-slate-500 font-medium">Discussion</span>
+                    <h3 className="font-bold text-slate-800 leading-tight">Replies</h3>
+                    <span className="text-[11px] text-slate-500 font-medium">Threaded Discussion</span>
                 </div>
                 <button onClick={() => setActiveThread(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
             </div>
+            
             <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
                 <MessageBubble 
                     msg={activeThread} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
@@ -69,18 +90,35 @@ const ThreadSidebar = ({ width, activeThread, setActiveThread, messages, user, c
                     />
                 ))}
             </div>
-            <div className="p-3 border-t border-slate-200 bg-white shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
-                <div className="flex gap-2 items-end bg-slate-50 rounded-xl border border-slate-200 focus-within:border-indigo-400 focus-within:bg-white transition-all shadow-sm p-1.5 pr-2">
+            
+            <div className="p-3 border-t border-slate-200 bg-white shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] relative">
+                {isUploading && (
+                    <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center backdrop-blur-sm">
+                        <div className="text-[11px] font-bold text-indigo-600 animate-pulse bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-200 shadow-sm">
+                            <i className="fa-solid fa-spinner fa-spin mr-2"></i> Uploading {Math.round(uploadProgress)}%...
+                        </div>
+                    </div>
+                )}
+                <div className="flex gap-2 items-end bg-slate-50 rounded-2xl border border-slate-200 focus-within:border-indigo-400 focus-within:bg-white transition-all shadow-sm p-1.5 pr-2">
+                   <input type="file" ref={threadFileInputRef} className="hidden" onChange={handleFileUpload} />
+                   
+                   <button onClick={() => threadFileInputRef.current?.click()} className="shrink-0 w-[38px] h-[38px] flex justify-center items-center rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:scale-105 transition-all shadow-sm border border-indigo-200 mb-0.5">
+                       <i className="fa-solid fa-paperclip text-[15px]"></i>
+                   </button>
+                   
                    <div 
                       contentEditable 
                       ref={threadInputRef}
                       onInput={e => setText(e.currentTarget.innerHTML)}
                       suppressContentEditableWarning={true}
                       data-placeholder="Reply to thread..."
-                      className="custom-wysiwyg bg-transparent flex-1 outline-none text-[13px] text-slate-800 py-2 px-3 overflow-y-auto font-medium"
+                      className="custom-wysiwyg bg-transparent flex-1 outline-none text-[13px] text-slate-800 py-2.5 px-2 overflow-y-auto font-medium"
                       style={{ minHeight: '38px', maxHeight: '120px' }}
                    />
-                   <button onClick={handleSend} disabled={!text.trim() || text === '<br>'} className="w-[36px] h-[36px] rounded-full bg-indigo-600 text-white flex items-center justify-center disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-sm shrink-0 mb-0.5"><i className="fa-solid fa-paper-plane text-xs ml-[-2px]"></i></button>
+                   
+                   <button onClick={handleSend} disabled={!text.trim() || text === '<br>'} className={`shrink-0 w-[40px] h-[40px] flex justify-center items-center rounded-full transition-all mb-0.5 ${text.trim() && text !== '<br>' ? 'bg-[#00a884] text-white shadow-md hover:bg-[#008f6f] hover:scale-105' : 'bg-slate-200 text-slate-400'}`}>
+                       <i className={`fa-solid fa-paper-plane text-[14px] ml-[-2px] ${text.trim() && text !== '<br>' ? 'text-white drop-shadow-md' : 'text-slate-400'}`}></i>
+                   </button>
                 </div>
             </div>
         </div>
@@ -89,7 +127,7 @@ const ThreadSidebar = ({ width, activeThread, setActiveThread, messages, user, c
 
 export default function ChatApp({ user, onLogout }) {
     
-    // 🧱 NEW: RESIZABLE PANEL STATES
+    // 🧱 RESIZABLE PANEL STATES
     const [leftSidebarWidth, setLeftSidebarWidth] = useState(320);
     const [rightSidebarWidth, setRightSidebarWidth] = useState(350);
 
@@ -535,7 +573,7 @@ export default function ChatApp({ user, onLogout }) {
         for (let i = 0; i < filesToProcess.length; i++) { 
             let pf = filesToProcess[i];
             let finalCaption = pf.caption || ""; if (i === 0 && currentText && currentText !== '<br>') finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText; 
-            pf.caption = finalCaption; pf.text = finalCaption; if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
+            pf.caption = finalCaption; pf.text = finalCaption; 
             try { await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); } 
         } 
         playMelody('fileUpload'); setIsUploading(false); setUploadProgress(0); 
@@ -689,8 +727,6 @@ export default function ChatApp({ user, onLogout }) {
             } 
         } 
     }; 
-
-    // ✅ "Wipe Data" completely removed as per BATCH 1.
 
     const handleGroupPicUpload = async (e) => { 
         const file = e.target.files[0]; if (!file) return; setGroupPicUploadProgress(10); const uniqueFileName = `${Date.now()}_group_${file.name}`; const storageRef = ref(storage, `group_pics/${uniqueFileName}`); const uploadTask = uploadBytesResumable(storageRef, file);
@@ -1131,6 +1167,7 @@ export default function ChatApp({ user, onLogout }) {
                                 currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} handleReactionIntercept={handleReactionIntercept} 
                                 deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} customTags={customTags} 
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
+                                uploadAndSendFileDB={uploadAndSendFileDB}
                             />
                         ) : showRightSidebar ? (
                           <RightSidebar
