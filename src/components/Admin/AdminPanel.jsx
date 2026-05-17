@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import EscalationLogPanel from './EscalationLogPanel'; // add at top
 import { db } from '../../firebase.js';
 import {
   collection, addDoc, serverTimestamp, updateDoc, doc,
@@ -55,7 +56,12 @@ export default function AdminPanel({
 }) {
   // ===== TABS =====
   const [activeTab, setActiveTab] = useState('overview');
+<button onClick={() => setActiveTab('escalations')} className={...}>
+  Escalations
+</button>
 
+// Render the panel when active:
+{activeTab === 'escalations' && <EscalationLogPanel currentUser={currentUser} />}
   // ----- Overview time range -----
   const [overviewTimeRange, setOverviewTimeRange] = useState('week');
 
