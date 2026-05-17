@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // 👈 FIXED IMPORT
+import React, { useState, useEffect } from 'react'; 
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { EMOJI_LIST, lockExtension } from '../../utils/helpers.js';
 
@@ -32,175 +32,133 @@ export default function InputArea({
   }, [inputText]);
 
   const handleSelectMention = (name, isGroup = false) => {
-    const mentionName = isGroup ? name.replace(/\s+/g, '') : name;
-    chatInputRef.current.focus();
-    const html = chatInputRef.current.innerHTML;
-    const newHtml = html.replace(/@[^@\s<]*$/, `@${mentionName} `);
-    chatInputRef.current.innerHTML = newHtml;
-    setInputText(newHtml);
-    
-    const range = document.createRange();
-    const sel = window.getSelection();
-    range.selectNodeContents(chatInputRef.current);
-    range.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(range);
+      if (chatInputRef.current) {
+          let html = chatInputRef.current.innerHTML;
+          const words = html.split(' ');
+          words.pop();
+          const badgeHtml = isGroup 
+              ? `<span class="bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded-md font-bold mx-1" contenteditable="false">@@${name}</span>&nbsp;`
+              : `<span class="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-md font-bold mx-1" contenteditable="false">@${name}</span>&nbsp;`;
+          
+          chatInputRef.current.innerHTML = words.join(' ') + (words.length > 0 ? ' ' : '') + badgeHtml;
+          setInputText(chatInputRef.current.innerHTML);
+          
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.setStartAfter(chatInputRef.current.lastChild);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+      }
   };
 
-  const checkSelection = () => {
-    const sel = window.getSelection();
-    setHasSelection(sel && sel.toString().length > 0 && chatInputRef.current?.contains(sel.anchorNode));
-  };
-
-  const insertEmoji = (emoji) => {
-    chatInputRef.current.focus();
-    document.execCommand('insertText', false, emoji);
-    handleInput();
-    setEmojiPickerOpen(false);
+  const applyFormat = (command) => {
+      document.execCommand(command, false, null);
+      if (chatInputRef.current) {
+          setInputText(chatInputRef.current.innerHTML);
+          chatInputRef.current.focus();
+      }
   };
 
   return (
-    <div className="bg-white border-t border-gray-200 px-3 md:px-4 py-3 shrink-0 z-40 flex flex-col gap-2 safe-bottom w-full relative">
-      <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
+    <div className="relative bg-white border-t border-slate-200 p-3 sm:px-6 z-20 shrink-0 shadow-[0_-4px_15px_rgba(0,0,0,0.02)] pb-4 safe-bottom">
       
-      {replyingTo && (
-        <div className="bg-gray-50 px-4 py-2 flex items-center justify-between rounded-lg border border-gray-100 animate-in slide-in-from-bottom-1">
-          <div className="flex flex-col overflow-hidden">
-            <div className="text-sm font-semibold text-primary">{(replyingTo.sender||"").split('@')[0]}</div>
-            <div className="text-xs text-text-secondary truncate">"{replyingTo.text || replyingTo.fileName}"</div>
-          </div>
-          <button onClick={()=>setReplyingTo(null)} className="text-primary hover:text-primary-hover"><i className="fa-solid fa-xmark"></i></button>
-        </div>
-      )}
-
-      {/* Floating True WYSIWYG Toolbar */}
-      {hasSelection && (
-        <div className="absolute bottom-full left-4 mb-2 z-50 bg-slate-800 text-white rounded-lg shadow-xl px-2 py-1.5 flex items-center gap-1 animate-in fade-in zoom-in-95">
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded font-bold text-sm transition-colors" title="Bold">B</button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded italic font-serif text-sm transition-colors" title="Italic">I</button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded underline text-sm transition-colors" title="Underline">U</button>
-           <div className="w-px h-5 bg-slate-600 mx-1"></div>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded text-xs transition-colors" title="Superscript">x²</button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded text-xs transition-colors" title="Subscript">x₂</button>
-           <div className="w-px h-5 bg-slate-600 mx-1"></div>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#800000] hover:scale-110 ml-1 transition-transform border border-white/20 shadow-inner" title="Maroon"></button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#006400] hover:scale-110 ml-1.5 transition-transform border border-white/20 shadow-inner" title="Dark Green"></button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#0000FF'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#0000FF] hover:scale-110 ml-1.5 transition-transform border border-white/20 shadow-inner" title="Blue"></button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#FF8C00'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#FF8C00] hover:scale-110 mx-1.5 transition-transform border border-white/20 shadow-inner" title="Dark Orange"></button>
-        </div>
-      )}
-
       {mentionQuery !== null && (
-        <div className="absolute bottom-[100%] left-4 bg-white shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto z-50 py-2 mb-2 border border-slate-200 animate-in fade-in zoom-in-95">
-          <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Peers</div>
-          {dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).length > 0 ? (
-            dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).map(u => (
-              <div 
-                key={u.uid} 
-                onMouseDown={(e) => e.preventDefault()} 
-                onClick={() => handleSelectMention(u.name)} 
-                className="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 text-sm transition-colors"
-              >
-                <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
-                <span className="font-medium text-slate-700">{u.name}</span>
-              </div>
-            ))
-          ) : (
-            <div className="px-4 py-2 text-xs text-slate-400 italic">No users found</div>
-          )}
+          <div className="absolute bottom-[100%] left-0 w-full bg-white border-t border-slate-200 shadow-xl max-h-48 overflow-y-auto z-50 p-2 animate-in slide-in-from-bottom-2">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-2 pt-2">Mention Someone</div>
+              {dbUsers.filter(u => u.name?.toLowerCase().includes(mentionQuery)).map(u => (
+                  <div key={u.uid} onClick={() => handleSelectMention(u.name.replace(/\s+/g, ''), false)} className="flex items-center gap-3 p-2 hover:bg-slate-50 cursor-pointer rounded-lg transition-colors">
+                      <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
+                      <div className="font-bold text-sm text-slate-700">{u.name}</div>
+                  </div>
+              ))}
+              {!activeGroup?.isDM && groups.filter(g => !g.isDM && g.name?.toLowerCase().includes(mentionQuery)).map(g => (
+                  <div key={`group-${g.id}`} onClick={() => handleSelectMention(g.name.replace(/\s+/g, ''), true)} className="flex items-center gap-3 p-2 hover:bg-slate-50 cursor-pointer rounded-lg transition-colors">
+                      <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center text-teal-600"><i className="fa-solid fa-users"></i></div>
+                      <div className="font-bold text-sm text-teal-700">{g.name}</div>
+                  </div>
+              ))}
+          </div>
+      )}
 
-          <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t mt-1 pt-2">Departments</div>
-          {groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).length > 0 ? (
-             groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).map(g => (
-              <div 
-                key={g.id} 
-                onMouseDown={(e) => e.preventDefault()} 
-                onClick={() => handleSelectMention(g.name, true)} 
-                className="px-4 py-2.5 hover:bg-teal-50 cursor-pointer flex items-center gap-3 text-sm transition-colors"
-              >
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                  <i className="fa-solid fa-users text-xs"></i>
-                </div>
-                <span className="font-medium text-slate-700">{g.name}</span>
-              </div>
-            ))
-          ) : (
-            <div className="px-4 py-2 text-xs text-slate-400 italic">No departments found</div>
-          )}
+      {replyingTo && (
+        <div className="mb-2 bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between relative shadow-sm animate-in slide-in-from-bottom-2 mx-2">
+          <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-500 rounded-l-xl"></div>
+          <div className="pl-3 flex-1 min-w-0">
+            <div className="font-bold text-[13px] text-indigo-600 mb-0.5"><i className="fa-solid fa-reply mr-1"></i> Replying to {replyingTo.sender?.split('@')[0]}</div>
+            <div className="text-[12px] text-slate-600 truncate font-medium">{replyingTo.text || replyingTo.fileName}</div>
+          </div>
+          <button onClick={() => setReplyingTo(null)} className="w-8 h-8 rounded-full hover:bg-slate-200 text-slate-400 flex items-center justify-center transition-colors"><i className="fa-solid fa-xmark"></i></button>
         </div>
       )}
 
       {showFileRename && pendingFiles.length > 0 && (
-        <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-bottom-2 z-20 space-y-3">
-          {pendingFiles.map((pf) => (
-            <div key={pf.id} className="flex items-start gap-3 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-              <div className="mt-1 w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600"><i className="fa-solid fa-file-lines text-xl"></i></div>
-              <div className="flex-1 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <input type="text" value={pf.customName.replace(/\.[^/.]+$/, '').replace('__SECURE__', '')} onChange={(e) => { const newName = lockExtension(pf.file.name, e.target.value); setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, customName: pf.allowDownload === false ? `__SECURE__${newName}` : newName } : f)); }} className="flex-1 text-sm font-bold text-slate-800 outline-none border-b border-transparent focus:border-indigo-500 bg-transparent py-0.5" placeholder="File name" />
-                  <span className="text-sm font-bold text-slate-500">.{pf.file.name.split('.').pop()}</span>
-                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{(pf.file.size / 1024 / 1024).toFixed(2)} MB</span>
-                </div>
-                <textarea rows={1} value={pf.caption} onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)); }} placeholder="Add a caption..." className="w-full text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"></textarea>
-                
-                <label className="flex items-center gap-2 mt-2 select-none cursor-pointer w-fit">
-                    <input type="checkbox" checked={pf.allowDownload !== false} onChange={(e) => {
-                        const isAllowed = e.target.checked;
-                        const cleanedName = pf.customName.replace('__SECURE__', '');
-                        setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, allowDownload: isAllowed, customName: isAllowed ? cleanedName : `__SECURE__${cleanedName}` } : f));
-                    }} className="w-4 h-4 accent-indigo-600 cursor-pointer" />
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{pf.allowDownload !== false ? '✅ Public Download Allowed' : '🔒 Secure (View Only)'}</span>
-                </label>
-              </div>
-              <button onClick={() => { setPendingFiles(prev => prev.filter(f => f.id !== pf.id)); if (pendingFiles.length === 1) setShowFileRename(false); }} className="text-slate-400 hover:text-rose-500 p-2"><i className="fa-solid fa-trash-can text-lg"></i></button>
-            </div>
-          ))}
-          <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => { setPendingFiles([]); setShowFileRename(false); }} className="text-slate-500 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-slate-100 transition-colors">Cancel</button>
-            <button onClick={handleSendPendingFiles} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-600/30 transition-all">
-              <i className="fa-solid fa-paper-plane"></i> Send {pendingFiles.length > 1 ? `All (${pendingFiles.length})` : ''}
-            </button>
+        <div className="mb-3 bg-white border border-slate-200 rounded-2xl p-4 shadow-xl animate-in slide-in-from-bottom-2 mx-2">
+          <div className="flex justify-between items-center mb-3">
+             <div className="font-bold text-sm text-slate-800"><i className="fa-solid fa-paperclip text-indigo-500 mr-2"></i> File Attachments ({pendingFiles.length})</div>
+             <button onClick={() => { setPendingFiles([]); setShowFileRename(false); }} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-xmark"></i></button>
           </div>
+          <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-2 custom-sidebar-scroll">
+            {pendingFiles.map((file, index) => (
+              <div key={file.id} className="flex flex-col gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg shrink-0 shadow-sm"><i className="fa-solid fa-file"></i></div>
+                  <input type="text" value={file.customName} onChange={(e) => { const newFiles = [...pendingFiles]; newFiles[index].customName = lockExtension(file.file.name, e.target.value); setPendingFiles(newFiles); }} className="flex-1 p-2 border border-slate-200 rounded-lg text-[13px] font-semibold outline-none focus:border-indigo-500 bg-white shadow-sm" placeholder="File Name..." />
+                  <button onClick={() => { const newFiles = pendingFiles.filter((_, i) => i !== index); setPendingFiles(newFiles); if(newFiles.length===0) setShowFileRename(false); }} className="w-8 h-8 rounded-full hover:bg-rose-100 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-colors shrink-0"><i className="fa-solid fa-trash-can"></i></button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button onClick={handleSendPendingFiles} className="w-full mt-4 bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-all shadow-md">
+            Upload & Send All
+          </button>
         </div>
       )}
 
-      <div className="flex items-end gap-2">
-        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
-        <button className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors shrink-0" onClick={() => fileInputRef.current.click()} disabled={isUploading}>
-          <i className="fa-solid fa-plus text-xl"></i>
-        </button>
+      {hasSelection && (
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-3 py-1.5 rounded-xl shadow-xl flex gap-1 animate-in fade-in zoom-in-95 z-50">
+          <button onClick={() => applyFormat('bold')} className="w-8 h-8 hover:bg-white/20 rounded-lg font-serif font-bold transition-colors">B</button>
+          <button onClick={() => applyFormat('italic')} className="w-8 h-8 hover:bg-white/20 rounded-lg font-serif italic transition-colors">I</button>
+          <button onClick={() => applyFormat('strikeThrough')} className="w-8 h-8 hover:bg-white/20 rounded-lg font-serif line-through transition-colors">S</button>
+        </div>
+      )}
+
+      <div className="flex items-end gap-2 max-w-5xl mx-auto bg-slate-50 border border-slate-200 rounded-3xl p-1.5 focus-within:bg-white focus-within:border-indigo-400 focus-within:shadow-[0_4px_20px_rgba(79,70,229,0.08)] transition-all relative">
+        <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
         
-        <div className="relative shrink-0" ref={emojiPickerRef}>
-          <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+        <div className="relative shrink-0">
+          <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex justify-center items-center text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-full transition-colors">
             <i className="fa-regular fa-face-smile text-xl"></i>
           </button>
           {emojiPickerOpen && (
-            <div className="emoji-picker-popup shadow-2xl border border-slate-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
+            <div ref={emojiPickerRef} className="emoji-picker-popup">
               {EMOJI_LIST.map(emoji => (
-                <button key={emoji} onClick={() => insertEmoji(emoji)} className="hover:bg-slate-100 p-1.5 rounded-lg transition-colors">{emoji}</button>
+                <button key={emoji} onClick={() => { if(chatInputRef.current){ chatInputRef.current.innerHTML += emoji; setInputText(chatInputRef.current.innerHTML); } setEmojiPickerOpen(false); }}>{emoji}</button>
               ))}
             </div>
           )}
         </div>
 
-        <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
+        <button onClick={() => fileInputRef.current?.click()} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100 hover:scale-105 transition-all shadow-sm">
+          <i className="fa-solid fa-paperclip text-xl"></i>
+        </button>
+        <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileUpload} />
+
+        <div className="flex-1 bg-transparent py-2.5 px-3 max-h-[160px] overflow-y-auto custom-sidebar-scroll">
           <div 
-            contentEditable 
-            ref={chatInputRef} 
-            onInput={handleInput}
-            onMouseUp={checkSelection}
-            onKeyUp={checkSelection}
-            onPaste={handlePaste} 
-            suppressContentEditableWarning={true}
-            data-placeholder={isOnline ? "Type or Paste a message..." : "Offline - message will be queued"}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium" 
-            style={{ minHeight: '46px', maxHeight: '120px' }} 
-            onKeyDown={(e) => { 
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                document.execCommand('insertHTML', false, '<br><br>');
-              }
-            }} 
+             contentEditable 
+             ref={chatInputRef}
+             onInput={handleInput}
+             onPaste={handlePaste}
+             onSelect={() => {
+                const sel = window.getSelection();
+                setHasSelection(sel.toString().length > 0);
+             }}
+             onBlur={() => setTimeout(() => setHasSelection(false), 200)}
+             suppressContentEditableWarning={true}
+             data-placeholder="Type a message or paste an image..."
+             className="custom-wysiwyg outline-none text-[15px] font-medium text-slate-800 leading-relaxed"
+             style={{ minHeight: '24px' }}
           />
         </div>
 
@@ -218,9 +176,9 @@ export default function InputArea({
         <button 
           onClick={handleSendOfflineAware} 
           disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+          className={`shrink-0 w-[44px] h-[44px] flex justify-center items-center rounded-full transition-all mb-0.5 ${inputText.trim() && inputText !== '<br>' ? 'bg-[#00a884] text-white shadow-lg shadow-[#00a884]/40 hover:bg-[#008f6f] hover:scale-105' : 'bg-slate-100 text-slate-400'}`}
         >
-          <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
+          <i className={`fa-solid fa-paper-plane text-xl ml-[-2px] ${inputText.trim() && inputText !== '<br>' ? 'text-white drop-shadow-md' : 'text-slate-400'}`}></i>
         </button>
       </div>
     </div>
