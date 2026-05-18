@@ -17,6 +17,7 @@ import useWorkspaceData from '../hooks/useWorkspaceData.js';
 import useChatEngine from '../hooks/useChatEngine.js';
 
 // Utils & Firebase Core
+import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
 import { lockExtension } from '../utils/helpers.js';
 import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
