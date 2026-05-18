@@ -120,6 +120,7 @@ export default function ChatView({
                 handleAddInlineComment={handleAddInlineComment} 
                 customTags={customTags || []} 
                 setActiveThread={setActiveThread}
+                  currentUserUid={user.uid}
                 />
             );
           })}
