@@ -39,7 +39,7 @@ const TaskAssigneesSummary = ({ taskId, isMine }) => {
   );
 };
 
-// ─── Main MessageBubble component (unchanged logic + new badges) ─
+// ─── Main MessageBubble component ───────────────────────────────
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
   hasReplies, replyCount, isHighlighted, isUnreadHighlight,
@@ -48,7 +48,8 @@ const MessageBubble = React.memo(({
   scrollToMessageDirect, handleReaction, handleToggleBookmark,
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
-  jumpToPrivateSource, handleAddInlineComment, customTags = [], setActiveThread, isThreadView = false 
+  jumpToPrivateSource, handleAddInlineComment, customTags = [], setActiveThread, isThreadView = false,
+  currentUserUid   // ← new prop
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false); 
@@ -196,6 +197,29 @@ const MessageBubble = React.memo(({
     } catch(err) { setTrailFileUploading(false); } finally { if(inlineFileInputRef.current) inlineFileInputRef.current.value = ""; }
   };
 
+  // ─── NEW: Acknowledge handler ─────────────────────────────────
+  const handleAcknowledge = async (e) => {
+    e.stopPropagation();
+    if (!currentUserUid) return alert("Cannot identify user for acknowledgment.");
+    try {
+      // Update task-level acknowledgedBy list
+      const newAckBy = [...(msg.taskData.acknowledgedBy || []), userEmail];
+      await updateDoc(doc(db, "messages", msg.id), {
+        "taskData.acknowledgedBy": newAckBy,
+      });
+      // Update the per‑assignee assignment document
+      const assignmentRef = doc(db, "messages", msg.id, "assignments", currentUserUid);
+      await updateDoc(assignmentRef, {
+        isAcknowledged: true,
+        acknowledgedAt: serverTimestamp(),
+      });
+      // Show a small toast/inline message (the parent handles toasts, but we can console log)
+      console.log('Task acknowledged');
+    } catch (err) {
+      alert("Acknowledgment failed: " + err.message);
+    }
+  };
+
   return (
     <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-50' : 'relative z-[1]'}`}>
       
@@ -288,7 +312,7 @@ const MessageBubble = React.memo(({
                       </div>
                     </div>
 
-                    {/* ─── Escalation badges (NEW) ─────────────────── */}
+                    {/* Escalation badges */}
                     <TaskAssigneesSummary taskId={msg.id} isMine={msg.isMine} />
 
                     
@@ -297,6 +321,13 @@ const MessageBubble = React.memo(({
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
                            {trailFileUploading && <span className="text-xs font-bold text-indigo-500 animate-pulse mr-2">Uploading...</span>}
                            
+                           {/* ─── Acknowledge Button (NEW) ─────────────────── */}
+                           {msg.taskData?.requireAck && !msg.taskData?.acknowledgedBy?.includes(userEmail) && (
+                             <button onClick={handleAcknowledge} className="px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-[11px] font-bold text-green-700 shadow-sm hover:bg-green-100 transition-colors">
+                               ✅ Acknowledge
+                             </button>
+                           )}
+
                            {isDelegating ? (
                               <div className="flex items-center gap-2 bg-white border border-slate-200 rounded p-1 shadow-sm w-full md:w-auto flex-1">
                                  <select value="" onChange={(e) => { if(!delegateSelection.includes(e.target.value)) setDelegateSelection([...delegateSelection, e.target.value]); }} className="text-[11px] p-1 w-full outline-none">
@@ -352,7 +383,6 @@ const MessageBubble = React.memo(({
                                       <span className="font-semibold">{t.action}</span>
                                       {t.to && <span> to <span className="font-semibold text-indigo-600">@{t.to}</span></span>}
                                       
-                                      {/* ─── Trail inline edit/delete ─── */}
                                       {t.comment && !t.fileUrl && (
                                          editingTrailIdx === idx ? (
                                             <div className="flex items-center gap-2 mt-2 bg-slate-50 p-1.5 rounded border border-slate-200">
@@ -375,7 +405,6 @@ const MessageBubble = React.memo(({
                                           </div>
                                       )}
 
-                                      {/* Hover Action Buttons for Editor/Admin */}
                                       {isAuthor && editingTrailIdx !== idx && (
                                           <div className="absolute top-1 right-1 hidden group-hover/editbox:flex gap-1.5 bg-white border border-slate-200 shadow-sm rounded-md px-1.5 py-1 z-20">
                                               {t.comment && !t.fileUrl && <i className="fa-solid fa-pen text-[10px] text-indigo-500 cursor-pointer hover:scale-110" onClick={()=>{setEditingTrailIdx(idx); setTrailEditText(t.comment);}}></i>}
@@ -408,7 +437,6 @@ const MessageBubble = React.memo(({
                   </div>
                 )}
 
-                {/* Simultaneous Text and File Rendering with WYSIWYG HTML Support */}
                 {!msg.isTask && !msg.isPrivateForward && msg.text && (
                   <div className={`text-[15px] leading-relaxed break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-3' : ''}`} dangerouslySetInnerHTML={{ __html: msg.text }}></div>
                 )}
