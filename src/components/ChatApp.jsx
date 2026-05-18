@@ -55,6 +55,8 @@ const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(
                     groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
                     customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
                     setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} 
+                    currentUserUid={user.uid}
+                    
                 />
                 
                 <div className="flex items-center gap-3 my-4 opacity-80">
