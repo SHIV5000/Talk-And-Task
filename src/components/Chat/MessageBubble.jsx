@@ -6,7 +6,7 @@ import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/fi
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-
+import { useTaskAssignments } from '../../hooks/useTaskAssignments';
 const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
 const MessageBubble = React.memo(({
@@ -259,6 +259,12 @@ const MessageBubble = React.memo(({
                     </div>
 
                     {/* 👇 RESTORED: INLINE ACTION CONTROLS 👇 */}
+                  {msg.isTask && (
+                  <TaskAssigneesSummary taskId={msg.id} isMine={isMine} />
+                  )}
+
+
+                    
                     {isTaskParticipant && !isTaskCompleted && (
                         <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
@@ -416,6 +422,38 @@ const MessageBubble = React.memo(({
             )}
         </div>
 
+const TaskAssigneesSummary = ({ taskId, isMine }) => {
+  const { assignments, loading } = useTaskAssignments(taskId);
+  if (loading) return null;
+
+  return (
+    <div className={`flex flex-wrap gap-1.5 mt-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
+      {assignments.map((assign) => {
+        const level = assign.escalationLevel || 0;
+        const colors = {
+          0: 'bg-green-100 text-green-800 border-green-200',
+          1: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+          2: 'bg-orange-100 text-orange-800 border-orange-200',
+          3: 'bg-red-100 text-red-800 border-red-200',
+        };
+        const labels = { 0: 'Normal', 1: 'Ack Due', 2: 'Overdue', 3: 'Critical' };
+        return (
+          <span
+            key={assign.id}
+            className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${colors[level]}`}
+            title={`${labels[level]} – ${assign.isAcknowledged ? 'Acknowledged' : 'Not Ack'}`}
+          >
+            {assign.id.slice(0, 6)}… {labels[level]}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+
+
+        
         <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-end justify-between gap-3 w-full">
             <div className="flex flex-wrap items-center gap-1.5 flex-1">
                 {Object.entries(msg.reactions || {}).map(([tagLabel, users]) => {
