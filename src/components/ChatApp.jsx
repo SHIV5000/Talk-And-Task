@@ -20,7 +20,7 @@ import useChatEngine from '../hooks/useChatEngine.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
 import { lockExtension } from '../utils/helpers.js';
 import { auth, db, storage, signOut } from '../firebase.js';
-import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
+
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
