@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { formatMessageText } from '../../utils/helpers.js';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { db, storage } from '../../firebase.js';
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -197,7 +197,7 @@ const MessageBubble = React.memo(({
     } catch(err) { setTrailFileUploading(false); } finally { if(inlineFileInputRef.current) inlineFileInputRef.current.value = ""; }
   };
 
-  // ─── NEW: Acknowledge handler ─────────────────────────────────
+  // ─── FIXED Acknowledge handler (creates assignment doc if missing) ──
   const handleAcknowledge = async (e) => {
     e.stopPropagation();
     if (!currentUserUid) return alert("Cannot identify user for acknowledgment.");
@@ -207,13 +207,34 @@ const MessageBubble = React.memo(({
       await updateDoc(doc(db, "messages", msg.id), {
         "taskData.acknowledgedBy": newAckBy,
       });
-      // Update the per‑assignee assignment document
+
+      // Update the per‑assignee assignment document.
+      // If it doesn't exist, create it (backwards compatibility with older tasks)
       const assignmentRef = doc(db, "messages", msg.id, "assignments", currentUserUid);
-      await updateDoc(assignmentRef, {
-        isAcknowledged: true,
-        acknowledgedAt: serverTimestamp(),
-      });
-      // Show a small toast/inline message (the parent handles toasts, but we can console log)
+      try {
+        await updateDoc(assignmentRef, {
+          isAcknowledged: true,
+          acknowledgedAt: serverTimestamp(),
+        });
+      } catch (updateError) {
+        if (updateError.code === 'not-found') {
+          // Document doesn't exist – create it with acknowledged state
+          await setDoc(assignmentRef, {
+            assigneeId: currentUserUid,
+            managerId: null,
+            isAcknowledged: true,
+            acknowledgedAt: serverTimestamp(),
+            completed: false,
+            completedAt: null,
+            escalationLevel: 0,
+            lastEscalatedAt: null,
+            resolvedAt: null,
+            resolvedBy: null,
+          });
+        } else {
+          throw updateError;
+        }
+      }
       console.log('Task acknowledged');
     } catch (err) {
       alert("Acknowledgment failed: " + err.message);
@@ -321,7 +342,7 @@ const MessageBubble = React.memo(({
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
                            {trailFileUploading && <span className="text-xs font-bold text-indigo-500 animate-pulse mr-2">Uploading...</span>}
                            
-                           {/* ─── Acknowledge Button (NEW) ─────────────────── */}
+                           {/* ─── Acknowledge Button ─────────────────── */}
                            {msg.taskData?.requireAck && !msg.taskData?.acknowledgedBy?.includes(userEmail) && (
                              <button onClick={handleAcknowledge} className="px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-[11px] font-bold text-green-700 shadow-sm hover:bg-green-100 transition-colors">
                                ✅ Acknowledge
