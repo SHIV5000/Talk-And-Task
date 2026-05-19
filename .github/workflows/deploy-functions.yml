@@ -4,7 +4,7 @@ on:
   push:
     branches: [ escalation-from-vercel ]
     paths:
-      - 'functions/**' 
+      - 'functions/**'
 
 jobs:
   deploy:
@@ -22,7 +22,7 @@ jobs:
       - name: Create service account key file
         run: echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > $HOME/gcloud-service-key.json
 
-      - name: Install dependencies and deploy
+      - name: Install deps and deploy
         run: |
           export GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcloud-service-key.json
           cd functions
