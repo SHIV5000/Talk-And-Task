@@ -6,40 +6,8 @@ import { doc, updateDoc, setDoc, collection, addDoc, serverTimestamp } from 'fir
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { useTaskAssignments } from '../../hooks/useTaskAssignments';
 const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
-// ─── Escalation badges for tasks ─────────────────────────────────
-const TaskAssigneesSummary = ({ taskId, isMine }) => {
-  const { assignments, loading } = useTaskAssignments(taskId);
-  if (loading) return null;
-
-  return (
-    <div className={`flex flex-wrap gap-1.5 mt-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
-      {assignments.map((assign) => {
-        const level = assign.escalationLevel || 0;
-        const colors = {
-          0: 'bg-green-100 text-green-800 border-green-200',
-          1: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-          2: 'bg-orange-100 text-orange-800 border-orange-200',
-          3: 'bg-red-100 text-red-800 border-red-200',
-        };
-        const labels = { 0: 'Normal', 1: 'Ack Due', 2: 'Overdue', 3: 'Critical' };
-        return (
-          <span
-            key={assign.id}
-            className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${colors[level]}`}
-            title={`${labels[level]} – ${assign.isAcknowledged ? 'Acknowledged' : 'Not Ack'}`}
-          >
-            {assign.id.slice(0, 6)}… {labels[level]}
-          </span>
-        );
-      })}
-    </div>
-  );
-};
-
-// ─── Main MessageBubble component ───────────────────────────────
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
   hasReplies, replyCount, isHighlighted, isUnreadHighlight,
@@ -49,7 +17,7 @@ const MessageBubble = React.memo(({
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
   jumpToPrivateSource, handleAddInlineComment, customTags = [], setActiveThread, isThreadView = false,
-  currentUserUid   // ← new prop
+  currentUserUid
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false); 
@@ -80,7 +48,9 @@ const MessageBubble = React.memo(({
   const senderName = (msg.sender || '').split('@')[0];
   const senderAvatar = senderUser.profilePicUrl || null;
 
-  const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
+  const isCreator = msg.senderEmail === userEmail;
+  const isAssignee = msg.taskData?.assignees?.includes(userEmail);
+  const isTaskParticipant = isCreator || isAssignee || currentUserData?.isAdmin || isVipAdmin;
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = !isTaskCompleted || isSuperAdmin;
@@ -197,19 +167,27 @@ const MessageBubble = React.memo(({
     } catch(err) { setTrailFileUploading(false); } finally { if(inlineFileInputRef.current) inlineFileInputRef.current.value = ""; }
   };
 
-  // ─── FIXED Acknowledge handler (creates assignment doc if missing) ──
+  // ─── Acknowledge handler (with trail entry) ─────────────────
   const handleAcknowledge = async (e) => {
     e.stopPropagation();
     if (!currentUserUid) return alert("Cannot identify user for acknowledgment.");
+    if (!isAssignee) return; // safety check
     try {
-      // Update task-level acknowledgedBy list
       const newAckBy = [...(msg.taskData.acknowledgedBy || []), userEmail];
+      const now = new Date();
+      const trailEntry = {
+        action: "Acknowledged",
+        by: userEmail,
+        time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(),
+        comment: `${(userEmail||"").split('@')[0]} acknowledged the task`
+      };
+      const updatedTrail = [...(msg.taskData.trail || []), trailEntry];
+      
       await updateDoc(doc(db, "messages", msg.id), {
         "taskData.acknowledgedBy": newAckBy,
+        "taskData.trail": updatedTrail,
       });
 
-      // Update the per‑assignee assignment document.
-      // If it doesn't exist, create it (backwards compatibility with older tasks)
       const assignmentRef = doc(db, "messages", msg.id, "assignments", currentUserUid);
       try {
         await updateDoc(assignmentRef, {
@@ -218,7 +196,6 @@ const MessageBubble = React.memo(({
         });
       } catch (updateError) {
         if (updateError.code === 'not-found') {
-          // Document doesn't exist – create it with acknowledged state
           await setDoc(assignmentRef, {
             assigneeId: currentUserUid,
             managerId: null,
@@ -235,11 +212,37 @@ const MessageBubble = React.memo(({
           throw updateError;
         }
       }
-      console.log('Task acknowledged');
+      notifyTaskChange(`${(userEmail||"").split('@')[0]} acknowledged the task`);
     } catch (err) {
       alert("Acknowledgment failed: " + err.message);
     }
   };
+
+  // Helper to show a tiny green check on acknowledged assignee avatars
+  const AcknowledgedAvatar = ({ email }) => {
+    const assignee = dbUsers?.find(u => u.email === email);
+    const ackd = msg.taskData?.acknowledgedBy?.includes(email);
+    if (!assignee) return null;
+    return (
+      <div className="relative shrink-0">
+        <MemoizedAvatar
+          uid={assignee.uid || email}
+          url={assignee.profilePicUrl}
+          name={assignee.name || email.split('@')[0]}
+          sizeClass="w-6 h-6"
+          extraClasses={`border-2 ${isTaskCompleted ? 'border-slate-50 opacity-70' : 'border-white'} relative z-10`}
+        />
+        {ackd && (
+          <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full flex items-center justify-center text-white text-[8px] font-bold shadow-sm">
+            ✓
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Check if the task card should be shown: only to creator and assignees
+  const showTaskCard = msg.isTask && (isCreator || isAssignee);
 
   return (
     <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-50' : 'relative z-[1]'}`}>
@@ -288,7 +291,7 @@ const MessageBubble = React.memo(({
               </div>
             ) : (
               <>
-                {msg.isTask && (
+                {showTaskCard && (
                   <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
                     <div className="p-3">
                       <div className="flex items-center justify-between mb-2">
@@ -320,10 +323,9 @@ const MessageBubble = React.memo(({
                       
                       <div className="flex items-center justify-between">
                         <div className="flex items-center -space-x-2 relative group/assignees">
-                          {(msg.taskData.assignees || []).slice(0, 3).map(email => {
-                            const assignee = dbUsers?.find(u => u.email === email);
-                            return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses={`border-2 ${isTaskCompleted ? 'border-slate-50 opacity-70' : 'border-white'} relative z-10`} />;
-                          })}
+                          {(msg.taskData.assignees || []).slice(0, 3).map(email => (
+                            <AcknowledgedAvatar key={email} email={email} />
+                          ))}
                           {(msg.taskData.assignees || []).length > 3 && (
                             <div className={`w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-600 border-2 ${isTaskCompleted ? 'border-slate-50' : 'border-white'} relative z-10`}>
                               +{msg.taskData.assignees.length - 3}
@@ -333,17 +335,15 @@ const MessageBubble = React.memo(({
                       </div>
                     </div>
 
-                    {/* Escalation badges */}
-                    <TaskAssigneesSummary taskId={msg.id} isMine={msg.isMine} />
-
+                    {/* Escalation badges REMOVED per request */}
                     
                     {isTaskParticipant && !isTaskCompleted && (
                         <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
                            {trailFileUploading && <span className="text-xs font-bold text-indigo-500 animate-pulse mr-2">Uploading...</span>}
                            
-                           {/* ─── Acknowledge Button ─────────────────── */}
-                           {msg.taskData?.requireAck && !msg.taskData?.acknowledgedBy?.includes(userEmail) && (
+                           {/* Acknowledge Button – only for assignees who haven't acknowledged */}
+                           {msg.taskData?.requireAck && isAssignee && !msg.taskData?.acknowledgedBy?.includes(userEmail) && (
                              <button onClick={handleAcknowledge} className="px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-[11px] font-bold text-green-700 shadow-sm hover:bg-green-100 transition-colors">
                                ✅ Acknowledge
                              </button>
@@ -372,7 +372,7 @@ const MessageBubble = React.memo(({
                                  <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Delegate</button>
                                  <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Attach</button>
                                  <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Update</button>
-                                 <button onClick={handleInlineComplete} className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors">Resolve</button>
+                                 <button onClick={handleInlineComplete} className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors">Mark as Completed</button>
                               </>
                            )}
                         </div>
@@ -392,7 +392,7 @@ const MessageBubble = React.memo(({
                             return (
                             <div key={idx} className="flex gap-3 text-sm group/trailitem">
                               <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 mt-1">
-                                <i className={`text-[10px] ${t.action.includes('Created') ? 'fa-solid fa-bolt text-amber-500' : t.action.includes('Completed') ? 'fa-solid fa-check text-teal-500' : t.action.includes('Delegated') ? 'fa-solid fa-share-nodes text-indigo-500' : t.fileUrl ? 'fa-solid fa-paperclip text-blue-500' : 'fa-solid fa-comment-dots text-indigo-500'}`}></i>
+                                <i className={`text-[10px] ${t.action.includes('Created') ? 'fa-solid fa-bolt text-amber-500' : t.action.includes('Completed') ? 'fa-solid fa-check text-teal-500' : t.action.includes('Acknowledged') ? 'fa-solid fa-check text-green-500' : t.action.includes('Delegated') ? 'fa-solid fa-share-nodes text-indigo-500' : t.fileUrl ? 'fa-solid fa-paperclip text-blue-500' : 'fa-solid fa-comment-dots text-indigo-500'}`}></i>
                               </div>
                               <div className="flex-1 min-w-0">
                                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm relative group/editbox">
@@ -441,6 +441,13 @@ const MessageBubble = React.memo(({
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* For non-task participants, just show the message text if it's a task */}
+                {msg.isTask && !showTaskCard && (
+                  <div className="text-[15px] leading-relaxed break-words font-medium text-slate-800 mt-1">
+                    {msg.text}
                   </div>
                 )}
 
@@ -498,7 +505,7 @@ const MessageBubble = React.memo(({
             )}
         </div>
 
-        
+        {/* Reactions section – now visible for tasks as well */}
         <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-end justify-between gap-3 w-full">
             <div className="flex flex-wrap items-center gap-1.5 flex-1">
                 {Object.entries(msg.reactions || {}).map(([tagLabel, users]) => {
@@ -532,7 +539,8 @@ const MessageBubble = React.memo(({
                     )
                 })}
                 
-                {toolPreferences?.react !== false && !msg.isTask && (
+                {/* Reaction picker – now available for all messages, including tasks */}
+                {toolPreferences?.react !== false && (
                     <div className="relative" ref={tagPickerRef}>
                         <button onClick={(e) => { e.stopPropagation(); setTagPickerOpen(!tagPickerOpen); }}
                             className={`h-8 px-2 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors shadow-sm ${hasReactions ? '' : 'opacity-0 group-hover/msg:opacity-100'}`}
