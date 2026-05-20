@@ -1,10 +1,10 @@
 {
   "name": "talk-and-task-escalation",
-  "description": "Automated task escalation engine",
+  "description": "Automated task escalation engine for Talk-And-Task",
   "main": "index.js",
- "engines": {
+  "engines": {
     "node": "20"
-}
+  },
   "dependencies": {
     "firebase-admin": "^11.8.0",
     "firebase-functions": "^4.3.1"
