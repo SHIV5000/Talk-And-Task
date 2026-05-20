@@ -7,5 +7,5 @@ const { runEscalationEngine } = require('./escalationEngine');
 
 exports.escalationCron = onSchedule('every 15 minutes', async (event) => {
   await runEscalationEngine(admin);
-  // Thin wrapper that catches synchronous errors OR passes them to the fallback  TTTTTTTT
+  // Thin wrapper that catches synchronous errors OR passes them to the fallback  TTTTTTTT kkkkk
 });
