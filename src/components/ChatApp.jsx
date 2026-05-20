@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import NotificationToast from './NotificationToast';
 // UI Components
+import useEscalationEngine from '../hooks/useEscalationEngine';
 import RightSidebar from './Sidebar/RightSidebar.jsx';
 import AdminPanel from './Admin/AdminPanel.jsx';
 import LeftSidebar from './Sidebar/LeftSidebar.jsx';
@@ -121,7 +122,7 @@ export default function ChatApp({ user, onLogout }) {
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editMessageText, setEditMessageText] = useState("");
     const [activeGroup, setActiveGroup] = useState(null);
-    
+    useEscalationEngine(activeGroup, messages);   // ← add this line
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
     const [taskPriority, setTaskPriority] = useState("Medium");
