@@ -16,15 +16,16 @@ jobs:
         with:
           node-version: 20
 
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Create service account key file
-        run: echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > $HOME/gcloud-service-key.json
-
       - name: Install deps and deploy
         run: |
-          export GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcloud-service-key.json
           cd functions
           npm install
           npx firebase deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }}
