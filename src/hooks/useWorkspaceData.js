@@ -1,91 +1,61 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebase.js';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
-export default function useWorkspaceData(user, profileForm, setProfileForm) {
-    const [isVipAdmin, setIsVipAdmin] = useState(false);
-    const [currentUserData, setCurrentUserData] = useState(null);
-    const [dbUsers, setDbUsers] = useState([]);
-    const [groups, setGroups] = useState([]);
-    const [activeReminders, setActiveReminders] = useState([]);
-    const [genericNotifications, setGenericNotifications] = useState([]);
-    const [allAdminReminders, setAllAdminReminders] = useState([]);
-    const [immutableAuditLogs, setImmutableAuditLogs] = useState([]);
-    const [globalAnnouncement, setGlobalAnnouncement] = useState(null);
-    const [toolPreferences, setToolPreferences] = useState({ 
-        reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic' 
+export default function useWorkspaceData() {
+  const { workspaceId } = useWorkspace();
+  const [groups, setGroups] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    const q = query(collection(db, 'workspaces', workspaceId, 'groups'));
+    const unsub = onSnapshot(q, (snap) => {
+      const grps = [];
+      snap.forEach(doc => grps.push({ id: doc.id, ...doc.data() }));
+      setGroups(grps);
     });
-    
-    // 🆕 NEW: Custom Tags State
-    const [customTags, setCustomTags] = useState([]);
+    return () => unsub();
+  }, [workspaceId]);
 
-    useEffect(() => {
-        if (!user) return;
+  useEffect(() => {
+    if (!workspaceId) return;
+    const q = query(collection(db, 'workspaces', workspaceId, 'members'));
+    const unsub = onSnapshot(q, async (snap) => {
+      const mems = [];
+      snap.forEach(doc => mems.push({ uid: doc.id, ...doc.data() }));
+      // Enrich with user data
+      const enriched = await Promise.all(
+        mems.map(async m => {
+          const userSnap = await getDoc(doc(db, 'users', m.uid));
+          return { ...m, ...(userSnap.data() || {}) };
+        })
+      );
+      setMembers(enriched);
+    });
+    return () => unsub();
+  }, [workspaceId]);
 
-        // User Data Listener
-        const unsubUser = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setCurrentUserData(data);
-                setIsVipAdmin(data.email === 'shivsuri1@gmail.com');
-                setProfileForm({ 
-                    name: data.name || "", 
-                    fontSize: data.fontSize || "text-[14.2px]", 
-                    fontFamily: data.fontFamily || "font-sans" 
-                });
-                if (data.toolPreferences) setToolPreferences(data.toolPreferences);
-            }
-        });
+  useEffect(() => {
+    const q = query(
+      collection(db, 'broadcasts'),
+      where('workspaceId', '==', workspaceId),
+      where('isActive', '==', true)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const bcasts = [];
+      snap.forEach(doc => bcasts.push({ id: doc.id, ...doc.data() }));
+      setBroadcasts(bcasts);
+    });
+    return () => unsub();
+  }, [workspaceId]);
 
-        // All Users Directory
-        const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
-            setDbUsers(snapshot.docs.map(d => ({ uid: d.id, ...d.data() })));
-        });
+  useEffect(() => {
+    if (groups.length > 0 || members.length > 0) setLoading(false);
+  }, [groups, members]);
 
-        // Departments / Groups
-        const unsubGroups = onSnapshot(collection(db, "groups"), (snapshot) => {
-            setGroups(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        // Personal Notifications
-        const unsubNotifs = onSnapshot(collection(db, "notifications"), (snapshot) => {
-            const notifs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            setGenericNotifications(notifs.filter(n => n.userId === user.uid && !n.isRead));
-        });
-
-        // Reminders
-        const unsubReminders = onSnapshot(collection(db, "reminders"), (snapshot) => {
-            const rems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            setActiveReminders(rems.filter(r => r.userId === user.uid));
-            setAllAdminReminders(rems);
-        });
-
-        // Immutable Audit Logs
-        const unsubLogs = onSnapshot(collection(db, "audit_logs"), (snapshot) => {
-            setImmutableAuditLogs(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
-        });
-
-        // Global Announcement Broadcasts
-        const unsubBroadcasts = onSnapshot(collection(db, "broadcasts"), (snapshot) => {
-            const activeBroadcast = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).find(b => b.isActive);
-            setGlobalAnnouncement(activeBroadcast || null);
-        });
-
-        // 🆕 NEW: Workspace Custom Tags Listener
-        const unsubTags = onSnapshot(collection(db, "workspace_tags"), (snapshot) => {
-            setCustomTags(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        return () => {
-            unsubUser(); unsubUsers(); unsubGroups(); unsubNotifs(); 
-            unsubReminders(); unsubLogs(); unsubBroadcasts(); unsubTags();
-        };
-    }, [user, setProfileForm]);
-
-    return { 
-        isVipAdmin, currentUserData, dbUsers, groups, 
-        activeReminders, genericNotifications, allAdminReminders, 
-        immutableAuditLogs, toolPreferences, setToolPreferences,
-        globalAnnouncement, customTags 
-    };
+  return { groups, members, broadcasts, loading };
 }
