@@ -24,7 +24,7 @@ export default function ProfileSettingsModal({
           <div className="flex flex-col items-center gap-4">
             <div className="w-32 h-32 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden relative cursor-pointer group shadow-inner border-4 border-slate-50" onClick={() => profilePicInputRef.current?.click()}>
               {currentUserData?.profilePicUrl ? (
-                <img src={currentUserData.profilePicUrl} className="w-full h-full object-cover" alt="avatar" />
+                <img src={currentUserData.profilePicUrl} className="w-full h-full object-cover" alt="avatar" loading="eager" decoding="async" fetchPriority="high" />
               ) : (
                 <i className="fa-solid fa-user text-5xl text-slate-300"></i>
               )}
@@ -47,13 +47,22 @@ export default function ProfileSettingsModal({
             />
           </div>
 
-          <button 
-            onClick={handleProfileSubmit} 
-            disabled={profileUploadProgress > 0} 
-            className="w-full bg-indigo-600 text-white py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold tracking-wide hover:-translate-y-0.5 active:translate-y-0"
-          >
-            {profileUploadProgress > 0 ? `Uploading Photo ${Math.round(profileUploadProgress)}%` : 'Save Changes'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveModal(null)}
+              className="flex-1 bg-white border border-slate-200 text-slate-700 py-3.5 rounded-xl hover:bg-slate-50 transition-all font-bold tracking-wide"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleProfileSubmit} 
+              disabled={profileUploadProgress > 0} 
+              className="flex-1 bg-indigo-600 text-white py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold tracking-wide hover:-translate-y-0.5 active:translate-y-0"
+            >
+              {profileUploadProgress > 0 ? `Uploading Photo ${Math.round(profileUploadProgress)}%` : 'Save Changes'}
+            </button>
+          </div>
         </div>
 
       </div>

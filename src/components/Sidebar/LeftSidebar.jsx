@@ -58,8 +58,8 @@ export default function LeftSidebar({
         style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
-        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 flex items-start justify-between gap-2">
-          <div className="flex flex-col items-center min-w-0 flex-1">
+        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
+          <div className="flex items-start justify-between gap-2">
             <MemoizedAvatar
               uid={user.uid}
               url={currentUserData?.profilePicUrl}
@@ -68,11 +68,7 @@ export default function LeftSidebar({
               extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
               imageLoading="eager"
             />
-            <span className="font-semibold text-sm whitespace-normal break-words leading-tight max-w-[170px] text-center mt-1">
-              {currentUserData?.name || user.email.split('@')[0]}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 pt-1">
+            <div className="flex items-center gap-2 shrink-0 pt-1">
             {(currentUserData?.isAdmin ||
               isVipAdmin ||
               currentUserData?.canCreateGroups) && (
@@ -100,7 +96,11 @@ export default function LeftSidebar({
             >
               <i className="fa-solid fa-power-off"></i>
             </button>
+            </div>
           </div>
+          <span className="block mt-2 font-semibold text-sm whitespace-normal break-words leading-tight pr-1">
+            {currentUserData?.name || user.email.split('@')[0]}
+          </span>
         </div>
 
         {/* Search */}
