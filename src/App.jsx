@@ -13,14 +13,17 @@ const deploymentInfo = {
   commitHash: typeof __BUILD_COMMIT_HASH__ !== 'undefined' ? __BUILD_COMMIT_HASH__ : 'unknown',
   commitName: typeof __BUILD_COMMIT_SUBJECT__ !== 'undefined' ? __BUILD_COMMIT_SUBJECT__ : 'unknown',
   editedAt: typeof __BUILD_COMMIT_DATE__ !== 'undefined' ? __BUILD_COMMIT_DATE__ : 'unknown',
+  source: typeof __BUILD_SOURCE_REPO__ !== 'undefined' ? __BUILD_SOURCE_REPO__ : 'unknown',
 };
 
 function DeploymentBadge() {
   return (
-    <div className="fixed top-2 right-2 z-[100] bg-black/80 text-white text-[11px] leading-4 px-3 py-2 rounded-md shadow-lg font-mono">
+    <div className="fixed bottom-2 right-2 z-[100] bg-black/80 text-white text-[11px] leading-4 px-3 py-2 rounded-md shadow-lg font-mono">
       <div>Branch: {deploymentInfo.branch}</div>
       <div>Commit: {deploymentInfo.commitHash} ({deploymentInfo.commitName})</div>
       <div>Edited: {deploymentInfo.editedAt}</div>
+      <div>Domain: {window.location.host || 'unknown'}</div>
+      <div>Source: {deploymentInfo.source}</div>
     </div>
   );
 }

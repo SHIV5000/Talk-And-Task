@@ -16,12 +16,14 @@ function getGitInfo() {
   const commitHash = safeRun('git rev-parse --short HEAD');
   const commitSubject = safeRun('git log -1 --pretty=%s');
   const commitDate = safeRun('git log -1 --date=format-local:%d-%b-%y %H:%M --pretty=%cd');
+  const sourceRepo = safeRun('git config --get remote.origin.url');
 
   return {
     branchName,
     commitHash,
     commitSubject,
     commitDate,
+    sourceRepo,
   };
 }
 
@@ -33,6 +35,7 @@ export default defineConfig({
     __BUILD_COMMIT_HASH__: JSON.stringify(gitInfo.commitHash),
     __BUILD_COMMIT_SUBJECT__: JSON.stringify(gitInfo.commitSubject),
     __BUILD_COMMIT_DATE__: JSON.stringify(gitInfo.commitDate),
+    __BUILD_SOURCE_REPO__: JSON.stringify(gitInfo.sourceRepo),
   },
   plugins: [
     react(),
