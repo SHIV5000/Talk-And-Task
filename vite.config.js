@@ -1,8 +1,39 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execSync } from 'node:child_process';
+
+function getGitInfo() {
+  const safeRun = (cmd, fallback = 'unknown') => {
+    try {
+      return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const branchName = safeRun('git rev-parse --abbrev-ref HEAD');
+  const commitHash = safeRun('git rev-parse --short HEAD');
+  const commitSubject = safeRun('git log -1 --pretty=%s');
+  const commitDate = safeRun('git log -1 --date=format-local:%d-%b-%y %H:%M --pretty=%cd');
+
+  return {
+    branchName,
+    commitHash,
+    commitSubject,
+    commitDate,
+  };
+}
+
+const gitInfo = getGitInfo();
 
 export default defineConfig({
+  define: {
+    __BUILD_BRANCH_NAME__: JSON.stringify(gitInfo.branchName),
+    __BUILD_COMMIT_HASH__: JSON.stringify(gitInfo.commitHash),
+    __BUILD_COMMIT_SUBJECT__: JSON.stringify(gitInfo.commitSubject),
+    __BUILD_COMMIT_DATE__: JSON.stringify(gitInfo.commitDate),
+  },
   plugins: [
     react(),
     VitePWA({
