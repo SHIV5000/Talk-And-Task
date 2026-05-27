@@ -58,49 +58,49 @@ export default function LeftSidebar({
         style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
-        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 text-center">
-          <div className="relative flex items-start justify-center min-h-[52px]">
-            <MemoizedAvatar
-              uid={user.uid}
-              url={currentUserData?.profilePicUrl}
-              name={currentUserData?.name || user.email.split('@')[0]}
-              sizeClass="w-12 h-12"
-              extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
-              imageLoading="eager"
-            />
-            <div className="absolute right-0 top-1 flex items-center gap-2 shrink-0">
-            {(currentUserData?.isAdmin ||
-              isVipAdmin ||
-              currentUserData?.canCreateGroups) && (
-              <button
-                onClick={() => {
-                  setGroupForm({ name: '', members: [], profilePicUrl: null });
-                  setEditingGroup(null);
-                  setActiveModal('group_form_modal');
-                }}
-                className="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg"
-                title="New Group (Group Name, Members)"
-              >
-                <i className="fa-solid fa-plus"></i>
-              </button>
-            )}
-            <button
-              onClick={() => setActiveModal('edit_profile')}
-              className="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg"
-            >
-              <i className="fa-solid fa-gear"></i>
-            </button>
-            <button
-              onClick={onLogout}
-              className="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg"
-            >
-              <i className="fa-solid fa-power-off"></i>
-            </button>
+        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
+          <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
+            <div className="flex flex-col items-center">
+              <MemoizedAvatar
+                uid={user.uid}
+                url={currentUserData?.profilePicUrl}
+                name={currentUserData?.name || user.email.split('@')[0]}
+                sizeClass="w-14 h-14"
+                extraClasses="cursor-pointer hover:opacity-90 transition-opacity"
+                imageLoading="eager"
+              />
+              <span className="block mt-2 font-semibold text-sm whitespace-normal break-words leading-tight text-center max-w-[220px]">
+                {currentUserData?.name || user.email.split('@')[0]}
+              </span>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
+                  <button
+                    onClick={() => {
+                      setGroupForm({ name: '', members: [], profilePicUrl: null });
+                      setEditingGroup(null);
+                      setActiveModal('group_form_modal');
+                    }}
+                    className="text-white/95 bg-white/10 hover:bg-white/20 w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all"
+                    title="New Group (Group Name, Members)"
+                  >
+                    <i className="fa-solid fa-plus"></i>
+                  </button>
+                )}
+                <button
+                  onClick={() => setActiveModal('edit_profile')}
+                  className="text-white/95 bg-white/10 hover:bg-white/20 w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all"
+                >
+                  <i className="fa-solid fa-gear"></i>
+                </button>
+                <button
+                  onClick={onLogout}
+                  className="text-white/95 bg-white/10 hover:bg-rose-500/30 w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all"
+                >
+                  <i className="fa-solid fa-power-off"></i>
+                </button>
+              </div>
             </div>
           </div>
-          <span className="block mt-2 font-semibold text-sm whitespace-normal break-words leading-tight text-center">
-            {currentUserData?.name || user.email.split('@')[0]}
-          </span>
         </div>
 
         {/* Search */}
