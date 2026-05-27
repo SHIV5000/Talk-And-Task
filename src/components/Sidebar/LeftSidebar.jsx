@@ -56,20 +56,20 @@ export default function LeftSidebar({
         } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
       >
         {/* Header */}
-        <div className="h-[59px] flex items-center justify-between px-3 shrink-0 border-b border-white/10 safe-top">
-          <div className="flex items-center gap-2">
+        <div className="shrink-0 border-b border-white/10 safe-top px-4 py-4 flex flex-col items-center text-center gap-3">
+          <div className="flex flex-col items-center gap-2">
             <MemoizedAvatar
               uid={user.uid}
               url={currentUserData?.profilePicUrl}
               name={currentUserData?.name || user.email.split('@')[0]}
-              sizeClass="w-8 h-8"
+              sizeClass="w-12 h-12"
               extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
             />
-            <span className="font-medium text-sm truncate max-w-[100px]">
+            <span className="font-semibold text-sm whitespace-normal break-words leading-tight max-w-full">
               {currentUserData?.name || user.email.split('@')[0]}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             {(currentUserData?.isAdmin ||
               isVipAdmin ||
               currentUserData?.canCreateGroups) && (
@@ -158,9 +158,9 @@ export default function LeftSidebar({
                   isGroup={true}
                   extraClasses="mr-3 shrink-0"
                 />
-                <div className="flex-1 overflow-hidden border-b border-white/10 h-full flex flex-col justify-center pr-2">
+                <div className="flex-1 border-b border-white/10 h-full flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
-                    <span className="font-medium text-[14.5px] truncate">
+                    <span className="font-medium text-[14.5px] whitespace-normal break-words leading-tight">
                       {g.name}
                     </span>
                   </div>
@@ -233,10 +233,10 @@ export default function LeftSidebar({
                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-success border-2 border-[#312E81] rounded-full online-dot" />
                   )}
                 </div>
-                <div className="flex-1 overflow-hidden border-b border-white/10 h-full flex flex-col justify-center pr-2">
+                <div className="flex-1 border-b border-white/10 h-full flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span
-                      className={`text-[14.5px] truncate ${
+                      className={`text-[14.5px] whitespace-normal break-words leading-tight ${
                         unreadInfo.total > 0 ? 'font-semibold' : 'font-medium'
                       }`}
                     >
