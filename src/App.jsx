@@ -58,8 +58,11 @@ export default function App() {
 
   useEffect(() => {
     notifyRuntimeEvent('app-run', {
+      status: 'RUN_STARTED',
+      note: 'App boot sequence started. If failures happen later, compare with latest RUN_OK event.',
       branch: deploymentInfo.branch,
-      commit: `${deploymentInfo.commitHash} (${deploymentInfo.commitName})`,
+      commitHash: deploymentInfo.commitHash,
+      commitName: deploymentInfo.commitName,
       editedAt: deploymentInfo.editedAt,
       source: deploymentInfo.source,
     }).catch(() => {});
@@ -70,6 +73,23 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!authChecked) return;
+
+    notifyRuntimeEvent('app-run-ok', {
+      status: 'RUN_OK',
+      note: user
+        ? 'App initialized successfully with active session. Good rollback baseline.'
+        : 'App initialized successfully and waiting for login. Good rollback baseline.',
+      branch: deploymentInfo.branch,
+      commitHash: deploymentInfo.commitHash,
+      commitName: deploymentInfo.commitName,
+      editedAt: deploymentInfo.editedAt,
+      source: deploymentInfo.source,
+      userEmail: user?.email || 'N/A',
+    }).catch(() => {});
+  }, [authChecked, user]);
 
   const handleGoogleLogin = async (e) => {
     e.preventDefault();
@@ -110,11 +130,15 @@ export default function App() {
       await updateDoc(doc(db, "users", loggedInUser.uid), { lastLogin: serverTimestamp() }).catch(() => {});
 
       await notifyRuntimeEvent('user-login', {
+        status: 'LOGIN_OK',
+        note: 'User authenticated successfully. Safe checkpoint for rollback mapping.',
         userName: loggedInUser.displayName || (loggedInUser.email || '').split('@')[0] || 'unknown',
         userEmail: loggedInUser.email || 'unknown',
         branch: deploymentInfo.branch,
-        commit: `${deploymentInfo.commitHash} (${deploymentInfo.commitName})`,
+        commitHash: deploymentInfo.commitHash,
+        commitName: deploymentInfo.commitName,
         editedAt: deploymentInfo.editedAt,
+        source: deploymentInfo.source,
       }).catch(() => {});
 
     } catch (err) {
