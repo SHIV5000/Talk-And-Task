@@ -178,6 +178,32 @@ export default function ChatApp({ user, onLogout }) {
     const [pendingScheduledText, setPendingScheduledText] = useState("");
     const [activeReminderAlert, setActiveReminderAlert] = useState(null); 
 
+    const [leftWidth, setLeftWidth] = useState(320);
+    const [rightWidth, setRightWidth] = useState(380);
+
+    const startResize = (side) => (e) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startLeft = leftWidth;
+      const startRight = rightWidth;
+      const onMove = (ev) => {
+        if (side === 'left') {
+          const next = Math.min(520, Math.max(260, startLeft + (ev.clientX - startX)));
+          setLeftWidth(next);
+        } else {
+          const next = Math.min(520, Math.max(280, startRight - (ev.clientX - startX)));
+          setRightWidth(next);
+        }
+      };
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    };
+
+
     const { 
         isVipAdmin, currentUserData, dbUsers, groups, customTags,
         activeReminders, genericNotifications, allAdminReminders, 
@@ -1034,13 +1060,14 @@ export default function ChatApp({ user, onLogout }) {
                 />
                 ) : (
                     <div className="flex h-full w-full relative">
-                        <LeftSidebar 
+                        <LeftSidebar sidebarWidth={leftWidth} 
                             user={user} currentUserData={currentUserData} myGroups={myGroups} dmUsers={dmUsers} activeGroup={activeGroup} setActiveGroup={setActiveGroup}
                             setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} getUnreadInfoForUser={getUnreadInfoForUser}
                             getUnreadInfoForGroup={getUnreadInfoForGroup} messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
                             sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={isVipAdmin} setViewMode={setViewMode}
                         />
-                        
+                        <div className="hidden md:block app-resizer" onMouseDown={startResize('left')} title="Resize sidebar" />
+
                         {!activeGroup ? (
                             <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
                                 <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
@@ -1055,7 +1082,7 @@ export default function ChatApp({ user, onLogout }) {
                                 )}                            
                             </div>
                         ) : (
-                            <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0">
+                            <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0 chat-main-panel">
                                 <div className="h-[59px] bg-white flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
                                     <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
                                     
@@ -1294,11 +1321,15 @@ export default function ChatApp({ user, onLogout }) {
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
                             />
                         ) : showRightSidebar ? (
-                          <RightSidebar
-                            showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
-                            tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                            navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
-                          />
+                          <>
+                            <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task hub" />
+                            <RightSidebar
+                              sidebarWidth={rightWidth}
+                              showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
+                              tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
+                              navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
+                            />
+                          </>
                         ) : null}
                         <ModalManager {...modalProps} />
                         <Toast toasts={toasts} removeToast={removeToast} />

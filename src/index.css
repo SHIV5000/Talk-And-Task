@@ -74,7 +74,7 @@ body {
 .msg-row-spacing { margin-bottom: 1.5rem; }
 
 @keyframes onlinePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0.5); } 50% { box-shadow: 0 0 0 6px rgba(13,148,136,0); } }
-.online-dot { animation: onlinePulse 2s infinite; }
+.online-rail { box-shadow: 0 0 0 1px rgba(255,255,255,0.35); }
 
 .emoji-picker-popup {
     position: absolute; bottom: 100%; left: 0; margin-bottom: 8px;
@@ -175,3 +175,9 @@ aside .hover\:bg-white\/10:hover {
   animation: loading-bar 4s ease-in-out infinite;
 }
 
+
+
+.app-resizer { width: 6px; cursor: col-resize; background: linear-gradient(180deg, rgba(79,70,229,0.25), rgba(79,70,229,0.05)); }
+.app-resizer:hover { background: linear-gradient(180deg, rgba(79,70,229,0.45), rgba(79,70,229,0.12)); }
+.chat-main-panel button { background-color: #eef2ff; color: #3730a3; }
+.chat-main-panel button:hover { background-color: #e0e7ff; }

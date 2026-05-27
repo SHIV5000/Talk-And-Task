@@ -3,7 +3,8 @@ import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 export default function RightSidebar({
   showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
-  archivedTasks, groups, dbUsers, navigateToMessageFromNotification
+  archivedTasks, groups, dbUsers, navigateToMessageFromNotification,
+  sidebarWidth,
 }) {
   const [filter, setFilter] = useState('All'); 
   const [startDate, setStartDate] = useState('');
@@ -47,7 +48,7 @@ export default function RightSidebar({
   }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, archivedTasks, startDate, endDate]);
 
   return (
-    <div className="w-full md:w-[350px] lg:w-[400px] shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2">
+    <div className="w-full shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2" style={{ width: `${sidebarWidth || 380}px` }}>
       
       <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0 shadow-sm">
         <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">

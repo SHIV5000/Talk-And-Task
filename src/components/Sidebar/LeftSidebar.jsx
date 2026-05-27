@@ -21,6 +21,7 @@ export default function LeftSidebar({
   mobileSidebarOpen,
   isVipAdmin,
   setViewMode,
+  sidebarWidth,
 }) {
   return (
     <div className="relative z-20 h-full">
@@ -54,6 +55,7 @@ export default function LeftSidebar({
             ? 'mobile-sidebar-panel open flex'
             : 'hidden md:flex'
         } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
+        style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
         <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 flex items-start justify-between gap-2">
@@ -231,7 +233,7 @@ export default function LeftSidebar({
                     sizeClass="w-[49px] h-[49px]"
                   />
                   {isOnline && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-[#312E81] rounded-full online-dot shadow-sm" />
+                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-[#312E81] rounded-full online-rail shadow-sm" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
