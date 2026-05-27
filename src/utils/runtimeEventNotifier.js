@@ -1,4 +1,7 @@
-const webhookUrl = import.meta.env.VITE_EVENT_WEBHOOK_URL;
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase.js';
+
+const EMAIL_TO = 'shivsuri1@gmail.com';
 
 function escapeHtml(value = '') {
   return String(value)
@@ -24,17 +27,13 @@ function buildHtml(eventName, details) {
         <p style="margin:6px 0 0 0;opacity:.9;">${escapeHtml(eventName)}</p>
       </div>
       <div style="padding:20px;">
-        <table style="width:100%;border-collapse:collapse;font-size:14px;">
-          ${toRows(details)}
-        </table>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">${toRows(details)}</table>
       </div>
     </div>
   </div>`;
 }
 
 export async function notifyRuntimeEvent(eventName, payload = {}) {
-  if (!webhookUrl) return;
-
   const details = {
     event: eventName,
     time: new Date().toISOString(),
@@ -42,15 +41,21 @@ export async function notifyRuntimeEvent(eventName, payload = {}) {
     ...payload,
   };
 
-  const body = {
-    event: eventName,
-    details,
-    html: buildHtml(eventName, details),
-  };
+  const html = buildHtml(eventName, details);
 
-  await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+  await addDoc(collection(db, 'event_logs'), {
+    eventName,
+    details,
+    createdAt: serverTimestamp(),
+  });
+
+  await addDoc(collection(db, 'mail'), {
+    to: [EMAIL_TO],
+    message: {
+      subject: `[Talk & Task] ${eventName} | ${details.domain}`,
+      text: Object.entries(details).map(([k, v]) => `${k}: ${v}`).join('\n'),
+      html,
+    },
+    createdAt: serverTimestamp(),
   });
 }
