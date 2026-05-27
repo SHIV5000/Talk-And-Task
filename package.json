@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup:hooks": "node scripts/install-git-hooks.mjs",
+    "notify:git-event": "node scripts/git-event-email.mjs manual"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -22,6 +24,7 @@
     "postcss": "^8.4.35",
     "autoprefixer": "^10.4.17",
     "vite": "^5.1.4",
-    "vite-plugin-pwa": "^0.17.5"
+    "vite-plugin-pwa": "^0.17.5",
+    "nodemailer": "^6.9.16"
   }
 }
