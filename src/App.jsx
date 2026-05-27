@@ -133,7 +133,7 @@ export default function App() {
   );
 }
 
-// Thin wrapper that catches synchronous errors and passes them to the fallback
+// Thin wrapper that catches synchronous errors and passes them to the fallback-TEST
 function SafeChatApp({ user, onLogout, onCrash }) {
   try {
     // ChatApp renders everything, but if it throws, we catch it here
