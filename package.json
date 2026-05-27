@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "setup:hooks": "node scripts/install-git-hooks.mjs",
-    "notify:git-event": "node scripts/git-event-email.mjs manual"
+    "notify:git-event": "node scripts/git-event-email.mjs manual",
+    "dev:notify": "node scripts/git-event-email.mjs app-run && vite"
   },
   "dependencies": {
     "react": "^18.2.0",

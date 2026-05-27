@@ -7,6 +7,7 @@ import {
 } from './firebase.js';
 import ChatApp from './components/ChatApp.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { notifyRuntimeEvent } from './utils/runtimeEventNotifier.js';
 
 const deploymentInfo = {
   branch: typeof __BUILD_BRANCH_NAME__ !== 'undefined' ? __BUILD_BRANCH_NAME__ : 'unknown',
@@ -56,6 +57,13 @@ export default function App() {
   const [chatAppReady, setChatAppReady] = useState(false);
 
   useEffect(() => {
+    notifyRuntimeEvent('app-run', {
+      branch: deploymentInfo.branch,
+      commit: `${deploymentInfo.commitHash} (${deploymentInfo.commitName})`,
+      editedAt: deploymentInfo.editedAt,
+      source: deploymentInfo.source,
+    }).catch(() => {});
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setTimeout(() => setAuthChecked(true), 300);
@@ -100,6 +108,14 @@ export default function App() {
       }
 
       await updateDoc(doc(db, "users", loggedInUser.uid), { lastLogin: serverTimestamp() }).catch(() => {});
+
+      await notifyRuntimeEvent('user-login', {
+        userName: loggedInUser.displayName || (loggedInUser.email || '').split('@')[0] || 'unknown',
+        userEmail: loggedInUser.email || 'unknown',
+        branch: deploymentInfo.branch,
+        commit: `${deploymentInfo.commitHash} (${deploymentInfo.commitName})`,
+        editedAt: deploymentInfo.editedAt,
+      }).catch(() => {});
 
     } catch (err) {
       setAuthError("Google Sign-In Cancelled or Failed.");

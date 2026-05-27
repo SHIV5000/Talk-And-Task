@@ -42,6 +42,26 @@ const text = [
   `Source: ${repo}`,
 ].join('\n');
 
+const html = `
+<div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f3f4f6;padding:24px;">
+  <div style="max-width:700px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+    <div style="background:linear-gradient(90deg,#4f46e5,#7c3aed);color:#fff;padding:16px 20px;">
+      <h2 style="margin:0;font-size:20px;">Talk & Task Git Event</h2>
+      <p style="margin:6px 0 0 0;opacity:.9;">${event}</p>
+    </div>
+    <div style="padding:20px;">
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">Branch</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${branch}</td></tr>
+        <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">Commit</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${commitHash}</td></tr>
+        <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">Commit Name</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${commitMessage}</td></tr>
+        <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">Edited</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${editedAt}</td></tr>
+        <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">Author</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${author}</td></tr>
+        <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">Source</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${repo}</td></tr>
+      </table>
+    </div>
+  </div>
+</div>`;
+
 const transporter = createTransport({
   host,
   port,
@@ -49,5 +69,5 @@ const transporter = createTransport({
   auth: { user, pass },
 });
 
-await transporter.sendMail({ from, to, subject, text });
+await transporter.sendMail({ from, to, subject, text, html });
 console.log(`[git-event-email] Email sent for event: ${event}`);
