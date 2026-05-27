@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 
-const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", isGroup = false, extraClasses = "" }) => {
+const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", isGroup = false, extraClasses = "", imageLoading = "lazy" }) => {
   const cachedUrl = useMemo(() => {
     if (!url) return null;
     try {
@@ -16,7 +16,7 @@ const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", is
     return (
       <img 
         src={cachedUrl} 
-        loading="lazy" 
+        loading={imageLoading} 
         className={`${sizeClass} ${isGroup ? 'rounded-2xl' : 'rounded-full'} object-cover shadow-sm ${extraClasses}`} 
         alt={name} 
       />

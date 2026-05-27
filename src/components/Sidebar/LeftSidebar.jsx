@@ -64,6 +64,7 @@ export default function LeftSidebar({
               name={currentUserData?.name || user.email.split('@')[0]}
               sizeClass="w-12 h-12"
               extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
+              imageLoading="eager"
             />
             <span className="font-semibold text-sm whitespace-normal break-words leading-tight max-w-full">
               {currentUserData?.name || user.email.split('@')[0]}
@@ -146,7 +147,7 @@ export default function LeftSidebar({
                   setShowRightSidebar(false);
                   setMobileSidebarOpen(false);
                 }}
-                className={`flex items-center h-[72px] cursor-pointer transition-colors relative ${
+                className={`flex items-start min-h-[72px] py-2 cursor-pointer transition-colors relative ${
                   activeGroup?.id === g.id ? 'bg-white/10' : 'hover:bg-white/5'
                 } pl-3 pr-4`}
               >
@@ -158,7 +159,7 @@ export default function LeftSidebar({
                   isGroup={true}
                   extraClasses="mr-3 shrink-0"
                 />
-                <div className="flex-1 border-b border-white/10 h-full flex flex-col justify-center pr-2">
+                <div className="flex-1 min-w-0 border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span className="font-medium text-[14.5px] whitespace-normal break-words leading-tight">
                       {g.name}
@@ -216,7 +217,7 @@ export default function LeftSidebar({
                   setShowRightSidebar(false);
                   setMobileSidebarOpen(false);
                 }}
-                className={`flex items-center h-[72px] cursor-pointer transition-colors relative ${
+                className={`flex items-start min-h-[72px] py-2 cursor-pointer transition-colors relative ${
                   activeGroup?.id === dmIdStr
                     ? 'bg-white/10'
                     : 'hover:bg-white/5'
@@ -233,7 +234,7 @@ export default function LeftSidebar({
                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-success border-2 border-[#312E81] rounded-full online-dot" />
                   )}
                 </div>
-                <div className="flex-1 border-b border-white/10 h-full flex flex-col justify-center pr-2">
+                <div className="flex-1 min-w-0 border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span
                       className={`text-[14.5px] whitespace-normal break-words leading-tight ${

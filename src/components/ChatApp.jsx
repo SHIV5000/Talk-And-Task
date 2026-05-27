@@ -835,7 +835,6 @@ export default function ChatApp({ user, onLogout }) {
 
     const onGroupUpdate = useCallback(async (updates) => {
         if (!activeGroup || !activeGroup.id) return;
-        setActiveModal(null);
         if (updates.profilePicFile) {
             const file = updates.profilePicFile;
             const uniqueFileName = `group_${Date.now()}_${file.name}`;
@@ -844,15 +843,17 @@ export default function ChatApp({ user, onLogout }) {
                 const url = await getDownloadURL(uploadTask.snapshot.ref);
                 await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
                 setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
+                setActiveModal(null);
             });
             return;
         }
         const cleanUpdates = {};
-        if (updates.name) cleanUpdates.name = updates.name;
+        if (Object.prototype.hasOwnProperty.call(updates, "name")) cleanUpdates.name = updates.name?.trim?.() ?? updates.name;
         if (updates.members) { cleanUpdates.members = updates.members; cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a)); }
         if (Object.keys(cleanUpdates).length === 0) return;
         setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
         await updateDoc(doc(db, "groups", activeGroup.id), cleanUpdates);
+        setActiveModal(null);
     }, [activeGroup, storage, db, setActiveModal]);
 
     const handleProfileSubmit = async (e) => {
@@ -1058,7 +1059,7 @@ export default function ChatApp({ user, onLogout }) {
                                 <div className="h-[59px] bg-white flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
                                     <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
                                     
-                                    <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) setActiveModal('group_settings'); }}>
+                                    <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
                                         {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
                                         <div className="flex flex-col min-w-0 flex-1">
                                             <span className={`text-[16px] font-bold leading-tight truncate text-slate-800`}>{activeGroup.name}</span>
