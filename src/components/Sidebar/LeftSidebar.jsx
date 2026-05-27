@@ -56,7 +56,7 @@ export default function LeftSidebar({
         } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
       >
         {/* Header */}
-        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 flex items-start justify-between gap-2">
+        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <MemoizedAvatar
               uid={user.uid}
@@ -66,7 +66,7 @@ export default function LeftSidebar({
               extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
               imageLoading="eager"
             />
-            <span className="font-semibold text-sm whitespace-normal break-all leading-tight max-w-[170px] text-left">
+            <span className="font-semibold text-sm whitespace-normal break-all leading-tight max-w-[150px] text-left">
               {currentUserData?.name || user.email.split('@')[0]}
             </span>
           </div>
