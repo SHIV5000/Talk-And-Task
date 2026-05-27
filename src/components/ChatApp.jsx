@@ -36,6 +36,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     const [replyUploadProgress, setReplyUploadProgress] = useState(0);
     const threadInputRef = useRef(null);
     const threadFileRef = useRef(null);
+    const repliesScrollRef = useRef(null);
     
     const handleSend = async () => {
         if((!text.trim() || text === '<br>') && threadFiles.length === 0) return;
@@ -47,6 +48,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
           return new File([f], `${base}${ext}`, { type: f.type });
         });
         await sendMessageToDB(text.trim(), { id: activeReplies.id, sender: activeReplies.sender, text: activeReplies.text || activeReplies.fileName }, renamed, setReplyUploadProgress);
+        setTimeout(() => repliesScrollRef.current?.scrollTo({ top: repliesScrollRef.current.scrollHeight, behavior: "smooth" }), 60);
         setText('');
         setThreadFiles([]);
         setThreadFileNames({});
@@ -65,7 +67,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                 </div>
                 <button onClick={() => setActiveReplies(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
+            <div ref={repliesScrollRef} className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
                 <MessageBubble 
                     msg={activeReplies} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
                     groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 

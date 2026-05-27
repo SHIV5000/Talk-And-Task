@@ -452,7 +452,7 @@ const MessageBubble = React.memo(({
                             src={msg.fileUrl} 
                             alt="Shared" 
                             onContextMenu={isSecure ? e => e.preventDefault() : undefined} 
-                            className="w-32 h-32 md:w-48 md:h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                            className="w-24 h-24 md:w-28 md:h-28 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
                             onClick={(e) => { e.stopPropagation(); if(!isSecure) window.open(msg.fileUrl, '_blank'); }} 
                           />
                           {isSecure && (
@@ -465,7 +465,7 @@ const MessageBubble = React.memo(({
                           )}
                        </div>
                     ) : (
-                       <div className={`flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 w-fit max-w-[280px] shadow-sm ${!isSecure ? 'cursor-pointer hover:bg-slate-100' : 'cursor-default opacity-90'}`} onClick={(e) => { e.stopPropagation(); if(!isSecure) window.open(msg.fileUrl, '_blank'); }}>
+                       <div className={`flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 w-fit max-w-[220px] shadow-sm ${!isSecure ? 'cursor-pointer hover:bg-slate-100' : 'cursor-default opacity-90'}`} onClick={(e) => { e.stopPropagation(); if(!isSecure) window.open(msg.fileUrl, '_blank'); }}>
                           <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center text-indigo-500 shadow-sm shrink-0"><i className="fa-solid fa-file-lines text-lg"></i></div>
                           <div className="flex-1 overflow-hidden min-w-0 flex flex-col">
                              <p className="text-sm font-bold text-slate-700 truncate">{displayFileName}</p>
