@@ -56,8 +56,8 @@ export default function LeftSidebar({
         } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
       >
         {/* Header */}
-        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 flex items-start justify-between gap-2">
+          <div className="flex flex-col items-center min-w-0 flex-1">
             <MemoizedAvatar
               uid={user.uid}
               url={currentUserData?.profilePicUrl}
@@ -66,11 +66,11 @@ export default function LeftSidebar({
               extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
               imageLoading="eager"
             />
-            <span className="font-semibold text-sm whitespace-normal break-all leading-tight max-w-[150px] text-left">
+            <span className="font-semibold text-sm whitespace-normal break-words leading-tight max-w-[170px] text-center mt-1">
               {currentUserData?.name || user.email.split('@')[0]}
             </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 pt-1">
             {(currentUserData?.isAdmin ||
               isVipAdmin ||
               currentUserData?.canCreateGroups) && (
@@ -161,7 +161,7 @@ export default function LeftSidebar({
                 />
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
-                    <span className="font-medium text-[14.5px] whitespace-normal break-all leading-tight">
+                    <span className="font-medium text-[14.5px] truncate">
                       {g.name}
                     </span>
                   </div>
@@ -237,7 +237,7 @@ export default function LeftSidebar({
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span
-                      className={`text-[14.5px] whitespace-normal break-all leading-tight ${
+                      className={`text-[14.5px] truncate ${
                         unreadInfo.total > 0 ? 'font-semibold' : 'font-medium'
                       }`}
                     >
