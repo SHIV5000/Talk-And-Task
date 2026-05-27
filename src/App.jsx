@@ -17,18 +17,6 @@ const deploymentInfo = {
   source: typeof __BUILD_SOURCE_REPO__ !== 'undefined' ? __BUILD_SOURCE_REPO__ : 'unknown',
 };
 
-function DeploymentBadge() {
-  return (
-    <div className="fixed bottom-2 right-2 z-[100] bg-black/80 text-white text-[11px] leading-4 px-3 py-2 rounded-md shadow-lg font-mono">
-      <div>Branch: {deploymentInfo.branch}</div>
-      <div>Commit: {deploymentInfo.commitHash} ({deploymentInfo.commitName})</div>
-      <div>Edited: {deploymentInfo.editedAt}</div>
-      <div>Domain: {window.location.host || 'unknown'}</div>
-      <div>Source: {deploymentInfo.source}</div>
-    </div>
-  );
-}
-
 function FallbackScreen({ error }) {
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-surface text-text-primary p-8">
@@ -158,7 +146,6 @@ export default function App() {
   if (!authChecked) {
     return (
       <>
-        <DeploymentBadge />
         <div className="flex flex-col justify-center items-center h-screen bg-surface text-primary">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
           <span className="font-bold tracking-widest uppercase text-sm">Initializing Enterprise Portal...</span>
@@ -170,7 +157,6 @@ export default function App() {
   if (!user) {
     return (
       <>
-        <DeploymentBadge />
         <div className="flex flex-col items-center justify-center min-h-screen bg-surface p-4 relative app-entrance">
           <div className="absolute top-0 left-0 w-full h-[40vh] bg-primary z-0"></div>
           <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl p-8 z-10">
@@ -194,7 +180,6 @@ export default function App() {
 
   return (
     <>
-      <DeploymentBadge />
       <ErrorBoundary>
         <SafeChatApp user={user} onLogout={handleLogout} onCrash={setCrash} />
       </ErrorBoundary>
