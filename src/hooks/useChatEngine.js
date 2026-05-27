@@ -154,7 +154,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         try { setDoc(doc(db, "typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
     };
 
-    const sendMessageToDB = async (messageText, replyingTo, attachments = []) => {
+    const sendMessageToDB = async (messageText, replyingTo, attachments = [], uploadProgressCb = null) => {
         try { deleteDoc(doc(db, "typing", `${activeGroup.id}_${user.uid}`)); } catch(e) {}
 
         const mentions = [];
@@ -176,8 +176,11 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
 
 
         if (attachments.length > 0) {
-            for (const file of attachments) {
-                await uploadAndSendFileDB({ file, customName: file.name, caption: '' }, () => {}, replyingTo);
+            for (let i = 0; i < attachments.length; i++) {
+                const file = attachments[i];
+                await uploadAndSendFileDB({ file, customName: file.name, caption: '' }, (pct) => {
+                    if (uploadProgressCb) uploadProgressCb((i / attachments.length) * 100 + (pct / attachments.length));
+                }, replyingTo);
             }
         }
         if (isPrivate && uniqueMentions.length > 0) {

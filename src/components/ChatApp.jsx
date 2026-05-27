@@ -27,18 +27,31 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 // 👇 UPDATED: Slack Sidebar Input uses matching WYSIWYG Editor 👇
-const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
+const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeReplies.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
     const [threadFiles, setThreadFiles] = useState([]);
+    const [threadFileNames, setThreadFileNames] = useState({});
+    const [isReplyUploading, setIsReplyUploading] = useState(false);
+    const [replyUploadProgress, setReplyUploadProgress] = useState(0);
     const threadInputRef = useRef(null);
     const threadFileRef = useRef(null);
     
     const handleSend = async () => {
         if((!text.trim() || text === '<br>') && threadFiles.length === 0) return;
-        await sendMessageToDB(text.trim(), { id: activeReplies.id, sender: activeReplies.sender, text: activeReplies.text || activeReplies.fileName }, threadFiles);
+        setIsReplyUploading(true);
+        setReplyUploadProgress(0);
+        const renamed = threadFiles.map((f, idx) => {
+          const base = (threadFileNames[idx] || f.name.replace(/\.[^/.]+$/, '')).trim() || f.name.replace(/\.[^/.]+$/, '');
+          const ext = f.name.includes('.') ? f.name.slice(f.name.lastIndexOf('.')) : '';
+          return new File([f], `${base}${ext}`, { type: f.type });
+        });
+        await sendMessageToDB(text.trim(), { id: activeReplies.id, sender: activeReplies.sender, text: activeReplies.text || activeReplies.fileName }, renamed, setReplyUploadProgress);
         setText('');
         setThreadFiles([]);
+        setThreadFileNames({});
+        setReplyUploadProgress(100);
+        setTimeout(() => setIsReplyUploading(false), 400);
         if(threadInputRef.current) threadInputRef.current.innerHTML = '';
     }
 
@@ -55,9 +68,9 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
             <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
                 <MessageBubble 
                     msg={activeReplies} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
-                    groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
+                    groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
                     customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
-                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} 
+                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin} 
                 />
                 
                 <div className="flex items-center gap-3 my-4 opacity-80">
@@ -69,9 +82,9 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                 {threadMessages.map(m => (
                     <MessageBubble 
                         key={m.id} msg={m} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
-                        groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
+                        groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
                         customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
-                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} 
+                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin} 
                     />
                 ))}
             </div>
@@ -84,19 +97,36 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                     <button key={c} onClick={() => { threadInputRef.current?.focus(); document.execCommand('foreColor', false, c); }} className="w-6 h-6 rounded border border-slate-200" style={{ backgroundColor: c }} />
                   ))}
                 </div>
+                {threadFiles.length > 0 && (
+                  <div className="mb-2 space-y-1">
+                    {threadFiles.map((f, idx) => (
+                      <div key={`${f.name}-${idx}`} className="flex items-center gap-2 text-xs">
+                        <input value={threadFileNames[idx] || ''} onChange={(e)=>setThreadFileNames(prev=>({...prev,[idx]:e.target.value}))} className="flex-1 px-2 py-1 border border-slate-200 rounded" />
+                        <span className="text-slate-500 font-semibold">{f.name.includes('.') ? f.name.slice(f.name.lastIndexOf('.')) : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {isReplyUploading && (
+                  <div className="mb-2">
+                    <div className="h-2 bg-slate-200 rounded overflow-hidden"><div className="h-full bg-indigo-600" style={{ width: `${Math.round(replyUploadProgress)}%` }} /></div>
+                    <div className="text-[11px] text-slate-600 mt-1 font-semibold">Uploading {Math.round(replyUploadProgress)}%</div>
+                  </div>
+                )}
                 <div className="flex gap-2 items-end bg-slate-50 rounded-xl border border-slate-200 focus-within:border-indigo-400 focus-within:bg-white transition-all shadow-sm p-1.5 pr-2">
                    <div 
                       contentEditable 
                       ref={threadInputRef}
                       onInput={e => setText(e.currentTarget.innerHTML)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!isReplyUploading) handleSend(); } }}
                       suppressContentEditableWarning={true}
                       data-placeholder="Write a reply..."
                       className="custom-wysiwyg bg-transparent flex-1 outline-none text-[13px] text-slate-800 py-2 px-3 overflow-y-auto font-medium"
                       style={{ minHeight: '38px', maxHeight: '120px' }}
                    />
-                   <input ref={threadFileRef} type="file" multiple className="hidden" onChange={(e)=>setThreadFiles(Array.from(e.target.files||[]))} />
+                   <input ref={threadFileRef} type="file" multiple className="hidden" onChange={(e)=>{ const files = Array.from(e.target.files||[]); setThreadFiles(files); setThreadFileNames(Object.fromEntries(files.map((f,i)=>[i, f.name.replace(/\.[^/.]+$/, "")]))); }} />
                    <button onClick={()=>threadFileRef.current?.click()} className="w-9 h-9 rounded-full bg-white border border-slate-200 text-indigo-600"><i className="fa-solid fa-paperclip"></i></button>
-                   <button onClick={handleSend} disabled={((!text.trim() || text === '<br>') && threadFiles.length===0)} className="px-3 h-9 rounded-lg bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-sm shrink-0 mb-0.5 font-bold">Send</button>
+                   <button onClick={handleSend} disabled={isReplyUploading || ((!text.trim() || text === '<br>') && threadFiles.length===0)} className="px-3 h-9 rounded-lg bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-sm shrink-0 mb-0.5 font-bold">Send</button>
                 </div>
             </div>
         </div>
@@ -1335,8 +1365,8 @@ export default function ChatApp({ user, onLogout }) {
                         {activeReplies ? (
                             <RepliesSidebar 
                                 activeReplies={activeReplies} setActiveReplies={setActiveReplies} messages={messages} user={user} 
-                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} handleReactionIntercept={handleReactionIntercept} 
-                                deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} customTags={customTags} 
+                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleReactionIntercept={handleReactionIntercept} 
+                                deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} customTags={customTags} 
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
                             />
                         ) : showRightSidebar ? (

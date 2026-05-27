@@ -45,7 +45,7 @@ const MessageBubble = React.memo(({
   const deliveredCount = (msg.deliveredTo || []).filter(e => e !== userEmail).length;
 
   const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
-  const senderName = (msg.sender || '').split('@')[0];
+  const senderName = senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
   const senderAvatar = senderUser.profilePicUrl || null;
 
   // 👇 Visibility Flags
