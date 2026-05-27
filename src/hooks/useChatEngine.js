@@ -177,7 +177,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
 
         if (attachments.length > 0) {
             for (const file of attachments) {
-                await uploadAndSendFileDB({ file, customName: file.name, caption: '' }, () => {});
+                await uploadAndSendFileDB({ file, customName: file.name, caption: '' }, () => {}, replyingTo);
             }
         }
         if (isPrivate && uniqueMentions.length > 0) {
@@ -207,7 +207,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         } catch (err) {}
     };
 
-    const uploadAndSendFileDB = async (pf, onProgress) => {
+    const uploadAndSendFileDB = async (pf, onProgress, replyingTo = null) => {
     const { file, customName, caption } = pf;
     const safeCaption = caption || ""; // Prevents .trim() crashes
 
@@ -231,8 +231,9 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
             reject,
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                const replyData = replyingTo ? { replyToId: replyingTo.id, originalText: replyingTo.text || replyingTo.fileName || 'Attachment', originalSender: (replyingTo.sender||'').split('@')[0] } : {};
                 await addDoc(collection(db, "messages"), {
-                    text: safeCaption.trim(), // Saves caption as the main message text
+                    text: safeCaption.trim(),
                     senderUid: user.uid,
                     senderEmail: user.email,
                     groupId: activeGroup.id,
@@ -241,7 +242,8 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
                     fileType: processedFile.type,
                     timestamp: serverTimestamp(),
                     isTask: false,
-                    seenBy: [user.email]
+                    seenBy: [user.email],
+                    ...replyData
                 });
                 resolve();
             }

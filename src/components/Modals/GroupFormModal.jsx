@@ -17,7 +17,7 @@ export default function GroupFormModal({
       <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 transform-gpu max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-layer-group"></i></div>
-          {editingGroup ? 'Edit Team' : 'New Team'}
+          {editingGroup ? 'Edit Group' : 'New Group'}
         </div>
         <div className="flex flex-col items-center gap-2 mb-6">
           <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center overflow-hidden relative cursor-pointer group shadow-inner border-2 border-white ring-1 ring-slate-200" onClick={() => groupPicInputRef.current?.click()}>

@@ -57,7 +57,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                     msg={activeReplies} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
                     groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
                     customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
-                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isRepliesView={true} 
+                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} 
                 />
                 
                 <div className="flex items-center gap-3 my-4 opacity-80">
@@ -71,11 +71,19 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                         key={m.id} msg={m} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
                         groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
                         customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
-                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isRepliesView={true} 
+                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} 
                     />
                 ))}
             </div>
             <div className="p-3 border-t border-slate-200 bg-white shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {[{cmd:'bold',label:'B'},{cmd:'italic',label:'I'},{cmd:'underline',label:'U'},{cmd:'superscript',label:'X²'},{cmd:'subscript',label:'X₂'}].map(t => (
+                    <button key={t.cmd} onClick={() => { threadInputRef.current?.focus(); document.execCommand(t.cmd); }} className="px-2 py-1 text-xs font-bold bg-white border border-slate-200 rounded">{t.label}</button>
+                  ))}
+                  {['#ef4444','#2563eb','#16a34a','#a855f7'].map(c => (
+                    <button key={c} onClick={() => { threadInputRef.current?.focus(); document.execCommand('foreColor', false, c); }} className="w-6 h-6 rounded border border-slate-200" style={{ backgroundColor: c }} />
+                  ))}
+                </div>
                 <div className="flex gap-2 items-end bg-slate-50 rounded-xl border border-slate-200 focus-within:border-indigo-400 focus-within:bg-white transition-all shadow-sm p-1.5 pr-2">
                    <div 
                       contentEditable 
