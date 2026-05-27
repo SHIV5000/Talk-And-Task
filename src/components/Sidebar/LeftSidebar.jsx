@@ -161,7 +161,7 @@ export default function LeftSidebar({
                 />
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
-                    <span className="font-medium text-[14.5px] truncate">
+                    <span className="font-medium text-[14.5px] leading-tight break-words whitespace-normal pr-2">
                       {g.name}
                     </span>
                   </div>
@@ -231,13 +231,13 @@ export default function LeftSidebar({
                     sizeClass="w-[49px] h-[49px]"
                   />
                   {isOnline && (
-                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-success border-2 border-[#312E81] rounded-full online-dot" />
+                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-[#312E81] rounded-full online-dot shadow-sm" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span
-                      className={`text-[14.5px] truncate ${
+                      className={`text-[14.5px] leading-tight break-words whitespace-normal pr-2 ${
                         unreadInfo.total > 0 ? 'font-semibold' : 'font-medium'
                       }`}
                     >

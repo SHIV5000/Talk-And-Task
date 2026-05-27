@@ -848,7 +848,7 @@ export default function ChatApp({ user, onLogout }) {
             return;
         }
         const cleanUpdates = {};
-        if (Object.prototype.hasOwnProperty.call(updates, "name")) cleanUpdates.name = updates.name?.trim?.() ?? updates.name;
+        if (Object.prototype.hasOwnProperty.call(updates, "name")) cleanUpdates.name = (updates.name ?? '').trim();
         if (updates.members) { cleanUpdates.members = updates.members; cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a)); }
         if (Object.keys(cleanUpdates).length === 0) return;
         setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
@@ -860,7 +860,7 @@ export default function ChatApp({ user, onLogout }) {
         e.preventDefault();
         const file = profilePicInputRef.current?.files[0];
         try {
-            let updateData = { name: profileForm.name, fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily };
+            let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily };
             if (file) {
                 setProfileUploadProgress(10);
                 const uniqueFileName = `${user.uid}_${Date.now()}_avatar`;

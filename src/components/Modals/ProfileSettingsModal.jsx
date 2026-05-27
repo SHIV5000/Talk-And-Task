@@ -39,7 +39,6 @@ export default function ProfileSettingsModal({
           <div>
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-2 ml-1">Display Name</label>
             <input 
-              required 
               type="text" 
               value={profileForm.name} 
               onChange={(e) => setProfileForm({...profileForm, name: e.target.value})} 

@@ -47,15 +47,16 @@ export default function GroupSettingsModal({
           <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Directory</div>
           <div className="space-y-1.5 p-2 bg-white border border-slate-200 rounded-xl shadow-sm">
             {dbUsers.map(u => {
-              const isMember = activeGroup.members?.includes(u.email);
+              const baseMembers = groupForm.members?.length ? groupForm.members : (activeGroup.members || []);
+              const isMember = baseMembers.includes(u.email);
               return (
                 <label key={u.uid} className={`flex items-center gap-3 p-2 rounded-lg transition-colors border border-transparent ${isAdmin ? 'hover:bg-slate-50 hover:border-slate-200 hover:shadow-sm cursor-pointer' : ''}`}>
-                  <input type="checkbox" disabled={!isAdmin || activeGroup.admins?.includes(u.email)} checked={isMember || groupForm.members.includes(u.email)}
+                  <input type="checkbox" disabled={!isAdmin || activeGroup.admins?.includes(u.email)} checked={isMember}
                     onChange={(e) => {
                       if(!isAdmin) return;
                       const newMembers = e.target.checked
-                        ? [...groupForm.members, u.email]
-                        : groupForm.members.filter(m => m !== u.email);
+                        ? [...new Set([...(baseMembers || []), u.email])]
+                        : (baseMembers || []).filter(m => m !== u.email);
                       setGroupForm({...groupForm, members: newMembers});
                     }} className="w-4 h-4 accent-indigo-600 disabled:opacity-40 rounded" />
                   <span className="text-[14px] font-semibold text-slate-700 flex-1 truncate">{u.name}</span>
