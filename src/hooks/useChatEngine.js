@@ -154,7 +154,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         try { setDoc(doc(db, "typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
     };
 
-    const sendMessageToDB = async (messageText, replyingTo) => {
+    const sendMessageToDB = async (messageText, replyingTo, attachments = []) => {
         try { deleteDoc(doc(db, "typing", `${activeGroup.id}_${user.uid}`)); } catch(e) {}
 
         const mentions = [];
@@ -174,6 +174,12 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
 
         logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, isPrivate ? `Private: ${uniqueMentions.join(', ')}` : "Public");
 
+
+        if (attachments.length > 0) {
+            for (const file of attachments) {
+                await uploadAndSendFileDB({ file, customName: file.name, caption: '' }, () => {});
+            }
+        }
         if (isPrivate && uniqueMentions.length > 0) {
             uniqueMentions.forEach(async (mentionEmail) => {
                 if (mentionEmail === user.email) return; 
@@ -211,7 +217,8 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
     try { 
         if (file.type.startsWith('image/')) { 
             const compressedBlob = await compressImage(file); 
-            processedFile = new File([compressedBlob], customName, { type: file.type }); 
+            const outName = customName.replace(/\.[^/.]+$/, "") + ".webp";
+            processedFile = new File([compressedBlob], outName, { type: "image/webp" }); 
         } 
     } catch (e) {}
 

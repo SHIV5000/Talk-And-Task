@@ -59,7 +59,7 @@ export default function LeftSidebar({
       >
         {/* Header */}
         <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 text-center">
-          <div className="flex items-start justify-between gap-2">
+          <div className="relative flex items-start justify-center min-h-[52px]">
             <MemoizedAvatar
               uid={user.uid}
               url={currentUserData?.profilePicUrl}
@@ -68,7 +68,7 @@ export default function LeftSidebar({
               extraClasses="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
               imageLoading="eager"
             />
-            <div className="flex items-center gap-2 shrink-0 pt-1">
+            <div className="absolute right-0 top-1 flex items-center gap-2 shrink-0">
             {(currentUserData?.isAdmin ||
               isVipAdmin ||
               currentUserData?.canCreateGroups) && (
@@ -146,7 +146,6 @@ export default function LeftSidebar({
                 key={g.id}
                 onClick={() => {
                   setActiveGroup(g);
-                  setShowRightSidebar(false);
                   setMobileSidebarOpen(false);
                 }}
                 className={`flex items-center min-h-[72px] py-2 cursor-pointer transition-colors relative ${
@@ -216,7 +215,6 @@ export default function LeftSidebar({
                     isDM: true,
                     members: [user.email, u.email],
                   });
-                  setShowRightSidebar(false);
                   setMobileSidebarOpen(false);
                 }}
                 className={`flex items-center min-h-[72px] py-2 cursor-pointer transition-colors relative ${

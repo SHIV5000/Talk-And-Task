@@ -26,14 +26,16 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 // 👇 UPDATED: Slack Sidebar Input uses matching WYSIWYG Editor 👇
-const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
-    const threadMessages = messages.filter(m => m.replyToId === activeThread.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
+const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
+    const threadMessages = messages.filter(m => m.replyToId === activeReplies.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
+    const [threadFiles, setThreadFiles] = useState([]);
     const threadInputRef = useRef(null);
+    const threadFileRef = useRef(null);
     
     const handleSend = async () => {
         if(!text.trim() || text === '<br>') return;
-        await sendMessageToDB(text.trim(), { id: activeThread.id, sender: activeThread.sender, text: activeThread.text || activeThread.fileName });
+        await sendMessageToDB(text.trim(), { id: activeReplies.id, sender: activeReplies.sender, text: activeReplies.text || activeReplies.fileName });
         setText('');
         if(threadInputRef.current) threadInputRef.current.innerHTML = '';
     }
@@ -43,17 +45,17 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
             <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
                 <div>
-                    <h3 className="font-bold text-slate-800 leading-tight">Thread</h3>
-                    <span className="text-[11px] text-slate-500 font-medium">Discussion</span>
+                    <h3 className="font-bold text-slate-800 leading-tight">Replies</h3>
+                    <span className="text-[11px] text-slate-500 font-medium">Replies Panel</span>
                 </div>
-                <button onClick={() => setActiveThread(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                <button onClick={() => setActiveReplies(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
                 <MessageBubble 
-                    msg={activeThread} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
+                    msg={activeReplies} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
                     groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
                     customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
-                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} 
+                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isRepliesView={true} 
                 />
                 
                 <div className="flex items-center gap-3 my-4 opacity-80">
@@ -67,7 +69,7 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
                         key={m.id} msg={m} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
                         groups={groups} isVipAdmin={false} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
                         customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
-                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} 
+                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isRepliesView={true} 
                     />
                 ))}
             </div>
@@ -78,11 +80,13 @@ const ThreadSidebar = ({ activeThread, setActiveThread, messages, user, currentU
                       ref={threadInputRef}
                       onInput={e => setText(e.currentTarget.innerHTML)}
                       suppressContentEditableWarning={true}
-                      data-placeholder="Reply to thread..."
+                      data-placeholder="Write a reply..."
                       className="custom-wysiwyg bg-transparent flex-1 outline-none text-[13px] text-slate-800 py-2 px-3 overflow-y-auto font-medium"
                       style={{ minHeight: '38px', maxHeight: '120px' }}
                    />
-                   <button onClick={handleSend} disabled={!text.trim() || text === '<br>'} className="w-[36px] h-[36px] rounded-full bg-indigo-600 text-white flex items-center justify-center disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-sm shrink-0 mb-0.5"><i className="fa-solid fa-paper-plane text-xs ml-[-2px]"></i></button>
+                   <input ref={threadFileRef} type="file" multiple className="hidden" onChange={(e)=>setThreadFiles(Array.from(e.target.files||[]))} />
+                   <button onClick={()=>threadFileRef.current?.click()} className="w-9 h-9 rounded-full bg-white border border-slate-200 text-indigo-600"><i className="fa-solid fa-paperclip"></i></button>
+                   <button onClick={handleSend} disabled={((!text.trim() || text === '<br>') && threadFiles.length===0)} className="px-3 h-9 rounded-lg bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-sm shrink-0 mb-0.5 font-bold">Send</button>
                 </div>
             </div>
         </div>
@@ -104,7 +108,7 @@ export default function ChatApp({ user, onLogout }) {
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchWrapperRef = useRef(null);
 
-    const [activeThread, setActiveThread] = useState(null);
+    const [activeReplies, setActiveReplies] = useState(null);
     const [dismissedBroadcastId, setDismissedBroadcastId] = useState(null);
 
     const [sidebarSearch, setSidebarSearch] = useState("");
@@ -478,14 +482,13 @@ export default function ChatApp({ user, onLogout }) {
 
         if (targetGroup) {
             setActiveGroup(targetGroup);
-            setShowRightSidebar(false);
             setMobileSidebarOpen(false);
             setShowNotifications(false);
             setActiveModal(null);
             
             if (replyToId) {
                 const parentMsg = messages.find(m => m.id === replyToId);
-                if (parentMsg) setActiveThread(parentMsg);
+                if (parentMsg) setActiveReplies(parentMsg);
             }
             
             setTimeout(() => { setPendingScrollTarget(msgId); }, 50);
@@ -1288,7 +1291,7 @@ export default function ChatApp({ user, onLogout }) {
                                     setIsEditingTaskTitle={setIsEditingTaskTitle} messagesEndRef={messagesEndRef} chatContainerRef={chatContainerRef} 
                                     isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId} unreadHighlightIds={unreadHighlightIds} 
                                     handleAddInlineComment={handleAddInlineComment} jumpToPrivateSource={(msgId, groupId) => navigateToMessageFromNotification(msgId, groupId)}
-                                    customTags={customTags} setActiveThread={setActiveThread}
+                                    customTags={customTags} setActiveReplies={setActiveReplies}
                                 />
 
                                 <InputArea
@@ -1313,9 +1316,9 @@ export default function ChatApp({ user, onLogout }) {
                             </div>
                         )}
 
-                        {activeThread ? (
-                            <ThreadSidebar 
-                                activeThread={activeThread} setActiveThread={setActiveThread} messages={messages} user={user} 
+                        {activeReplies ? (
+                            <RepliesSidebar 
+                                activeReplies={activeReplies} setActiveReplies={setActiveReplies} messages={messages} user={user} 
                                 currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} handleReactionIntercept={handleReactionIntercept} 
                                 deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} customTags={customTags} 
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
