@@ -1077,7 +1077,7 @@ export default function ChatApp({ user, onLogout }) {
                                 <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
                                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                                     <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-all">
-                                        <i className="fa-solid fa-layer-group mr-2"></i> Create Department
+                                        <i className="fa-solid fa-layer-group mr-2"></i> New Group (Group Name, Members)
                                     </button>
                                 )}                            
                             </div>

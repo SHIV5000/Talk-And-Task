@@ -58,7 +58,7 @@ export default function LeftSidebar({
         style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
-        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
+        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3 text-center">
           <div className="flex items-start justify-between gap-2">
             <MemoizedAvatar
               uid={user.uid}
@@ -79,7 +79,7 @@ export default function LeftSidebar({
                   setActiveModal('group_form_modal');
                 }}
                 className="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center text-lg"
-                title="Create Team"
+                title="New Group (Group Name, Members)"
               >
                 <i className="fa-solid fa-plus"></i>
               </button>
@@ -98,7 +98,7 @@ export default function LeftSidebar({
             </button>
             </div>
           </div>
-          <span className="block mt-2 font-semibold text-sm whitespace-normal break-words leading-tight pr-1">
+          <span className="block mt-2 font-semibold text-sm whitespace-normal break-words leading-tight text-center">
             {currentUserData?.name || user.email.split('@')[0]}
           </span>
         </div>

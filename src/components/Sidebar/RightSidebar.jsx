@@ -1,14 +1,35 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+
+const DATE_FMT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+const formatDDMMMYY = (value) => {
+  if (!value) return 'N/A';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return 'N/A';
+  return DATE_FMT.format(d).replace(/ /g, '-');
+};
 
 export default function RightSidebar({
   showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
   archivedTasks, groups, dbUsers, navigateToMessageFromNotification,
   sidebarWidth,
 }) {
-  const [filter, setFilter] = useState('All'); 
+  const [filter, setFilter] = useState('All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [hiddenTaskIds, setHiddenTaskIds] = useState([]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('rightSidebarHiddenTasks_v1') || '[]');
+      if (Array.isArray(saved)) setHiddenTaskIds(saved);
+    } catch (e) {}
+  }, []);
+
+  const updateHidden = (next) => {
+    setHiddenTaskIds(next);
+    try { localStorage.setItem('rightSidebarHiddenTasks_v1', JSON.stringify(next)); } catch (e) {}
+  };
 
   const allTasks = useMemo(() => {
     const map = new Map();
@@ -18,147 +39,100 @@ export default function RightSidebar({
     return Array.from(map.values());
   }, [tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
 
-  const stats = {
-    total: tasksAssignedToMe.length + tasksAssignedByMe.length, 
-    completed: allTasks.filter(t => t.taskData.status === 'Completed' && !t.taskData.isArchived).length,
-    pending: allTasks.filter(t => t.taskData.status !== 'Completed' && !t.taskData.isArchived).length,
-  };
+  const visibleTasks = allTasks.filter(t => !hiddenTaskIds.includes(t.id));
+  const completedCount = visibleTasks.filter(t => t.taskData.status === 'Completed' && !t.taskData.isArchived).length;
+  const completionPct = visibleTasks.length ? Math.round((completedCount / visibleTasks.length) * 100) : 0;
+  const scoreBadge = completionPct >= 90 ? '👑 Elite' : completionPct >= 80 ? '🎈 Great' : completionPct >= 70 ? '🏅 Strong' : completionPct >= 60 ? '💪 Good' : '🚀 Rising';
 
   const filteredTasks = useMemo(() => {
     let res = [];
-    if (filter === 'Archived') res = archivedTasks;
-    else if (filter === 'Assigned To Me') res = tasksAssignedToMe;
-    else if (filter === 'Created By Me') res = tasksAssignedByMe;
+    if (filter === 'Archived') res = allTasks.filter(t => hiddenTaskIds.includes(t.id));
+    else if (filter === 'Assigned To Me') res = tasksAssignedToMe.filter(t => !hiddenTaskIds.includes(t.id));
+    else if (filter === 'Created By Me') res = tasksAssignedByMe.filter(t => !hiddenTaskIds.includes(t.id));
     else {
-        res = allTasks.filter(t => !t.taskData.isArchived); 
-        if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
-        if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
+      res = allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id));
+      if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
+      if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
     }
-
-    // Apply Date Range Filter
-    if (startDate) {
-        res = res.filter(t => new Date(t.taskData.deadline) >= new Date(startDate));
-    }
-    if (endDate) {
-        res = res.filter(t => new Date(t.taskData.deadline) <= new Date(endDate));
-    }
-
-    // Sort: Closer deadlines first
+    if (startDate) res = res.filter(t => new Date(t.taskData.deadline) >= new Date(startDate));
+    if (endDate) res = res.filter(t => new Date(t.taskData.deadline) <= new Date(endDate));
     return res.sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime());
-  }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, archivedTasks, startDate, endDate]);
+  }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, hiddenTaskIds, startDate, endDate]);
+
+  const filterCounts = {
+    All: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id)).length,
+    Pending: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id) && t.taskData.status !== 'Completed').length,
+    Completed: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id) && t.taskData.status === 'Completed').length,
+    'Assigned To Me': tasksAssignedToMe.filter(t => !hiddenTaskIds.includes(t.id)).length,
+    'Created By Me': tasksAssignedByMe.filter(t => !hiddenTaskIds.includes(t.id)).length,
+    Archived: hiddenTaskIds.length,
+  };
 
   return (
     <div className="w-full shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2" style={{ width: `${sidebarWidth || 380}px` }}>
-      
       <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0 shadow-sm">
         <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
           <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-layer-group text-sm"></i></div>
-          Workspace Hub
+          Task Hub
         </h2>
         <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 flex items-center justify-center transition-colors">
           <i className="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
 
-      <div className="p-4 bg-white border-b border-slate-200 shrink-0">
-         <div className="flex gap-2 mb-4">
-            <div className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-2 text-center shadow-sm">
-                <div className="text-lg font-black text-slate-700">{stats.total}</div>
-                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-1">Active</div>
-            </div>
-            <div className="flex-1 bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
-                <div className="text-lg font-black text-amber-700">{stats.pending}</div>
-                <div className="text-[9px] font-bold text-amber-500 uppercase tracking-wider mt-1">Pending</div>
-            </div>
-            <div className="flex-1 bg-teal-50 border border-teal-100 rounded-xl p-2 text-center shadow-sm">
-                <div className="text-lg font-black text-teal-700">{stats.completed}</div>
-                <div className="text-[9px] font-bold text-teal-500 uppercase tracking-wider mt-1">Done</div>
-            </div>
+      <div className="p-4 bg-white border-b border-slate-200 shrink-0 space-y-3">
+         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex items-center justify-between">
+           <div>
+             <div className="text-xs font-bold text-indigo-700 uppercase">Completion Score</div>
+             <div className="text-xl font-black text-indigo-800">{completionPct}%</div>
+           </div>
+           <div className="text-sm font-bold text-indigo-700">{scoreBadge}</div>
          </div>
-         
-         <div className="flex flex-wrap gap-2 mb-4">
+
+         <div className="flex flex-wrap gap-2">
             {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
                 <button key={f} onClick={()=>setFilter(f)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}>
-                  {f}
+                  {f} ({filterCounts[f] || 0})
                 </button>
             ))}
          </div>
 
-         {/* Date Range Filter */}
-         <div className="flex gap-2 items-center bg-slate-50 p-2 rounded-xl border border-slate-100 shadow-inner">
+         <div className="flex gap-2 items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200">
              <i className="fa-solid fa-calendar-day text-slate-400 text-sm ml-1"></i>
-             <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="flex-1 text-[10px] uppercase font-bold text-slate-600 bg-transparent outline-none cursor-pointer" title="Start Date" />
-             <span className="text-slate-300">-</span>
-             <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="flex-1 text-[10px] uppercase font-bold text-slate-600 bg-transparent outline-none cursor-pointer" title="End Date" />
-             {(startDate || endDate) && (
-                 <button onClick={()=>{setStartDate(''); setEndDate('');}} className="text-rose-500 hover:text-rose-700 p-1"><i className="fa-solid fa-times"></i></button>
-             )}
+             <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="flex-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 outline-none" title="Start Date" />
+             <span className="text-slate-300">to</span>
+             <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="flex-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 outline-none" title="End Date" />
+             {(startDate || endDate) && <button onClick={()=>{setStartDate(''); setEndDate('');}} className="text-rose-500 hover:text-rose-700 p-1"><i className="fa-solid fa-times"></i></button>}
          </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll space-y-3 bg-slate-50">
-         {filteredTasks.length === 0 ? (
-             <div className="text-sm text-slate-400 italic text-center py-8 bg-white border border-slate-100 rounded-xl shadow-sm">No tasks match criteria.</div>
-         ) : (
-             filteredTasks.map(task => {
-                 const group = groups.find(g => g.id === task.groupId);
-                 const isDone = task.taskData.status === 'Completed';
-                 const isArchived = task.taskData.isArchived;
-
-                 return (
-                     <div 
-                        key={task.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (navigateToMessageFromNotification) navigateToMessageFromNotification(task.id, task.groupId);
-                        }}
-                        className={`bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isArchived ? 'border-slate-200 opacity-70 bg-slate-50/50' : 'border-slate-200 hover:border-indigo-300'}`}
-                     >
-                        {!isArchived && !isDone && (
-                           <div className={`absolute top-0 left-0 w-1.5 h-full ${task.taskData.priority==='High'?'bg-rose-500':task.taskData.priority==='Medium'?'bg-amber-500':'bg-emerald-500'}`}></div>
-                        )}
-
-                        <div className="flex justify-between items-start mb-2.5 pl-1.5">
-                            <div className="flex gap-1.5 items-center">
-                                {isArchived ? (
-                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                                      <i className="fa-solid fa-box-archive"></i> Archived
-                                    </span>
-                                ) : (
-                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDone ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
-                                      {task.taskData.status}
-                                    </span>
-                                )}
-                            </div>
-                            <span className={`text-[10px] font-bold flex items-center gap-1 ${isDone ? 'text-teal-600' : 'text-slate-400'}`}>
-                                <i className="fa-regular fa-calendar"></i> {new Date(task.taskData.deadline).toLocaleDateString()}
-                            </span>
-                        </div>
-                        
-                        <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 pl-1.5 ${isDone || isArchived ? 'text-slate-500 line-through' : 'text-slate-800 group-hover/task:text-indigo-600 transition-colors'}`}>
-                            {task.text}
-                        </div>
-                        
-                        <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-100 pl-1.5">
-                            <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-md truncate max-w-[120px] shadow-sm">
-                                {group?.name || 'Direct Task'}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-indigo-500 opacity-0 group-hover/task:opacity-100 transition-opacity mr-1 flex items-center gap-1">
-                                View Original <i className="fa-solid fa-arrow-right"></i>
-                              </span>
-                              <div className="flex -space-x-1.5">
-                                  {(task.taskData.assignees || []).slice(0, 3).map(email => {
-                                      const assignee = dbUsers.find(u => u.email === email);
-                                      return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses="border-2 border-white shadow-sm" />;
-                                  })}
-                              </div>
-                            </div>
-                        </div>
-                     </div>
-                 )
-             })
-         )}
+         {filteredTasks.length === 0 ? <div className="text-sm text-slate-400 italic text-center py-8 bg-white border border-slate-100 rounded-xl shadow-sm">No tasks match criteria.</div> : filteredTasks.map(task => {
+            const group = groups.find(g => g.id === task.groupId);
+            const isDone = task.taskData.status === 'Completed';
+            const isHidden = hiddenTaskIds.includes(task.id);
+            return (
+              <div key={task.id} onClick={() => navigateToMessageFromNotification?.(task.id, task.groupId)} className={`bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isHidden ? 'border-slate-200 opacity-80 bg-slate-50/60' : 'border-slate-200 hover:border-indigo-300'}`}>
+                <div className="flex justify-between items-start mb-2.5">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDone ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>{isHidden ? 'Archived' : task.taskData.status}</span>
+                  <span className="text-[10px] font-bold text-slate-500"><i className="fa-regular fa-calendar mr-1"></i>{formatDDMMMYY(task.taskData.deadline)}</span>
+                </div>
+                <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone ? 'text-slate-500' : 'text-slate-800'}`}><span className={isDone ? 'line-through decoration-2' : ''}>{task.text}</span></div>
+                <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-md truncate max-w-[120px] shadow-sm">{group?.name || 'Direct Task'}</span>
+                  <div className="flex items-center gap-2">
+                    {!isHidden && <button onClick={(e)=>{e.stopPropagation(); updateHidden([...new Set([...hiddenTaskIds, task.id])]);}} className="text-[10px] font-bold text-rose-500 hover:text-rose-700">Archive</button>}
+                    {isHidden && <button onClick={(e)=>{e.stopPropagation(); updateHidden(hiddenTaskIds.filter(id=>id!==task.id));}} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700">Unarchive</button>}
+                    <div className="flex -space-x-1.5">
+                      {(task.taskData.assignees || []).slice(0, 3).map(email => {
+                        const assignee = dbUsers.find(u => u.email === email);
+                        return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses="border-2 border-white shadow-sm" imageLoading="eager" />;
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )})}
       </div>
     </div>
   );
