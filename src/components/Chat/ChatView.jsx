@@ -13,7 +13,7 @@ export default function ChatView({
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
   unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
-  customTags, setActiveThread 
+  customTags, setActiveReplies 
 }) {
   
   const handleChatScroll = (e) => {
@@ -119,7 +119,7 @@ export default function ChatView({
                 jumpToPrivateSource={jumpToPrivateSource} 
                 handleAddInlineComment={handleAddInlineComment} 
                 customTags={customTags || []} 
-                setActiveThread={setActiveThread}
+                setActiveReplies={setActiveReplies}
                 />
             );
           })}

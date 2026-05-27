@@ -18,6 +18,7 @@ import useChatEngine from '../hooks/useChatEngine.js';
 
 // Utils & Firebase Core
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
+import { compressImage } from '../utils/imageUtils.js';
 import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -34,9 +35,10 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     const threadFileRef = useRef(null);
     
     const handleSend = async () => {
-        if(!text.trim() || text === '<br>') return;
-        await sendMessageToDB(text.trim(), { id: activeReplies.id, sender: activeReplies.sender, text: activeReplies.text || activeReplies.fileName });
+        if((!text.trim() || text === '<br>') && threadFiles.length === 0) return;
+        await sendMessageToDB(text.trim(), { id: activeReplies.id, sender: activeReplies.sender, text: activeReplies.text || activeReplies.fileName }, threadFiles);
         setText('');
+        setThreadFiles([]);
         if(threadInputRef.current) threadInputRef.current.innerHTML = '';
     }
 
@@ -829,8 +831,10 @@ export default function ChatApp({ user, onLogout }) {
         const file = e.target.files[0];
         if (!file) return;
         setGroupPicUploadProgress(10);
-        const uniqueFileName = `group_${Date.now()}_${file.name}`;
-        const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
+        const uniqueFileName = `group_${Date.now()}.webp`;
+        const compressedBlob = await compressImage(file, 640, 640, 0.68);
+        const groupFile = new File([compressedBlob], uniqueFileName, { type: 'image/webp' });
+        const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), groupFile);
         uploadTask.on('state_changed', (snapshot) => setGroupPicUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100), (error) => { setGroupPicUploadProgress(0); alert("Upload failed."); }, async () => {
             const url = await getDownloadURL(uploadTask.snapshot.ref);
             setGroupForm(prev => ({...prev, profilePicUrl: url}));
@@ -866,8 +870,10 @@ export default function ChatApp({ user, onLogout }) {
         if (!activeGroup || !activeGroup.id) return;
         if (updates.profilePicFile) {
             const file = updates.profilePicFile;
-            const uniqueFileName = `group_${Date.now()}_${file.name}`;
-            const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), file);
+            const uniqueFileName = `group_${Date.now()}.webp`;
+            const compressedBlob = await compressImage(file, 640, 640, 0.68);
+            const groupFile = new File([compressedBlob], uniqueFileName, { type: 'image/webp' });
+            const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), groupFile);
             uploadTask.on('state_changed', null, null, async () => {
                 const url = await getDownloadURL(uploadTask.snapshot.ref);
                 await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
@@ -892,8 +898,10 @@ export default function ChatApp({ user, onLogout }) {
             let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily };
             if (file) {
                 setProfileUploadProgress(10);
-                const uniqueFileName = `${user.uid}_${Date.now()}_avatar`;
-                const uploadTask = uploadBytesResumable(ref(storage, `avatars/${uniqueFileName}`), file);
+                const uniqueFileName = `${user.uid}_${Date.now()}_avatar.webp`;
+                const compressedBlob = await compressImage(file, 512, 512, 0.62);
+                const avatarFile = new File([compressedBlob], uniqueFileName, { type: 'image/webp' });
+                const uploadTask = uploadBytesResumable(ref(storage, `avatars/${uniqueFileName}`), avatarFile);
                 await new Promise((resolve, reject) => {
                     uploadTask.on('state_changed', (snapshot) => setProfileUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100), reject, async () => {
                         updateData.profilePicUrl = await getDownloadURL(uploadTask.snapshot.ref);
