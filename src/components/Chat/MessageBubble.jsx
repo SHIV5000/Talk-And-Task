@@ -7,6 +7,9 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
+const TASK_DTF = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
+const formatTaskDateTime = (value) => { if (!value) return 'N/A'; const d = new Date(value); if (Number.isNaN(d.getTime())) return 'N/A'; return TASK_DTF.format(d).replace(',', '').replace(/ /g, '-').replace(/-(\d{2}:\d{2})-/, ' $1 '); };
+
 const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
 const MessageBubble = React.memo(({
@@ -260,7 +263,7 @@ const MessageBubble = React.memo(({
                           )}
                         </div>
                         <span className={`text-[11px] font-bold flex items-center gap-1 ${isTaskCompleted ? 'text-slate-400' : 'text-slate-500'}`}>
-                          <i className="fa-regular fa-calendar-check"></i> Due {new Date(msg.taskData.deadline).toLocaleDateString()}
+                          <i className="fa-regular fa-calendar-check"></i> Due {formatTaskDateTime(msg.taskData.deadline)}
                         </span>
                       </div>
                       
@@ -271,7 +274,7 @@ const MessageBubble = React.memo(({
                           <button onClick={()=>{setIsEditingTitle(false); setTempTitle(msg.text);}} className="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded font-semibold hover:bg-slate-300">Cancel</button>
                         </div>
                       ) : (
-                        <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                        <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskCompleted ? 'text-slate-500' : 'text-slate-800'}`}>
                           {msg.text}
                           {canEditTask && isTaskParticipant && <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer ml-2 opacity-0 group-hover/title:opacity-100 transition-opacity" onClick={(e)=>{e.stopPropagation(); setIsEditingTitle(true);}}></i>}
                         </p>
@@ -352,7 +355,7 @@ const MessageBubble = React.memo(({
                                    className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`}
                                    title={!hasProofAttached ? 'You must attach a file to complete this task' : ''}
                                  >
-                                   Resolve
+                                   Completed
                                  </button>
                               </>
                            )}
@@ -366,7 +369,7 @@ const MessageBubble = React.memo(({
 
                     {isTaskExpanded && (
                       <div className="bg-slate-50 border-t border-slate-200 p-3 animate-in slide-in-from-top-2">
-                        <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-2 custom-sidebar-scroll scroll-smooth">
+                        <div className="space-y-3 mb-4 pr-2 scroll-smooth">
                           {(msg.taskData.trail || []).map((t, idx) => {
                             const tAuthor = dbUsers.find(u => u.email === t.by)?.name || 'System';
                             const isAuthor = t.by === userEmail || isSuperAdmin;

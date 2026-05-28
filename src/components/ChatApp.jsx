@@ -702,9 +702,13 @@ export default function ChatApp({ user, onLogout }) {
                 }
             }
 
+            const finalAssignees = Array.from(new Set([...(taskAssignees || []), user.email]));
+
+            const sanitizedTaskTitle = stripHtml(selectedMessage.text || "").replace(/ |&nbsp;/g, " ").trim() || "Task";
+
             const taskData = {
                 deadline: taskDeadline,
-                assignees: taskAssignees,
+                assignees: finalAssignees,
                 priority: taskPriority,
                 status: "Pending",
                 isArchived: false,
@@ -713,7 +717,7 @@ export default function ChatApp({ user, onLogout }) {
                     action: "Task Created", 
                     by: user.email, 
                     time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), 
-                    to: taskAssignees.map(email => {
+                    to: finalAssignees.map(email => {
     const u = dbUsers.find(x => x.email === email);
     return u ? u.name : (email||"").split('@')[0];
 }).join(', ')
@@ -727,10 +731,11 @@ export default function ChatApp({ user, onLogout }) {
 
             await setDoc(doc(db, "messages", selectedMessage.id), {
                 isTask: true,
+                text: sanitizedTaskTitle,
                 taskData: taskData
             }, { merge: true });
 
-            taskAssignees.forEach(email => {
+            finalAssignees.forEach(email => {
                 if (email !== user.email) {
                     const assigneeUser = dbUsers.find(u => u.email === email);
                     if (assigneeUser) {

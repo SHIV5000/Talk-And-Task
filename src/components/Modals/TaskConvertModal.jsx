@@ -78,7 +78,7 @@ export default function TaskConvertModal({
           <div className="relative mt-2">
             <label className="text-[10px] text-blue-600 font-bold uppercase absolute -top-2.5 left-3 bg-white px-1">Set Deadline</label>
             <input type="datetime-local" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)}
-              className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[14px] font-semibold outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+              className="modern-date-input" />
           </div>
 
           {/* 👇 NEW: Require Acknowledgement Toggle */}
