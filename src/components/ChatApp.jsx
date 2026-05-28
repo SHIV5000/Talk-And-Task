@@ -671,10 +671,10 @@ export default function ChatApp({ user, onLogout }) {
 
     useEffect(() => {
         const migrateAssigneeStates = async () => {
-            const candidates = messages.filter(m => m.isTask && m.taskData?.assignees?.length && !m.taskData?.assigneeStates);
+            const candidates = messages.filter(m => m.isTask && m.taskData?.assignees?.length && (!m.taskData?.assigneeStates || !m.taskData?.masterReviewerEmail));
             for (const m of candidates.slice(0, 20)) {
                 const states = Object.fromEntries((m.taskData.assignees || []).map(e => [e, 'assigned']));
-                await updateDoc(doc(db, "messages", m.id), { "taskData.assigneeStates": states }).catch(() => {});
+                await updateDoc(doc(db, "messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "" }).catch(() => {});
             }
         };
         migrateAssigneeStates();
@@ -714,7 +714,7 @@ export default function ChatApp({ user, onLogout }) {
                 }
             }
 
-            const finalAssignees = Array.from(new Set([...(taskAssignees || []), user.email]));
+            const finalAssignees = Array.from(new Set([...(taskAssignees || [])]));
 
             const sanitizedTaskTitle = stripHtml(selectedMessage.text || "").replace(/ |&nbsp;/g, " ").trim() || "Task";
 
@@ -739,7 +739,10 @@ export default function ChatApp({ user, onLogout }) {
                 acknowledged: false,
                 requireProof: requireProof,
                 escalated: false,
-                assigneeStates: Object.fromEntries(finalAssignees.map(e => [e, "assigned"]))
+                assigneeStates: Object.fromEntries(finalAssignees.map(e => [e, "assigned"])),
+                masterReviewerEmail: user.email,
+                isDeleted: false,
+                deletedAt: null
             };
 
             await setDoc(doc(db, "messages", selectedMessage.id), {

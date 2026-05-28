@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { formatMessageText } from '../../utils/helpers.js';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { db, storage } from '../../firebase.js';
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -37,6 +37,7 @@ const MessageBubble = React.memo(({
   const [trailEditText, setTrailEditText] = useState("");
   const [trailFileUploading, setTrailFileUploading] = useState(false);
   const [trailUploadProgress, setTrailUploadProgress] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
   
   const menuRef = useRef(null);
   const tagPickerRef = useRef(null);
@@ -62,7 +63,8 @@ const MessageBubble = React.memo(({
   const canEditTask = !isTaskCompleted || isSuperAdmin;
 
   const assigneeStates = msg.taskData?.assigneeStates || {};
-  const isCreator = msg.senderEmail === userEmail;
+  const masterReviewerEmail = msg.taskData?.masterReviewerEmail || msg.senderEmail;
+  const isCreator = masterReviewerEmail === userEmail;
   const myAssigneeState = assigneeStates[userEmail] || (isAssignee ? 'assigned' : null);
   const activeAssignees = (msg.taskData?.assignees || []).filter(e => assigneeStates[e] !== 'revoked');
   const allAccepted = activeAssignees.length > 0 && activeAssignees.every(e => assigneeStates[e] === 'accepted_completed');
@@ -144,6 +146,7 @@ const MessageBubble = React.memo(({
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": updatedTrail });
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} updated the task.`);
       playTaskSound();
+      setReviewComment("");
         setInlineUpdateText(""); setIsAddingUpdate(false);
     } catch(e) {}
   };
@@ -173,7 +176,13 @@ const MessageBubble = React.memo(({
     try {
       const now = new Date();
       const newTrail = [...msg.taskData.trail, { action: "Completion Submitted", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: senderName }];
-      await updateDoc(doc(db, "messages", msg.id), { [`taskData.assigneeStates.${userEmail}`]: "submitted_completed", "taskData.status": "In Progress", "taskData.trail": newTrail });
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "messages", msg.id);
+        const snap = await tx.get(ref);
+        const data = snap.data() || {};
+        const states = { ...(data.taskData?.assigneeStates || {}), [userEmail]: "submitted_completed" };
+        tx.update(ref, { "taskData.assigneeStates": states, "taskData.status": "In Progress", "taskData.trail": [...(data.taskData?.trail || []), ...[newTrail[newTrail.length-1]]] });
+      });
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} submitted completion for review ✅`);
       playTaskSound();
     } catch(e) {}
@@ -192,9 +201,10 @@ const MessageBubble = React.memo(({
   };
 
   const handleCreatorReviewAgain = async (assigneeEmail) => {
+    if (!reviewComment || reviewComment.trim().length < 6) return alert("Review comment must be at least 6 characters.");
     try {
       const now = new Date();
-      const newTrail = [...(msg.taskData?.trail || []), { action: "Review Requested", by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: assigneeEmail }];
+      const newTrail = [...(msg.taskData?.trail || []), { action: "Review Requested", by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: assigneeEmail, comment: reviewComment.trim() }];
       await updateDoc(doc(db, "messages", msg.id), { [`taskData.assigneeStates.${assigneeEmail}`]: "needs_review", "taskData.status": "In Progress", "taskData.trail": newTrail });
       const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Review again requested: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
       playTaskSound();
@@ -414,15 +424,25 @@ const MessageBubble = React.memo(({
                         {(msg.taskData?.assignees || []).filter(email => (assigneeStates[email] || 'assigned') === 'submitted_completed').map(email => (
                           <div key={email} className="flex items-center justify-between gap-2 text-xs">
                             <span className="font-semibold text-blue-700">{email}</span>
-                            <div className="flex gap-2">
-                              <button onClick={(e)=>{e.stopPropagation(); handleCreatorAcceptCompletion(email);}} className="px-2 py-1 rounded bg-emerald-600 text-white font-bold">Accept Completion</button>
-                              <button onClick={(e)=>{e.stopPropagation(); handleCreatorReviewAgain(email);}} className="px-2 py-1 rounded bg-amber-500 text-white font-bold">Review</button>
+                            <div className="flex flex-col gap-1">
+                              <input value={reviewComment} onChange={(e)=>setReviewComment(e.target.value)} placeholder="Review comment (min 6 chars)" className="text-[11px] border rounded px-1.5 py-1" />
+                              <div className="flex gap-2">
+                                <button onClick={(e)=>{e.stopPropagation(); handleCreatorAcceptCompletion(email);}} className="px-2 py-1 rounded bg-emerald-600 text-white font-bold">Mark Done</button>
+                                <button disabled={(reviewComment||'').trim().length<6} onClick={(e)=>{e.stopPropagation(); handleCreatorReviewAgain(email);}} className="px-2 py-1 rounded bg-amber-500 disabled:opacity-50 text-white font-bold">Review Again</button>
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
                     )}
 
+
+                    <div className="px-3 pb-2">
+                      <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Task Vault</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(msg.taskData?.trail || []).filter(t=>t.fileUrl).slice(-6).map((t, i)=>(<button key={i} onClick={(e)=>{e.stopPropagation(); window.open(t.fileUrl, '_blank');}} className="text-left text-[11px] px-2 py-1 bg-white border rounded truncate">{t.fileName || 'Attachment'}</button>))}
+                      </div>
+                    </div>
                     <button onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); setIsDelegating(false); }} className={`w-full border-t border-slate-200 py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isTaskCompleted ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}>
                       <i className={`fa-solid fa-chevron-${isTaskExpanded ? 'up' : 'down'} text-[10px]`}></i>
                       {isTaskExpanded ? 'Hide Details' : `View Updates & Trail (${msg.taskData.trail?.length || 0})`}
