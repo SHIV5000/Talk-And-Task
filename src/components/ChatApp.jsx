@@ -38,6 +38,14 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     const threadFileRef = useRef(null);
     const repliesScrollRef = useRef(null);
     
+
+
+    useEffect(() => {
+        const scrollToLatest = () => repliesScrollRef.current?.scrollTo({ top: repliesScrollRef.current.scrollHeight, behavior: "smooth" });
+        const timer = setTimeout(scrollToLatest, 80);
+        return () => clearTimeout(timer);
+    }, [activeReplies?.id, threadMessages.length]);
+
     const handleSend = async () => {
         if((!text.trim() || text === '<br>') && threadFiles.length === 0) return;
         setIsReplyUploading(true);
@@ -65,7 +73,10 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                     <h3 className="font-bold text-slate-800 leading-tight">Replies</h3>
                     <span className="text-[11px] text-slate-500 font-medium">Replies Panel</span>
                 </div>
-                <button onClick={() => setActiveReplies(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                <div className="flex items-center gap-1">
+                    <button onClick={() => repliesScrollRef.current?.scrollTo({ top: repliesScrollRef.current.scrollHeight, behavior: 'smooth' })} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors" title="Scroll to latest reply"><i className="fa-solid fa-arrow-down"></i></button>
+                    <button onClick={() => setActiveReplies(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                </div>
             </div>
             <div ref={repliesScrollRef} className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
                 <MessageBubble 
