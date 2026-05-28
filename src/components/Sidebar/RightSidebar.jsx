@@ -18,6 +18,7 @@ export default function RightSidebar({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [hiddenTaskIds, setHiddenTaskIds] = useState([]);
+  const [showDateFilters, setShowDateFilters] = useState(false);
 
   useEffect(() => {
     try {
@@ -77,25 +78,29 @@ export default function RightSidebar({
       </div>
 
       <div className="p-4 bg-white border-b border-slate-200 shrink-0 space-y-3">
-         <div className="grid grid-cols-2 gap-2">
-            {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
-                <button key={f} onClick={()=>setFilter(f)} className={`px-3 py-2 rounded-xl text-[11px] font-bold transition-all border ${filter === f ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                  <span className="block truncate">{f}</span>
-                  <span className={`text-[10px] ${filter === f ? 'text-indigo-100' : 'text-slate-400'}`}>{filterCounts[f] || 0}</span>
-                </button>
-            ))}
+         <div className="flex items-center gap-2">
+           <select value={filter} onChange={(e)=>setFilter(e.target.value)} className="flex-1 modern-date-input">
+             {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
+               <option key={f} value={f}>{f} ({filterCounts[f] || 0})</option>
+             ))}
+           </select>
+           <button onClick={() => setShowDateFilters(v => !v)} className={`w-10 h-[38px] rounded-xl border transition-colors flex items-center justify-center ${showDateFilters || startDate || endDate ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`} title="Date filters">
+             <i className="fa-solid fa-calendar-days"></i>
+           </button>
          </div>
 
-         <div className="grid grid-cols-2 gap-2">
-             <div>
-               <label className="text-[10px] font-semibold text-slate-500 mb-1 block">From</label>
-               <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="modern-date-input" title="Start Date" />
-             </div>
-             <div>
-               <label className="text-[10px] font-semibold text-slate-500 mb-1 block">To</label>
-               <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="modern-date-input" title="End Date" />
-             </div>
-         </div>
+         {showDateFilters && (
+           <div className="grid grid-cols-2 gap-2">
+               <div>
+                 <label className="text-[10px] font-semibold text-slate-500 mb-1 block">From</label>
+                 <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="modern-date-input" title="Start Date" />
+               </div>
+               <div>
+                 <label className="text-[10px] font-semibold text-slate-500 mb-1 block">To</label>
+                 <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="modern-date-input" title="End Date" />
+               </div>
+           </div>
+         )}
          {(startDate || endDate) && <button onClick={()=>{setStartDate(''); setEndDate('');}} className="w-full text-xs font-semibold text-rose-600 hover:text-rose-700 py-1.5 rounded-lg bg-rose-50 border border-rose-100">Clear date range</button>}
       </div>
 

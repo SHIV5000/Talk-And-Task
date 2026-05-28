@@ -196,9 +196,9 @@ export default function InputArea({
             className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium" 
             style={{ minHeight: '46px', maxHeight: '120px' }} 
             onKeyDown={(e) => { 
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                document.execCommand('insertHTML', false, '<br><br>');
+                if (inputText.trim() && inputText !== '<br>') handleSendOfflineAware();
               }
             }} 
           />

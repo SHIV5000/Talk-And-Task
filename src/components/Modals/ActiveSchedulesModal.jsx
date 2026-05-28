@@ -69,7 +69,7 @@ export default function ActiveSchedulesModal({ setActiveModal, user, activeRemin
                     <div key={r.id} className="bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm hover:border-indigo-200 transition-colors relative">
                         {editingId === r.id ? (
                             <div className="space-y-3">
-                                <input type="datetime-local" value={editDate} onChange={e=>setEditDate(e.target.value)} className="w-full text-xs font-bold border border-slate-300 p-2 rounded-lg bg-white" />
+                                <input type="datetime-local" value={editDate} onChange={e=>setEditDate(e.target.value)} className="modern-date-input" />
                                 <input type="text" value={editVal} onChange={e=>setEditVal(e.target.value)} className="w-full text-sm border border-slate-300 p-2 rounded-lg bg-white" />
                                 <div className="flex gap-2 justify-end">
                                     <button onClick={()=>setEditingId(null)} className="text-xs font-bold text-slate-500 hover:bg-slate-200 px-3 py-1.5 rounded-md">Cancel</button>
@@ -99,7 +99,7 @@ export default function ActiveSchedulesModal({ setActiveModal, user, activeRemin
                     <div key={s.id} className="bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm hover:border-indigo-200 transition-colors relative">
                          {editingId === s.id ? (
                             <div className="space-y-3">
-                                <input type="datetime-local" value={editDate} onChange={e=>setEditDate(e.target.value)} className="w-full text-xs font-bold border border-slate-300 p-2 rounded-lg bg-white" />
+                                <input type="datetime-local" value={editDate} onChange={e=>setEditDate(e.target.value)} className="modern-date-input" />
                                 <input type="text" value={editVal} onChange={e=>setEditVal(e.target.value)} className="w-full text-sm border border-slate-300 p-2 rounded-lg bg-white" />
                                 <div className="flex gap-2 justify-end">
                                     <button onClick={()=>setEditingId(null)} className="text-xs font-bold text-slate-500 hover:bg-slate-200 px-3 py-1.5 rounded-md">Cancel</button>

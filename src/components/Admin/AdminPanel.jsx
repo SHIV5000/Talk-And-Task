@@ -806,8 +806,8 @@ export default function AdminPanel({
                               <td colSpan={7} className="bg-slate-50 p-4">
                                 <div className="flex flex-wrap gap-4 items-end">
                                   <div><label className="text-xs font-bold">Title</label><input value={editTaskTitle} onChange={(e) => setEditTaskTitle(e.target.value)} className="border border-slate-200 rounded p-1 text-sm w-full" /></div>
-                                  <div><label className="text-xs font-bold">Priority</label><select value={editTaskPriority} onChange={(e) => setEditTaskPriority(e.target.value)} className="border border-slate-200 rounded p-1 text-sm"><option>Low</option><option>Medium</option><option>High</option></select></div>
-                                  <div><label className="text-xs font-bold">Deadline</label><input type="date" value={editTaskDeadline} onChange={(e) => setEditTaskDeadline(e.target.value)} className="border border-slate-200 rounded p-1 text-sm" /></div>
+                                  <div><label className="text-xs font-bold">Priority</label><select value={editTaskPriority} onChange={(e) => setEditTaskPriority(e.target.value)} className="modern-date-input"><option>Low</option><option>Medium</option><option>High</option></select></div>
+                                  <div><label className="text-xs font-bold">Deadline</label><input type="date" value={editTaskDeadline} onChange={(e) => setEditTaskDeadline(e.target.value)} className="modern-date-input" /></div>
                                   <div>
                                     <label className="text-xs font-bold">Assignees</label>
                                     <div className="flex flex-wrap gap-1">
@@ -1051,7 +1051,7 @@ export default function AdminPanel({
                                 <input value={editTagLabel} onChange={(e) => setEditTagLabel(e.target.value)} className="border border-slate-200 rounded p-1 text-sm font-bold" />
                               </td>
                               <td className="px-4 py-2">
-                                <select value={editTagTheme} onChange={(e) => setEditTagTheme(e.target.value)} className="border border-slate-200 rounded p-1 text-sm">
+                                <select value={editTagTheme} onChange={(e) => setEditTagTheme(e.target.value)} className="modern-date-input">
                                   {Object.keys(tagThemes).map((theme) => <option key={theme} value={theme}>{theme}</option>)}
                                 </select>
                               </td>

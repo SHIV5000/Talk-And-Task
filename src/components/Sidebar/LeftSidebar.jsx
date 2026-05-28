@@ -62,6 +62,7 @@ export default function LeftSidebar({
         {/* Header */}
         <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
           <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
+            <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <MemoizedAvatar
@@ -79,7 +80,7 @@ export default function LeftSidebar({
                 >
                   <i className="fa-solid fa-search"></i>
                 </button>
-                <span className="font-semibold text-sm truncate max-w-[120px]">{currentUserData?.name || user.email.split('@')[0]}</span>
+                
               </div>
               <div className="flex items-center gap-1">
                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
@@ -108,6 +109,8 @@ export default function LeftSidebar({
                   <i className="fa-solid fa-power-off"></i>
                 </button>
               </div>
+            </div>
+            <div className="text-xs text-white/90 break-words leading-tight text-center px-1">{currentUserData?.name || user.email.split('@')[0]}</div>
             </div>
           </div>
         </div>

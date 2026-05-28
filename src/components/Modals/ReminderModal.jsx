@@ -11,7 +11,7 @@ export default function ReminderModal({ setActiveModal, reminderDateTime, setRem
         <div className="space-y-6">
           <div className="relative">
             <label className="text-[10px] text-yellow-600 font-bold uppercase tracking-widest absolute -top-2.5 left-3 bg-white px-1">Alert Time</label>
-            <input type="datetime-local" value={reminderDateTime} onChange={(e) => setReminderDateTime(e.target.value)} className="w-full p-4 pt-5 border border-slate-300 rounded-2xl text-[14px] font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" />
+            <input type="datetime-local" value={reminderDateTime} onChange={(e) => setReminderDateTime(e.target.value)} className="modern-date-input" />
           </div>
           <div className="flex justify-end gap-3">
             <button onClick={() => setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl transition-colors">Cancel</button>
