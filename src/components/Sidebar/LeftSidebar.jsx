@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
 export default function LeftSidebar({
@@ -23,6 +23,8 @@ export default function LeftSidebar({
   setViewMode,
   sidebarWidth,
 }) {
+  const [showSearch, setShowSearch] = useState(false);
+
   return (
     <div className="relative z-20 h-full">
       {/* CSS injected to guarantee scrollbars are visible in Chrome/Edge/Safari */}
@@ -60,19 +62,26 @@ export default function LeftSidebar({
         {/* Header */}
         <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
           <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
-            <div className="flex flex-col items-center">
-              <MemoizedAvatar
-                uid={user.uid}
-                url={currentUserData?.profilePicUrl}
-                name={currentUserData?.name || user.email.split('@')[0]}
-                sizeClass="w-14 h-14"
-                extraClasses="cursor-pointer hover:opacity-90 transition-opacity"
-                imageLoading="eager"
-              />
-              <span className="block mt-2 font-semibold text-sm whitespace-normal break-words leading-tight text-center max-w-[220px]">
-                {currentUserData?.name || user.email.split('@')[0]}
-              </span>
-              <div className="mt-3 flex items-center justify-center gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <MemoizedAvatar
+                  uid={user.uid}
+                  url={currentUserData?.profilePicUrl}
+                  name={currentUserData?.name || user.email.split('@')[0]}
+                  sizeClass="w-10 h-10"
+                  extraClasses="cursor-pointer hover:opacity-90 transition-opacity"
+                  imageLoading="eager"
+                />
+                <button
+                  onClick={() => setShowSearch(prev => !prev)}
+                  className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                  title="Search teams & people"
+                >
+                  <i className="fa-solid fa-search"></i>
+                </button>
+                <span className="font-semibold text-sm truncate max-w-[120px]">{currentUserData?.name || user.email.split('@')[0]}</span>
+              </div>
+              <div className="flex items-center gap-1">
                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                   <button
                     onClick={() => {
@@ -80,7 +89,7 @@ export default function LeftSidebar({
                       setEditingGroup(null);
                       setActiveModal('group_form_modal');
                     }}
-                    className="text-white/95 bg-white/10 hover:bg-white/20 w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all"
+                    className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                     title="New Group (Group Name, Members)"
                   >
                     <i className="fa-solid fa-plus"></i>
@@ -88,13 +97,13 @@ export default function LeftSidebar({
                 )}
                 <button
                   onClick={() => setActiveModal('edit_profile')}
-                  className="text-white/95 bg-white/10 hover:bg-white/20 w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all"
+                  className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                 >
                   <i className="fa-solid fa-gear"></i>
                 </button>
                 <button
                   onClick={onLogout}
-                  className="text-white/95 bg-white/10 hover:bg-rose-500/30 w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all"
+                  className="text-white/95 bg-white/10 hover:bg-rose-500/30 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                 >
                   <i className="fa-solid fa-power-off"></i>
                 </button>
@@ -104,7 +113,7 @@ export default function LeftSidebar({
         </div>
 
         {/* Search */}
-        <div className="p-3 border-b border-white/10 shrink-0">
+        <div className={`border-b border-white/10 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
           <div className="bg-white/10 rounded-lg flex items-center px-3 py-2 focus-within:bg-white/20 transition-all">
             <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
             <input

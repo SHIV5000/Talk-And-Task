@@ -39,10 +39,6 @@ export default function RightSidebar({
     return Array.from(map.values());
   }, [tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
 
-  const visibleTasks = allTasks.filter(t => !hiddenTaskIds.includes(t.id));
-  const completedCount = visibleTasks.filter(t => t.taskData.status === 'Completed' && !t.taskData.isArchived).length;
-  const completionPct = visibleTasks.length ? Math.round((completedCount / visibleTasks.length) * 100) : 0;
-  const scoreBadge = completionPct >= 90 ? '👑 Elite' : completionPct >= 80 ? '🎈 Great' : completionPct >= 70 ? '🏅 Strong' : completionPct >= 60 ? '💪 Good' : '🚀 Rising';
 
   const filteredTasks = useMemo(() => {
     let res = [];
@@ -81,29 +77,26 @@ export default function RightSidebar({
       </div>
 
       <div className="p-4 bg-white border-b border-slate-200 shrink-0 space-y-3">
-         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex items-center justify-between">
-           <div>
-             <div className="text-xs font-bold text-indigo-700 uppercase">Completion Score</div>
-             <div className="text-xl font-black text-indigo-800">{completionPct}%</div>
-           </div>
-           <div className="text-sm font-bold text-indigo-700">{scoreBadge}</div>
-         </div>
-
-         <div className="flex flex-wrap gap-2">
+         <div className="grid grid-cols-2 gap-2">
             {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
-                <button key={f} onClick={()=>setFilter(f)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm ${filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 border'}`}>
-                  {f} ({filterCounts[f] || 0})
+                <button key={f} onClick={()=>setFilter(f)} className={`px-3 py-2 rounded-xl text-[11px] font-bold transition-all border ${filter === f ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                  <span className="block truncate">{f}</span>
+                  <span className={`text-[10px] ${filter === f ? 'text-indigo-100' : 'text-slate-400'}`}>{filterCounts[f] || 0}</span>
                 </button>
             ))}
          </div>
 
-         <div className="flex gap-2 items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-             <i className="fa-solid fa-calendar-day text-slate-400 text-sm ml-1"></i>
-             <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="flex-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 outline-none" title="Start Date" />
-             <span className="text-slate-300">to</span>
-             <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="flex-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 outline-none" title="End Date" />
-             {(startDate || endDate) && <button onClick={()=>{setStartDate(''); setEndDate('');}} className="text-rose-500 hover:text-rose-700 p-1"><i className="fa-solid fa-times"></i></button>}
+         <div className="grid grid-cols-2 gap-2">
+             <div>
+               <label className="text-[10px] font-semibold text-slate-500 mb-1 block">From</label>
+               <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="modern-date-input" title="Start Date" />
+             </div>
+             <div>
+               <label className="text-[10px] font-semibold text-slate-500 mb-1 block">To</label>
+               <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="modern-date-input" title="End Date" />
+             </div>
          </div>
+         {(startDate || endDate) && <button onClick={()=>{setStartDate(''); setEndDate('');}} className="w-full text-xs font-semibold text-rose-600 hover:text-rose-700 py-1.5 rounded-lg bg-rose-50 border border-rose-100">Clear date range</button>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll space-y-3 bg-slate-50">
