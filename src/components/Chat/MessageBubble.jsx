@@ -159,8 +159,9 @@ const MessageBubble = React.memo(({
         const data = snap.data() || {};
         const currentTrail = data.taskData?.trail || [];
         const now = new Date();
+        const nextAckBy = { ...(data.taskData?.ackBy || {}), [userEmail]: true };
         tx.update(ref, {
-          [`taskData.ackBy.${userEmail}`]: true,
+          "taskData.ackBy": nextAckBy,
           "taskData.status": data.taskData?.status === 'Pending' ? 'In Progress' : (data.taskData?.status || 'In Progress'),
           "taskData.trail": [...currentTrail, {
             action: `${getUserName(userEmail)} acknowledged the task.`,
@@ -250,7 +251,8 @@ const MessageBubble = React.memo(({
     try {
       const now = new Date();
       const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} requested rework from ${getUserName(assigneeEmail)}.`, by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: getUserName(assigneeEmail), comment: reviewComment.trim() }];
-      await updateDoc(doc(db, "messages", msg.id), { [`taskData.assigneeStates.${assigneeEmail}`]: "needs_review", "taskData.status": "In Progress", "taskData.trail": newTrail });
+      const nextStates = { ...(msg.taskData?.assigneeStates || {}), [assigneeEmail]: "needs_review" };
+      await updateDoc(doc(db, "messages", msg.id), { "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
       const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Review again requested: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
       logTaskAudit("review_again", "submitted_completed", "needs_review");
       setReviewComment("");
