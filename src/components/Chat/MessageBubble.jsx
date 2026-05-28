@@ -56,6 +56,7 @@ const MessageBubble = React.memo(({
   const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
   const isAssignee = msg.isTask && msg.taskData?.assignees?.includes(userEmail); // 👈 ONLY assignees
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
+  const isRevokedForMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'revoked');
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = !isTaskCompleted || isSuperAdmin;
 
@@ -202,7 +203,16 @@ const MessageBubble = React.memo(({
       }).join(', ');
 
       const newTrail = [...msg.taskData.trail, { action: "Delegated", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames }];
-      await updateDoc(doc(db, "messages", msg.id), { "taskData.assignees": delegateSelection, "taskData.status": "In Progress", "taskData.trail": newTrail });
+      const oldAssignees = msg.taskData.assignees || [];
+      const removed = oldAssignees.filter(e => !delegateSelection.includes(e));
+      const added = delegateSelection.filter(e => !oldAssignees.includes(e));
+      const nextStates = { ...(msg.taskData.assigneeStates || {}) };
+      removed.forEach(e => nextStates[e] = 'revoked');
+      added.forEach(e => nextStates[e] = 'assigned');
+      delegateSelection.forEach(e => { if (!nextStates[e] || nextStates[e] === 'revoked') nextStates[e] = 'assigned'; });
+      await updateDoc(doc(db, "messages", msg.id), { "taskData.assignees": delegateSelection, "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
+      for (const em of removed) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Task revoked: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
+      for (const em of added) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `New task assignment: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} added new assignees 👤`);
       setIsDelegating(false); setDelegateSelection([]);
     } catch(e) {}
@@ -274,7 +284,7 @@ const MessageBubble = React.memo(({
             ) : (
               <>
                 {msg.isTask && (
-                  <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
+                  <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
                     <div className="p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
@@ -282,7 +292,7 @@ const MessageBubble = React.memo(({
                             {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${msg.taskData.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                            {msg.taskData.status}
+                            {isRevokedForMe ? "Revoked" : msg.taskData.status}
                           </span>
                           {msg.taskData.escalated && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">🚨 Escalated</span>

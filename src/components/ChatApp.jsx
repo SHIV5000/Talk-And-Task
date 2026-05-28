@@ -668,6 +668,18 @@ export default function ChatApp({ user, onLogout }) {
     };
 
     // 👇 UPDATED convertToTask function with acknowledgment & proof fields
+
+    useEffect(() => {
+        const migrateAssigneeStates = async () => {
+            const candidates = messages.filter(m => m.isTask && m.taskData?.assignees?.length && !m.taskData?.assigneeStates);
+            for (const m of candidates.slice(0, 20)) {
+                const states = Object.fromEntries((m.taskData.assignees || []).map(e => [e, 'assigned']));
+                await updateDoc(doc(db, "messages", m.id), { "taskData.assigneeStates": states }).catch(() => {});
+            }
+        };
+        migrateAssigneeStates();
+    }, [messages]);
+
     const convertToTask = async () => {
         if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
         try {
@@ -726,7 +738,8 @@ export default function ChatApp({ user, onLogout }) {
                 ackDeadline: ackDeadline ? ackDeadline.toISOString() : null,
                 acknowledged: false,
                 requireProof: requireProof,
-                escalated: false
+                escalated: false,
+                assigneeStates: Object.fromEntries(finalAssignees.map(e => [e, "assigned"]))
             };
 
             await setDoc(doc(db, "messages", selectedMessage.id), {
