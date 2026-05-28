@@ -165,7 +165,7 @@ const MessageBubble = React.memo(({
 
   const handleInlineComplete = async (e) => {
     e.stopPropagation();
-    if (!isTaskParticipant) return alert("You don't have permission to complete this.");
+    if (!isAssignee || isRevokedForMe) return alert("Only active assignees can submit completion.");
     try {
       const now = new Date();
       const newTrail = [...msg.taskData.trail, { action: "Marked Completed", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
