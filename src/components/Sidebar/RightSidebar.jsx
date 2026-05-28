@@ -115,7 +115,12 @@ export default function RightSidebar({
                   <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDone ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>{isHidden ? 'Archived' : task.taskData.status}</span>
                   <span className="text-[10px] font-bold text-slate-500"><i className="fa-regular fa-calendar mr-1"></i>{formatDDMMMYY(task.taskData.deadline)}</span>
                 </div>
-                <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone ? 'text-slate-500' : 'text-slate-800'}`}><span className={isDone ? 'line-through decoration-2' : ''}>{task.text}</span></div>
+                <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone ? 'text-slate-600 opacity-80' : 'text-slate-800'}`}>
+                  <span className="inline-flex items-start gap-1.5">
+                    {isDone && <i className="fa-solid fa-circle-check text-teal-500 mt-0.5 shrink-0"></i>}
+                    <span>{task.text}</span>
+                  </span>
+                </div>
                 <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-100">
                   <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-md truncate max-w-[120px] shadow-sm">{group?.name || 'Direct Task'}</span>
                   <div className="flex items-center gap-2">

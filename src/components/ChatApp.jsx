@@ -25,6 +25,15 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
+const APP_VERSION = "15.0";
+const universalTaskFilters = [
+  { key: 'all', label: 'All', icon: 'fa-layer-group' },
+  { key: 'tasks-pending', label: 'Pending Tasks', icon: 'fa-hourglass-half' },
+  { key: 'tasks-completed', label: 'Completed', icon: 'fa-circle-check' },
+  { key: 'messages', label: 'Messages', icon: 'fa-comment-dots' },
+  { key: 'today', label: 'Today', icon: 'fa-calendar-day' },
+  { key: 'bookmarked', label: 'Bookmarked', icon: 'fa-bookmark' },
+];
 
 // 👇 UPDATED: Slack Sidebar Input uses matching WYSIWYG Editor 👇
 const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
@@ -1356,7 +1365,24 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                 </div>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[80px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
+                                <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
+                                  <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-indigo-600 text-white px-3 py-1.5 text-[11px] font-extrabold tracking-wide shadow-sm" title="Current app version">
+                                    <i className="fa-solid fa-code-branch text-[10px]"></i> v{APP_VERSION}
+                                  </span>
+                                  <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 px-1">Universal Task Bar</span>
+                                  {universalTaskFilters.map((f) => (
+                                    <button
+                                      key={f.key}
+                                      onClick={() => setChatFilter(f.key)}
+                                      className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:shadow-sm ${chatFilter === f.key ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600'}`}
+                                      title={`Show ${f.label.toLowerCase()}`}
+                                    >
+                                      <i className={`fa-solid ${f.icon} text-[10px]`}></i>{f.label}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[122px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
                                     <i className="fa-solid fa-arrow-down"></i>
                                 </button>
 

@@ -437,7 +437,7 @@ const MessageBubble = React.memo(({
                            
                            {isDelegating ? (
                               <div className="bg-white border border-slate-200 rounded-lg p-2 shadow-sm w-full space-y-2">
-                                 <input value={delegateSearch} onChange={(e)=>setDelegateSearch(e.target.value)} placeholder="Search users to delegate..." className="w-full text-[11px] border rounded px-2 py-1" />
+                                 <input value={delegateSearch} onChange={(e)=>setDelegateSearch(e.target.value)} placeholder="Search users to delegate..." className="w-full text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none" />
                                  <div className="max-h-32 overflow-y-auto grid grid-cols-1 gap-1">
                                    {sortedGroupUsers.filter(u => u.email !== userEmail && (u.name || u.email || '').toLowerCase().includes(delegateSearch.toLowerCase())).map(u => (
                                      <label key={u.uid} className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5">
@@ -446,27 +446,27 @@ const MessageBubble = React.memo(({
                                      </label>
                                    ))}
                                  </div>
-                                 <input value={delegateComment} onChange={(e)=>setDelegateComment(e.target.value)} placeholder="Delegate comment (min 6 chars)" className="w-full text-[11px] border rounded px-2 py-1" />
+                                 <input value={delegateComment} onChange={(e)=>setDelegateComment(e.target.value)} placeholder="Delegate comment (min 6 chars) — Enter to save" className="w-full text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none" onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); if(delegateSelection.length>0 && delegateComment.trim().length>=6) handleInlineDelegateSubmit(e); } }} />
                                  <div className="flex items-center justify-end gap-2">
-                                   <button onClick={handleInlineDelegateSubmit} disabled={delegateSelection.length===0 || delegateComment.trim().length<6} className="text-xs bg-indigo-600 disabled:opacity-50 text-white px-2 py-1 rounded font-bold hover:bg-indigo-700">Save</button>
-                                   <button onClick={()=>{setIsDelegating(false); setDelegateSelection([]); setDelegateComment(''); setDelegateSearch('');}} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold">X</button>
+                                   <button onClick={handleInlineDelegateSubmit} disabled={delegateSelection.length===0 || delegateComment.trim().length<6} className="text-xs bg-indigo-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-full font-bold hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Save</button>
+                                   <button onClick={()=>{setIsDelegating(false); setDelegateSelection([]); setDelegateComment(''); setDelegateSearch('');}} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold transition-colors">X</button>
                                  </div>
                               </div>
                            ) : isAddingUpdate ? (
                               <div className="flex items-center gap-2 bg-white border border-slate-200 rounded p-1 shadow-sm w-full">
-                                 <input type="text" value={inlineUpdateText} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type a quick update..." className="flex-1 text-[12px] p-1 outline-none font-medium text-slate-700" autoFocus onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
-                                 <button onClick={submitInlineUpdate} className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-bold hover:bg-indigo-700">Post</button>
-                                 <button onClick={()=>setIsAddingUpdate(false)} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold">Cancel</button>
+                                 <input type="text" value={inlineUpdateText} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type a quick update — Enter to post, Shift+Enter for a new line" className="flex-1 text-[12px] p-1 outline-none font-medium text-slate-700" autoFocus onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
+                                 <button onClick={submitInlineUpdate} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-full font-bold hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Post</button>
+                                 <button onClick={()=>setIsAddingUpdate(false)} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold transition-colors">Cancel</button>
                               </div>
                            ) : (
                               <>
-                                 <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Delegate</button>
-                                 <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Attach</button>
-                                 <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">Update</button>
+                                 <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Delegate</button>
+                                 <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Attach</button>
+                                 <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Update</button>
                                  <button 
                                    onClick={handleInlineComplete} 
                                    disabled={!hasProofAttached}
-                                   className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                   className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 hover:-translate-y-0.5 hover:shadow-md transition-all ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`}
                                    title={!hasProofAttached ? 'You must attach a file to complete this task' : ''}
                                  >
                                    {isAcceptedForMe ? "Completed ✅" : "Completed"}
@@ -482,12 +482,12 @@ const MessageBubble = React.memo(({
                           <div key={email} className="flex items-center justify-between gap-2 text-xs">
                             <span className="font-semibold text-blue-700">{getUserName(email)}</span>
                             <div className="flex flex-col gap-1">
-                              <input value={reviewComment} onChange={(e)=>setReviewComment(e.target.value)} placeholder="Review comment (min 6 chars)" className="text-[11px] border rounded px-1.5 py-1" />
+                              <input value={reviewComment} onChange={(e)=>setReviewComment(e.target.value)} placeholder="Review/complete comment (min 6 chars)" className="text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none" />
                               <div className="flex gap-2">
-                                <button onClick={(e)=>{e.stopPropagation(); handleCreatorAcceptCompletion(email);}} className="px-2 py-1 rounded bg-emerald-600 text-white font-bold">Mark Done</button>
-                                <button disabled={(reviewComment||'').trim().length<6} onClick={(e)=>{e.stopPropagation(); handleCreatorReviewAgain(email);}} className="px-2 py-1 rounded bg-amber-500 disabled:opacity-50 text-white font-bold">Review Again</button>
+                                <button onClick={(e)=>{e.stopPropagation(); handleCreatorAcceptCompletion(email);}} className="px-3 py-1.5 rounded-full bg-emerald-600 text-white font-bold hover:bg-emerald-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Mark Done</button>
+                                <button disabled={(reviewComment||'').trim().length<6} onClick={(e)=>{e.stopPropagation(); handleCreatorReviewAgain(email);}} className="px-3 py-1.5 rounded-full bg-amber-500 disabled:opacity-50 text-white font-bold hover:bg-amber-600 hover:-translate-y-0.5 hover:shadow-md transition-all">Review Again</button>
                               </div>
-                              <input value={transferSearch} onChange={(e)=>setTransferSearch(e.target.value)} placeholder="Search users to transfer..." className="text-[11px] border rounded px-1.5 py-1" />
+                              <input value={transferSearch} onChange={(e)=>setTransferSearch(e.target.value)} placeholder="Search users to transfer..." className="text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 outline-none" />
                               <div className="max-h-32 overflow-y-auto border rounded bg-white p-1 space-y-1">
                                 {sortedGroupUsers.filter(u => u.email !== email && (u.name || u.email || '').toLowerCase().includes(transferSearch.toLowerCase())).map(u => (
                                   <label key={u.uid} className="flex items-center gap-2 text-[11px] text-slate-700 hover:bg-slate-50 rounded px-1 py-0.5">
@@ -496,8 +496,8 @@ const MessageBubble = React.memo(({
                                   </label>
                                 ))}
                               </div>
-                              <input value={transferComment} onChange={(e)=>setTransferComment(e.target.value)} placeholder="Transfer comment (min 6 chars)" className="text-[11px] border rounded px-1.5 py-1" />
-                              <button disabled={(transferComment||'').trim().length<6 || transferSelection.length===0} onClick={(e)=>{e.stopPropagation(); handleTransferTask(email);}} className="px-2 py-1 rounded bg-rose-600 disabled:opacity-50 text-white font-bold">Transfer Task</button>
+                              <input value={transferComment} onChange={(e)=>setTransferComment(e.target.value)} placeholder="Transfer comment (min 6 chars) — Enter to transfer" className="text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 outline-none" onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); if((transferComment||'').trim().length>=6 && transferSelection.length>0) handleTransferTask(email); } }} />
+                              <button disabled={(transferComment||'').trim().length<6 || transferSelection.length===0} onClick={(e)=>{e.stopPropagation(); handleTransferTask(email);}} className="px-3 py-1.5 rounded-full bg-rose-600 disabled:opacity-50 text-white font-bold hover:bg-rose-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Transfer Task</button>
                             </div>
                           </div>
                         ))}
