@@ -38,6 +38,8 @@ const MessageBubble = React.memo(({
   const [trailFileUploading, setTrailFileUploading] = useState(false);
   const [trailUploadProgress, setTrailUploadProgress] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
+  const [transferSelection, setTransferSelection] = useState([]);
+  const [transferComment, setTransferComment] = useState("");
   
   const menuRef = useRef(null);
   const tagPickerRef = useRef(null);
@@ -59,6 +61,7 @@ const MessageBubble = React.memo(({
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
   const isRevokedForMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'revoked');
   const isSubmittedForReviewMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'submitted_completed');
+  const ackRequiredLocked = msg.isTask && isAssignee && msg.taskData?.requireAck && !msg.taskData?.acknowledged;
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = !isTaskCompleted || isSuperAdmin;
 
@@ -256,6 +259,25 @@ const MessageBubble = React.memo(({
     } catch(e) {}
   };
 
+
+  const handleTransferTask = async (fromEmail) => {
+    if (!isCreator) return;
+    if (!transferSelection.length) return alert("Select assignee(s) to transfer.");
+    if (!transferComment || transferComment.trim().length < 6) return alert("Transfer comment must be at least 6 characters.");
+    try {
+      const now = new Date();
+      const nextStates = { ...(msg.taskData?.assigneeStates || {}) };
+      nextStates[fromEmail] = 'transferred_out';
+      transferSelection.forEach(e => { nextStates[e] = 'transferred_in'; });
+      const mergedAssignees = Array.from(new Set([...(msg.taskData?.assignees || []), ...transferSelection]));
+      const newTrail = [...(msg.taskData?.trail || []), { action: 'Task Transferred', by: userEmail, time: now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: transferSelection.join(', '), comment: transferComment.trim() }];
+      await updateDoc(doc(db, 'messages', msg.id), { 'taskData.assignees': mergedAssignees, 'taskData.assigneeStates': nextStates, 'taskData.status': 'In Progress', 'taskData.trail': newTrail });
+      for (const em of [fromEmail, ...transferSelection]) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db,'notifications'), { userId: u.uid, type: 'task', text: em===fromEmail ? `Task transferred from you: "${msg.text}"` : `Transferred task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
+      setTransferSelection([]); setTransferComment('');
+      playTaskSound();
+    } catch(e) {}
+  };
+
   const handleInlineFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -331,7 +353,7 @@ const MessageBubble = React.memo(({
                             {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${msg.taskData.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                            {isRevokedForMe ? "Revoked" : isSubmittedForReviewMe ? "Sent for Review" : msg.taskData.status}
+                            {(msg.taskData?.assigneeStates?.[userEmail] === "transferred_out") ? "Task Transferred" : (msg.taskData?.assigneeStates?.[userEmail] === "transferred_in") ? "Transferred Task" : isRevokedForMe ? "Revoked" : isSubmittedForReviewMe ? "Sent for Review" : msg.taskData.status}
                           </span>
                           {msg.taskData.escalated && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">🚨 Escalated</span>
@@ -387,7 +409,7 @@ const MessageBubble = React.memo(({
                       </div>
                     </div>
 
-                    {isTaskParticipant && !isTaskCompleted && !isSubmittedForReviewMe && (
+                    {isTaskParticipant && !isTaskCompleted && !isSubmittedForReviewMe && !ackRequiredLocked && (
                         <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
                            {trailFileUploading && <div className="mr-2 min-w-[120px]"><div className="h-1.5 bg-slate-200 rounded"><div className="h-full bg-indigo-600 rounded" style={{ width: `${Math.round(trailUploadProgress)}%` }} /></div><span className="text-[10px] font-bold text-indigo-500">Uploading {Math.round(trailUploadProgress)}%</span></div>}
@@ -448,6 +470,11 @@ const MessageBubble = React.memo(({
                                 <button onClick={(e)=>{e.stopPropagation(); handleCreatorAcceptCompletion(email);}} className="px-2 py-1 rounded bg-emerald-600 text-white font-bold">Mark Done</button>
                                 <button disabled={(reviewComment||'').trim().length<6} onClick={(e)=>{e.stopPropagation(); handleCreatorReviewAgain(email);}} className="px-2 py-1 rounded bg-amber-500 disabled:opacity-50 text-white font-bold">Review Again</button>
                               </div>
+                              <select multiple value={transferSelection} onChange={(e)=>setTransferSelection(Array.from(e.target.selectedOptions).map(o=>o.value))} className="text-[11px] border rounded px-1 py-1">
+                                {dbUsers.filter(u => u.email !== email).map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
+                              </select>
+                              <input value={transferComment} onChange={(e)=>setTransferComment(e.target.value)} placeholder="Transfer comment (min 6 chars)" className="text-[11px] border rounded px-1.5 py-1" />
+                              <button disabled={(transferComment||'').trim().length<6 || transferSelection.length===0} onClick={(e)=>{e.stopPropagation(); handleTransferTask(email);}} className="px-2 py-1 rounded bg-rose-600 disabled:opacity-50 text-white font-bold">Transfer Task</button>
                             </div>
                           </div>
                         ))}
@@ -455,12 +482,7 @@ const MessageBubble = React.memo(({
                     )}
 
 
-                    <div className="px-3 pb-2">
-                      <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Task Vault</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(msg.taskData?.trail || []).filter(t=>t.fileUrl).slice(-6).map((t, i)=>(<button key={i} onClick={(e)=>{e.stopPropagation(); window.open(t.fileUrl, '_blank');}} className="text-left text-[11px] px-2 py-1 bg-white border rounded truncate">{t.fileName || 'Attachment'}</button>))}
-                      </div>
-                    </div>
+                    
                     <button onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); setIsDelegating(false); }} className={`w-full border-t border-slate-200 py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isTaskCompleted ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}>
                       <i className={`fa-solid fa-chevron-${isTaskExpanded ? 'up' : 'down'} text-[10px]`}></i>
                       {isTaskExpanded ? 'Hide Details' : `View Updates & Trail (${msg.taskData.trail?.length || 0})`}
