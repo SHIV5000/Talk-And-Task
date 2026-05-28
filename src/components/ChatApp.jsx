@@ -10,7 +10,7 @@ import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
 import ChatView from './Chat/ChatView.jsx';
 import InputArea from './Chat/InputArea.jsx';
 import ModalManager from './Modals/ModalManager.jsx';
-import MessageBubble from './Chat/MessageBubble.jsx'; 
+import MessageBubble from './Chat/MessageBubble.jsx';
 
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "16.0";
+const APP_VERSION = "17.0";
 const universalTaskFilters = [
   { key: 'all', label: 'All', icon: 'fa-layer-group' },
   { key: 'tasks-pending', label: 'Pending Tasks', icon: 'fa-hourglass-half' },
@@ -39,14 +39,16 @@ const universalTaskFilters = [
 const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeReplies.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
-    const [threadFiles, setThreadFiles] = useState([]);
-    const [threadFileNames, setThreadFileNames] = useState({});
+    const [threadPendingFiles, setThreadPendingFiles] = useState([]);
+    const [showThreadFileRename, setShowThreadFileRename] = useState(false);
     const [isReplyUploading, setIsReplyUploading] = useState(false);
     const [replyUploadProgress, setReplyUploadProgress] = useState(0);
+    const [threadEmojiPickerOpen, setThreadEmojiPickerOpen] = useState(false);
     const threadInputRef = useRef(null);
     const threadFileRef = useRef(null);
+    const threadEmojiPickerRef = useRef(null);
     const repliesScrollRef = useRef(null);
-    
+
 
 
     useEffect(() => {
@@ -56,23 +58,49 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     }, [activeReplies?.id, threadMessages.length]);
 
     const handleSend = async () => {
-        if((!text.trim() || text === '<br>') && threadFiles.length === 0) return;
+        if((!text.trim() || text === '<br>') && threadPendingFiles.length === 0) return;
         setIsReplyUploading(true);
         setReplyUploadProgress(0);
-        const renamed = threadFiles.map((f, idx) => {
-          const base = (threadFileNames[idx] || f.name.replace(/\.[^/.]+$/, '')).trim() || f.name.replace(/\.[^/.]+$/, '');
-          const ext = f.name.includes('.') ? f.name.slice(f.name.lastIndexOf('.')) : '';
-          return new File([f], `${base}${ext}`, { type: f.type });
+        const renamed = threadPendingFiles.map((pf) => {
+          const file = pf.file;
+          const base = (pf.customName || file.name.replace(/\.[^/.]+$/, '')).replace(/\.[^/.]+$/, '').trim() || file.name.replace(/\.[^/.]+$/, '');
+          const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+          const renamedFile = new File([file], `${base}${ext}`, { type: file.type });
+          renamedFile.caption = pf.caption || '';
+          return renamedFile;
         });
         await sendMessageToDB(text.trim(), { id: activeReplies.id, sender: activeReplies.sender, text: activeReplies.text || activeReplies.fileName }, renamed, setReplyUploadProgress);
         setTimeout(() => repliesScrollRef.current?.scrollTo({ top: repliesScrollRef.current.scrollHeight, behavior: "smooth" }), 60);
         setText('');
-        setThreadFiles([]);
-        setThreadFileNames({});
+        setThreadPendingFiles([]);
+        setShowThreadFileRename(false);
         setReplyUploadProgress(100);
         setTimeout(() => setIsReplyUploading(false), 400);
         if(threadInputRef.current) threadInputRef.current.innerHTML = '';
-    }
+    };
+
+    const handleThreadFileUpload = (e) => {
+        const files = Array.from(e.target.files || []).slice(0, 3);
+        e.target.value = '';
+        if (files.length === 0) return;
+        setThreadPendingFiles(files.map((file) => ({ id: Date.now() + Math.random(), file, customName: file.name, caption: '' })));
+        setShowThreadFileRename(true);
+    };
+
+    const handleThreadPaste = (e) => {
+        const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items || [];
+        for (let index in items) {
+            const item = items[index];
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                const blob = item.getAsFile();
+                if (blob) {
+                    const file = new File([blob], `reply_pasted_image_${Date.now()}.png`, { type: blob.type || 'image/png' });
+                    setThreadPendingFiles(prev => [...prev, { id: Date.now() + Math.random(), file, customName: file.name, caption: '' }].slice(0, 3));
+                    setShowThreadFileRename(true);
+                }
+            }
+        }
+    };
 
     return (
         <div className="w-80 md:w-96 bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative">
@@ -88,13 +116,13 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                 </div>
             </div>
             <div ref={repliesScrollRef} className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
-                <MessageBubble 
-                    msg={activeReplies} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
-                    groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
-                    customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
-                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin} 
+                <MessageBubble
+                    msg={activeReplies} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers}
+                    groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB}
+                    customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal}
+                    setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin}
                 />
-                
+
                 <div className="flex items-center gap-3 my-4 opacity-80">
                     <div className="flex-1 h-px bg-slate-300"></div>
                     <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">{threadMessages.length} Replies</span>
@@ -102,71 +130,105 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                 </div>
 
                 {threadMessages.map(m => (
-                    <MessageBubble 
-                        key={m.id} msg={m} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers} 
-                        groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB} 
-                        customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal} 
-                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin} 
+                    <MessageBubble
+                        key={m.id} msg={m} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers}
+                        groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB}
+                        customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal}
+                        setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin}
                     />
                 ))}
             </div>
-            <div className="p-3 border-t border-slate-200 bg-white shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  {[{cmd:'bold',label:'B'},{cmd:'italic',label:'I'},{cmd:'underline',label:'U'},{cmd:'superscript',label:'X²'},{cmd:'subscript',label:'X₂'}].map(t => (
-                    <button key={t.cmd} onClick={() => { threadInputRef.current?.focus(); document.execCommand(t.cmd); }} className="px-2 py-1 text-xs font-bold bg-white border border-slate-200 rounded">{t.label}</button>
-                  ))}
-                  {['#ef4444','#2563eb','#16a34a','#a855f7'].map(c => (
-                    <button key={c} onClick={() => { threadInputRef.current?.focus(); document.execCommand('foreColor', false, c); }} className="w-6 h-6 rounded border border-slate-200" style={{ backgroundColor: c }} />
-                  ))}
-                </div>
-                {threadFiles.length > 0 && (
-                  <div className="mb-2 space-y-1">
-                    {threadFiles.map((f, idx) => (
-                      <div key={`${f.name}-${idx}`} className="flex items-center gap-2 text-xs">
-                        <input value={threadFileNames[idx] || ''} onChange={(e)=>setThreadFileNames(prev=>({...prev,[idx]:e.target.value}))} className="flex-1 px-2 py-1 border border-slate-200 rounded" />
-                        <span className="text-slate-500 font-semibold">{f.name.includes('.') ? f.name.slice(f.name.lastIndexOf('.')) : ''}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {isReplyUploading && (
-                  <div className="mb-2">
-                    <div className="h-2 bg-slate-200 rounded overflow-hidden"><div className="h-full bg-indigo-600" style={{ width: `${Math.round(replyUploadProgress)}%` }} /></div>
-                    <div className="text-[11px] text-slate-600 mt-1 font-semibold">Uploading {Math.round(replyUploadProgress)}%</div>
-                  </div>
-                )}
-                <div className="flex gap-2 items-end bg-slate-50 rounded-xl border border-slate-200 focus-within:border-indigo-400 focus-within:bg-white transition-all shadow-sm p-1.5 pr-2">
-                   <div 
-                      contentEditable 
-                      ref={threadInputRef}
-                      onInput={e => setText(e.currentTarget.innerHTML)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!isReplyUploading) handleSend(); } }}
-                      suppressContentEditableWarning={true}
-                      data-placeholder="Write a reply..."
-                      className="custom-wysiwyg bg-transparent flex-1 outline-none text-[13px] text-slate-800 py-2 px-3 overflow-y-auto font-medium"
-                      style={{ minHeight: '38px', maxHeight: '120px' }}
-                   />
-                   <input ref={threadFileRef} type="file" multiple className="hidden" onChange={(e)=>{ const files = Array.from(e.target.files||[]); setThreadFiles(files); setThreadFileNames(Object.fromEntries(files.map((f,i)=>[i, f.name.replace(/\.[^/.]+$/, "")]))); }} />
-                   <button onClick={()=>threadFileRef.current?.click()} className="w-9 h-9 rounded-full bg-white border border-slate-200 text-indigo-600"><i className="fa-solid fa-paperclip"></i></button>
-                   <button onClick={handleSend} disabled={isReplyUploading || ((!text.trim() || text === '<br>') && threadFiles.length===0)} className="px-3 h-9 rounded-lg bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-sm shrink-0 mb-0.5 font-bold">Send</button>
-                </div>
-            </div>
+            <InputArea
+                inputText={text}
+                setInputText={setText}
+                isOnline={true}
+                isUploading={isReplyUploading}
+                activeGroup={activeGroup}
+                replyingTo={null}
+                setReplyingTo={() => {}}
+                handleSendOfflineAware={handleSend}
+                handleTypingEvent={() => {}}
+                handlePaste={handleThreadPaste}
+                chatInputRef={threadInputRef}
+                fileInputRef={threadFileRef}
+                handleFileUpload={handleThreadFileUpload}
+                emojiPickerOpen={threadEmojiPickerOpen}
+                setEmojiPickerOpen={setThreadEmojiPickerOpen}
+                emojiPickerRef={threadEmojiPickerRef}
+                pendingFiles={threadPendingFiles}
+                setPendingFiles={setThreadPendingFiles}
+                showFileRename={showThreadFileRename}
+                setShowFileRename={setShowThreadFileRename}
+                setActiveModal={setActiveModal}
+                setPendingScheduledText={() => {}}
+                offlineDrafts={[]}
+                user={user}
+                dbUsers={dbUsers}
+                groups={groups}
+                currentUserData={currentUserData}
+                MAX_FILE_SIZE_MB={10}
+                handleSendPendingFiles={handleSend}
+                composerVariant="reply"
+                placeholder="Write a reply with rich formatting..."
+                showScheduleButton={false}
+                showOfflineDrafts={false}
+            />
         </div>
     )
+};
+
+const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage, chatInputRef }) => {
+    const liveTask = messages.find(m => m.id === activeTask?.id) || activeTask;
+    if (!liveTask) return null;
+    const taskGroup = groups.find(g => g.id === liveTask.groupId) || activeGroup;
+    return (
+        <div className="w-80 md:w-96 bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative">
+            <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
+                <div className="min-w-0">
+                    <h3 className="font-bold text-slate-800 leading-tight flex items-center gap-2"><i className="fa-regular fa-square-check text-indigo-600"></i> Task Sidebar</h3>
+                    <span className="text-[11px] text-slate-500 font-medium truncate block">Updates, uploads and review actions happen here</span>
+                </div>
+                <button onClick={() => setActiveTask(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
+                <MessageBubble
+                    msg={liveTask}
+                    userEmail={user.email}
+                    currentUserData={currentUserData}
+                    dbUsers={dbUsers}
+                    groups={groups}
+                    activeGroup={taskGroup}
+                    handleReaction={handleReactionIntercept}
+                    handleDeleteMessage={deleteMessageDB}
+                    customTags={customTags}
+                    toolPreferences={toolPreferences}
+                    setActiveModal={setActiveModal}
+                    setReplyingTo={setReplyingTo}
+                    setSelectedMessage={setSelectedMessage}
+                    chatInputRef={chatInputRef}
+                    isThreadView={true}
+                    isVipAdmin={isVipAdmin}
+                    handleToggleBookmark={handleToggleBookmark}
+                    handleTogglePin={handleTogglePin}
+                    taskSidebarMode={true}
+                />
+            </div>
+        </div>
+    );
 };
 
 export default function ChatApp({ user, onLogout }) {
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
+    const [activeTaskSidebar, setActiveTaskSidebar] = useState(null);
     const [viewMode, setViewMode] = useState("chat");
-    const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
     const MAX_FILE_SIZE_MB = 10;
     const [inputText, setInputText] = useState("");
-    
-    const [searchQuery, setSearchQuery] = useState(""); 
+
+    const [searchQuery, setSearchQuery] = useState("");
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchWrapperRef = useRef(null);
 
@@ -180,7 +242,7 @@ export default function ChatApp({ user, onLogout }) {
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editMessageText, setEditMessageText] = useState("");
     const [activeGroup, setActiveGroup] = useState(null);
-    
+
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
     const [taskPriority, setTaskPriority] = useState("Medium");
@@ -190,7 +252,7 @@ export default function ChatApp({ user, onLogout }) {
     const [reminderDateTime, setReminderDateTime] = useState("");
     const [isEditingTaskTitle, setIsEditingTaskTitle] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState("");
-    
+
     // 👇 NEW STATES for acknowledgment & proof
     const [requireAck, setRequireAck] = useState(false);
     const [ackTimeOption, setAckTimeOption] = useState('any'); // 'immediate','30min','1hr','2hr','3hr','eod','any'
@@ -203,7 +265,7 @@ export default function ChatApp({ user, onLogout }) {
     const [trailFileUploading, setTrailFileUploading] = useState(false);
     const [profileUploadProgress, setProfileUploadProgress] = useState(0);
     const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
-    
+
     const [adminForm, setAdminForm] = useState({ uid: '', name: '', email: '', isAdmin: false, canCreateGroups: false });
     const [profileForm, setProfileForm] = useState({ name: "", fontSize: "text-[14.2px]", fontFamily: "font-sans" });
     const [groupForm, setGroupForm] = useState({ name: "", members: [], admins: [], profilePicUrl: null });
@@ -220,7 +282,7 @@ export default function ChatApp({ user, onLogout }) {
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
     }, []);
     const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
-    
+
     const messagesEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const chatInputRef = useRef(null);
@@ -242,7 +304,7 @@ export default function ChatApp({ user, onLogout }) {
     const [unreadHighlightIds, setUnreadHighlightIds] = useState([]);
     const [scheduleDateTime, setScheduleDateTime] = useState("");
     const [pendingScheduledText, setPendingScheduledText] = useState("");
-    const [activeReminderAlert, setActiveReminderAlert] = useState(null); 
+    const [activeReminderAlert, setActiveReminderAlert] = useState(null);
 
     const [leftWidth, setLeftWidth] = useState(320);
     const [rightWidth, setRightWidth] = useState(380);
@@ -270,11 +332,11 @@ export default function ChatApp({ user, onLogout }) {
     };
 
 
-    const { 
+    const {
         isVipAdmin, currentUserData, dbUsers, groups, customTags,
-        activeReminders, genericNotifications, allAdminReminders, 
+        activeReminders, genericNotifications, allAdminReminders,
         immutableAuditLogs, toolPreferences, setToolPreferences,
-        globalAnnouncement 
+        globalAnnouncement
     } = useWorkspaceData(user, profileForm, setProfileForm);
 
     const {
@@ -282,8 +344,8 @@ export default function ChatApp({ user, onLogout }) {
         logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
-    } = useChatEngine({ 
-        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast 
+    } = useChatEngine({
+        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast
     });
 
     useEffect(() => {
@@ -309,8 +371,8 @@ export default function ChatApp({ user, onLogout }) {
             const incomingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FINCOMING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=413e00ca-6dc0-41e1-85d9-3d02e53ca526';
             const outgoingSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FOUTGOING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=4f357d75-c496-4f53-8f6a-fd0e6e81b41d';
             const bannerSound = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FBANNER.mp3?alt=media&token=b3463c11-1f70-4450-8efc-049e04f33a0a';
-            
-            let soundUrl = outgoingSound; 
+
+            let soundUrl = outgoingSound;
             switch (type) {
                 case 'messageReceived':
                 case 'taskCreated':
@@ -422,8 +484,8 @@ export default function ChatApp({ user, onLogout }) {
                 try {
                     await updateDoc(doc(db, "reminders", rem.id), { isTriggered: true });
                     await addDoc(collection(db, "notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
-                    playMelody('taskCreated'); 
-                    setActiveReminderAlert(rem); 
+                    playMelody('taskCreated');
+                    setActiveReminderAlert(rem);
                 } catch(e) {}
             }
 
@@ -448,12 +510,12 @@ export default function ChatApp({ user, onLogout }) {
                         };
                         await addDoc(collection(db, "messages"), payload);
                         await updateDoc(doc(db, "scheduled_messages", document.id), { status: "sent" });
-                        playMelody('messageSent'); 
+                        playMelody('messageSent');
                     }
                 }
             } catch(e) { console.error(e); }
 
-        }, 15000); 
+        }, 15000);
         return () => clearInterval(checkerInterval);
     }, [messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
 
@@ -470,7 +532,7 @@ export default function ChatApp({ user, onLogout }) {
     const activeActionableTasks = useMemo(() => {
         return messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && m.taskData?.assignees?.includes(user.email) && !(m.taskData?.dismissedBy || []).includes(user.uid));
     }, [messages, user.email, user.uid]);
-    
+
     const totalNotifications = genericNotifications.length + activeActionableTasks.length;
 
     const pinnedMessages = useMemo(() => activeGroup ? messages.filter(m => m.groupId === activeGroup.id && m.isPinned) : [], [messages, activeGroup]);
@@ -478,23 +540,20 @@ export default function ChatApp({ user, onLogout }) {
     const globalSearchResults = useMemo(() => {
         if (!searchQuery.trim()) return null;
         const q = searchQuery.toLowerCase();
-        
-        const matchedUsers = dbUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q));
-        const matchedTags = (customTags || []).filter(t => (t.label||'').toLowerCase().includes(q) || (t.shortCode||'').toLowerCase().includes(q));
-        
+
         const matchedMessages = messages.filter(m => {
             if (m.isPrivateMention && !m.allowedUsers?.includes(user.email) && m.senderEmail !== user.email) return false;
-            
+
             const strippedText = stripHtml(m.text).toLowerCase();
             const textMatch = strippedText.includes(q);
             const fileMatch = (m.fileName || '').toLowerCase().includes(q);
             const trailMatch = m.isTask && (m.taskData?.trail || []).some(t => (t.comment || '').toLowerCase().includes(q));
-            
+
             return textMatch || fileMatch || trailMatch;
         }).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).slice(0, 50);
 
-        return { users: matchedUsers, tags: matchedTags, messages: matchedMessages };
-    }, [searchQuery, dbUsers, customTags, messages, user.email]);
+        return { messages: matchedMessages };
+    }, [searchQuery, messages, user.email]);
 
     const messagesToRender = useMemo(() => {
         if(!activeGroup) return [];
@@ -536,13 +595,15 @@ export default function ChatApp({ user, onLogout }) {
     const navigateToMessageFromNotification = useCallback(async (msgId, targetGroupId, replyToId = null) => {
         setChatFilter('all');
         setSearchQuery('');
-        let targetGroup = groups.find(g => g.id === targetGroupId);
-        if (!targetGroup && targetGroupId) {
-            const otherUid = targetGroupId.split('_').find(id => id !== user.uid);
+        const targetMsg = messages.find(m => m.id === msgId) || messages.find(m => m.id === replyToId);
+        const resolvedGroupId = targetMsg?.groupId || targetGroupId;
+        let targetGroup = groups.find(g => g.id === resolvedGroupId);
+        if (!targetGroup && resolvedGroupId) {
+            const otherUid = resolvedGroupId.split('_').find(id => id !== user.uid);
             if (otherUid) {
                 const otherUser = dbUsers.find(u => u.uid === otherUid);
                 if (otherUser) {
-                    targetGroup = { id: targetGroupId, isDM: true, name: otherUser.name, members: [user.email, otherUser.email], profilePicUrl: otherUser.profilePicUrl };
+                    targetGroup = { id: resolvedGroupId, isDM: true, name: otherUser.name, members: [user.email, otherUser.email], profilePicUrl: otherUser.profilePicUrl };
                 }
             }
         }
@@ -552,12 +613,38 @@ export default function ChatApp({ user, onLogout }) {
             setMobileSidebarOpen(false);
             setShowNotifications(false);
             setActiveModal(null);
-            
-            if (replyToId) {
-                const parentMsg = messages.find(m => m.id === replyToId);
-                if (parentMsg) setActiveReplies(parentMsg);
+
+            if (targetMsg?.isTask) {
+                setActiveReplies(null);
+                setActiveTaskSidebar(targetMsg);
+                setShowRightSidebar(true);
+                return;
             }
-            
+
+            setActiveTaskSidebar(null);
+            const effectiveReplyToId = replyToId || targetMsg?.replyToId || null;
+            if (effectiveReplyToId) {
+                const parentMsg = messages.find(m => m.id === effectiveReplyToId);
+                if (parentMsg) {
+                    setActiveReplies(parentMsg);
+                    let attempts = 0;
+                    const scrollReplyIntoView = () => {
+                        const el = document.getElementById(`msg-${msgId}`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            el.classList.add('ring-4', 'ring-indigo-400', 'bg-indigo-50', 'transition-all', 'duration-500');
+                            setTimeout(() => el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50'), 4000);
+                        } else if (attempts < 30) {
+                            attempts += 1;
+                            setTimeout(scrollReplyIntoView, 150);
+                        }
+                    };
+                    setTimeout(scrollReplyIntoView, 120);
+                    return;
+                }
+            }
+
+            setActiveReplies(null);
             setTimeout(() => { setPendingScrollTarget(msgId); }, 50);
         }
     }, [groups, dbUsers, user.uid, user.email, messages]);
@@ -583,17 +670,17 @@ export default function ChatApp({ user, onLogout }) {
         if (!inputText.trim() || !activeGroup) return;
         const msgText = inputText.trim();
         await sendMessageToDB(msgText, replyingTo);
-        playMelody('messageSent'); 
+        playMelody('messageSent');
         if(chatInputRef.current) chatInputRef.current.innerHTML = '';
         setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
-        
+
         const otherMembers = (activeGroup.members || []).filter(email => email !== user.email);
         const uidsToNotify = dbUsers.filter(u => otherMembers.includes(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
-            addDoc(collection(db, "notifications"), { 
-                userId: uid, type: "message", 
-                text: `New Message in ${activeGroup.name}: "${stripHtml(msgText).substring(0,40)}..."`, 
-                groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false 
+            addDoc(collection(db, "notifications"), {
+                userId: uid, type: "message",
+                text: `New Message in ${activeGroup.name}: "${stripHtml(msgText).substring(0,40)}..."`,
+                groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false
             }).catch(()=>{});
         }
 
@@ -613,16 +700,16 @@ export default function ChatApp({ user, onLogout }) {
         if (pendingFiles.length === 0) return;
         const currentText = inputText.trim();
         const filesToProcess = [...pendingFiles];
-        setPendingFiles([]); setShowFileRename(false); setIsUploading(true); setUploadProgress(0); setInputText(""); 
+        setPendingFiles([]); setShowFileRename(false); setIsUploading(true); setUploadProgress(0); setInputText("");
         if(chatInputRef.current) chatInputRef.current.innerHTML = '';
         for (let i = 0; i < filesToProcess.length; i++) {
             let pf = filesToProcess[i];
             let finalCaption = pf.caption || "";
             if (i === 0 && currentText && currentText !== '<br>') finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText;
-            pf.caption = finalCaption; pf.text = finalCaption; 
-            
+            pf.caption = finalCaption; pf.text = finalCaption;
+
             if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
-            
+
             try { await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); }
         }
         playMelody('fileUpload');
@@ -739,10 +826,10 @@ export default function ChatApp({ user, onLogout }) {
                 status: "Pending",
                 isArchived: false,
                 dismissedBy: [],
-                trail: [{ 
-                    action: "Task Created", 
-                    by: user.email, 
-                    time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), 
+                trail: [{
+                    action: "Task Created",
+                    by: user.email,
+                    time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(),
                     to: finalAssignees.map(email => {
     const u = dbUsers.find(x => x.email === email);
     return u ? u.name : (email||"").split('@')[0];
@@ -769,22 +856,22 @@ export default function ChatApp({ user, onLogout }) {
                 if (email !== user.email) {
                     const assigneeUser = dbUsers.find(u => u.email === email);
                     if (assigneeUser) {
-                        addDoc(collection(db, "notifications"), { 
-                            userId: assigneeUser.uid, 
-                            type: "task", 
-                            text: `"${stripHtml(selectedMessage.text).substring(0,30)}..." - Assigned to You 🕒`, 
-                            messageId: selectedMessage.id, 
-                            groupId: selectedMessage.groupId, 
-                            timestamp: serverTimestamp(), 
-                            isRead: false 
+                        addDoc(collection(db, "notifications"), {
+                            userId: assigneeUser.uid,
+                            type: "task",
+                            text: `"${stripHtml(selectedMessage.text).substring(0,30)}..." - Assigned to You 🕒`,
+                            messageId: selectedMessage.id,
+                            groupId: selectedMessage.groupId,
+                            timestamp: serverTimestamp(),
+                            isRead: false
                         }).catch(() => {});
                     }
                 }
             });
 
             logImmutableAction("TASK_CREATE", `Converted to Task: "${stripHtml(selectedMessage.text)}"`, `Assignees: ${taskAssignees.join(', ')} | Priority: ${taskPriority}`);
-            playMelody('taskCreated'); 
-            setActiveModal(null); 
+            playMelody('taskCreated');
+            setActiveModal(null);
             setTaskAssignees([]);
             // Reset new states
             setRequireAck(false);
@@ -810,7 +897,7 @@ export default function ChatApp({ user, onLogout }) {
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(email => {   const u = dbUsers.find(x => x.email === email);
     return u ? u.name : (email||"").split('@')[0];}).join(', ') }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
-            playMelody('taskUpdated'); 
+            playMelody('taskUpdated');
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
     };
@@ -821,7 +908,7 @@ export default function ChatApp({ user, onLogout }) {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
-            playMelody('taskUpdated'); 
+            playMelody('taskUpdated');
             setActiveModal(null);
         } catch (error) {}
     };
@@ -835,7 +922,7 @@ export default function ChatApp({ user, onLogout }) {
             await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
-            playMelody('taskUpdated'); 
+            playMelody('taskUpdated');
             if (closeModal) setActiveModal(null);
         } catch (error) {}
     };
@@ -854,7 +941,7 @@ export default function ChatApp({ user, onLogout }) {
                 const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
                 await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
-                playMelody('taskFileUpload'); 
+                playMelody('taskFileUpload');
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
         });
     };
@@ -883,7 +970,7 @@ export default function ChatApp({ user, onLogout }) {
             const newStatus = targetMsg.taskData.status === 'Pending' ? 'In Progress' : targetMsg.taskData.status;
             await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
-            playMelody('taskUpdated'); 
+            playMelody('taskUpdated');
         } catch (error) {}
     };
 
@@ -893,10 +980,10 @@ export default function ChatApp({ user, onLogout }) {
         if (msg && msg.senderEmail !== user.email) {
             const sender = dbUsers.find(u => u.email === msg.senderEmail);
             if (sender) {
-                addDoc(collection(db, "notifications"), { 
-                    userId: sender.uid, type: "reaction", 
-                    text: `${currentUserData?.name || user.email.split('@')[0]} affixed ${tagLabel} to your message.`, 
-                    messageId: msgId, groupId: activeGroup?.id || '', timestamp: serverTimestamp(), isRead: false 
+                addDoc(collection(db, "notifications"), {
+                    userId: sender.uid, type: "reaction",
+                    text: `${currentUserData?.name || user.email.split('@')[0]} affixed ${tagLabel} to your message.`,
+                    messageId: msgId, groupId: activeGroup?.id || '', timestamp: serverTimestamp(), isRead: false
                 }).catch(()=>{});
             }
         }
@@ -933,13 +1020,13 @@ export default function ChatApp({ user, onLogout }) {
         try {
             const finalMembers = [...new Set([...groupForm.members, ...(activeGroup?.admins || [])])];
             await updateDoc(doc(db, "groups", activeGroup.id), { members: finalMembers });
-            setActiveModal(null); 
+            setActiveModal(null);
             setActiveGroup(prev => ({...prev, members: finalMembers}));
-        } catch (error) { 
-            alert("Failed to update members."); 
+        } catch (error) {
+            alert("Failed to update members.");
         }
     };
-    
+
     const handleGroupSubmit = async (e) => {
         if(e && e.preventDefault) e.preventDefault();
         if(!groupForm.name.trim()) return;
@@ -1036,7 +1123,7 @@ export default function ChatApp({ user, onLogout }) {
         isUploading, uploadProgress, setReminder,
         handleDelegateTask, handleCompleteTask,
         trailFileInputRef, handleTrailFileUpload, handleAddComment,
-        messages, groups, trailComment, setTrailComment, activeReminders, 
+        messages, groups, trailComment, setTrailComment, activeReminders,
         readOnly: viewMode === "admin",
         // 👇 NEW props
         requireAck, setRequireAck,
@@ -1074,19 +1161,19 @@ export default function ChatApp({ user, onLogout }) {
         </div>
       );
     }
-    
+
     return (
         <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900">
-            
+
             {globalAnnouncement?.isActive && globalAnnouncement.id !== dismissedBroadcastId && (
                 <div className={`flex items-center justify-between px-4 py-3 shrink-0 shadow-md relative z-[100] ${
-                    globalAnnouncement.type === 'emergency' ? 'bg-rose-600 text-white border-b-4 border-rose-800' : 
-                    globalAnnouncement.type === 'warning' ? 'bg-amber-500 text-white border-b-4 border-amber-600' : 
+                    globalAnnouncement.type === 'emergency' ? 'bg-rose-600 text-white border-b-4 border-rose-800' :
+                    globalAnnouncement.type === 'warning' ? 'bg-amber-500 text-white border-b-4 border-amber-600' :
                     'bg-indigo-600 text-white border-b-4 border-indigo-800'
                 }`}>
                     <div className="flex items-center">
                         <i className={`fa-solid ${
-                            globalAnnouncement.type === 'emergency' ? 'fa-bullhorn animate-pulse' : 
+                            globalAnnouncement.type === 'emergency' ? 'fa-bullhorn animate-pulse' :
                             globalAnnouncement.type === 'warning' ? 'fa-clock' : 'fa-pen'
                         } mr-3 text-lg`}></i>
                         <div className="text-sm font-bold tracking-wide">
@@ -1100,7 +1187,7 @@ export default function ChatApp({ user, onLogout }) {
                     </button>
                 </div>
             )}
-            
+
             <div className="flex-1 flex overflow-hidden relative">
                 {activeReminderAlert && (
                     <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white rounded-3xl shadow-2xl z-[100] border border-indigo-100 p-6 animate-in slide-in-from-top-10 duration-700">
@@ -1130,7 +1217,7 @@ export default function ChatApp({ user, onLogout }) {
                   setActiveModal={setActiveModal}
                   dbUsers={dbUsers}
                   groups={groups}
-                  filteredAuditLogs={immutableAuditLogs} 
+                  filteredAuditLogs={immutableAuditLogs}
                   adminFilterUser={adminFilterUser}
                   setAdminFilterUser={setAdminFilterUser}
                   adminFilterDate={adminFilterDate}
@@ -1139,7 +1226,7 @@ export default function ChatApp({ user, onLogout }) {
                   setAdminFilterType={setAdminFilterType}
                   adminFilterGroup={adminFilterGroup}
                   setAdminFilterGroup={setAdminFilterGroup}
-                  handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })} 
+                  handleToggleApprove={(u) => updateDoc(doc(db, "users", u.uid), { isApproved: !u.isApproved })}
                   handleToggleAdmin={async (u) => { await updateDoc(doc(db, "users", u.uid), { isAdmin: !u.isAdmin }); }}
                   handleToggleCanCreateGroups={async (u) => { await updateDoc(doc(db, "users", u.uid), { canCreateGroups: !u.canCreateGroups }); }}
                   setSelectedMessage={setSelectedMessage}
@@ -1157,7 +1244,7 @@ export default function ChatApp({ user, onLogout }) {
                 />
                 ) : (
                     <div className="flex h-full w-full relative">
-                        <LeftSidebar sidebarWidth={leftWidth} 
+                        <LeftSidebar sidebarWidth={leftWidth}
                             user={user} currentUserData={currentUserData} myGroups={myGroups} dmUsers={dmUsers} activeGroup={activeGroup} setActiveGroup={setActiveGroup}
                             setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} getUnreadInfoForUser={getUnreadInfoForUser}
                             getUnreadInfoForGroup={getUnreadInfoForGroup} messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
@@ -1176,13 +1263,13 @@ export default function ChatApp({ user, onLogout }) {
                                     <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-all">
                                         <i className="fa-solid fa-layer-group mr-2"></i> New Group (Group Name, Members)
                                     </button>
-                                )}                            
+                                )}
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0 chat-main-panel">
                                 <div className="h-[59px] bg-white flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
                                     <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
-                                    
+
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
                                         {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
                                         <div className="flex flex-col min-w-0 flex-1">
@@ -1200,51 +1287,25 @@ export default function ChatApp({ user, onLogout }) {
                                     <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
                                         <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
                                             <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
-                                            <input 
-                                               type="text" 
-                                               placeholder="Global Search (Users, Tags, Tasks, Messages)..." 
-                                               className="bg-transparent outline-none flex-1 text-[13px] text-slate-800 placeholder-slate-400 font-medium" 
-                                               value={searchQuery} 
-                                               onChange={(e) => setSearchQuery(e.target.value)} 
-                                               onFocus={() => setIsSearchFocused(true)} 
+                                            <input
+                                               type="text"
+                                               placeholder="Search messages and tasks..."
+                                               className="bg-transparent outline-none flex-1 text-[13px] text-slate-800 placeholder-slate-400 font-medium"
+                                               value={searchQuery}
+                                               onChange={(e) => setSearchQuery(e.target.value)}
+                                               onFocus={() => setIsSearchFocused(true)}
                                             />
                                             {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
                                         </div>
-                                        
+
                                         {isSearchFocused && globalSearchResults && (
                                             <div className="absolute top-[110%] left-0 w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
                                                 <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
-                                                    <span>Global Search Engine</span>
-                                                    <span>{globalSearchResults.users.length + globalSearchResults.tags.length + globalSearchResults.messages.length} Found</span>
+                                                    <span>Messages & Tasks Search</span>
+                                                    <span>{globalSearchResults.messages.length} Found</span>
                                                 </div>
                                                 <div className="overflow-y-auto p-2 custom-sidebar-scroll">
-                                                    
-                                                    {globalSearchResults.users.length > 0 && (
-                                                        <div className="mb-4">
-                                                            <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-users mr-1"></i> Directory Users</div>
-                                                            {globalSearchResults.users.map(u => (
-                                                                <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-100">
-                                                                    <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
-                                                                    <div>
-                                                                        <div className="font-bold text-slate-800 text-sm leading-tight">{u.name}</div>
-                                                                        <div className="text-[11px] text-slate-400 font-medium">{u.email}</div>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                    
-                                                    {globalSearchResults.tags.length > 0 && (
-                                                        <div className="mb-4">
-                                                            <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-hashtag mr-1"></i> Workflow Tags</div>
-                                                            <div className="flex flex-wrap gap-2 px-3 pt-1">
-                                                                {globalSearchResults.tags.map(t => (
-                                                                    <span key={t.id} className={`px-2.5 py-1 rounded-md text-xs font-bold shadow-sm ${t.bgClass} ${t.textClass}`}>{t.label}</span>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    
+
                                                     {globalSearchResults.messages.length > 0 && (
                                                         <div className="mb-2">
                                                             <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
@@ -1252,7 +1313,7 @@ export default function ChatApp({ user, onLogout }) {
                                                             {globalSearchResults.messages.map(m => (
                                                                 <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
                                                                     <div className="flex justify-between items-center">
-                                                                        <div className="text-[11px] font-extrabold text-indigo-600">{(m.sender||'').split('@')[0]}</div>
+                                                                        <div className="text-[11px] font-extrabold text-indigo-600">{(dbUsers.find(u => u.email === m.senderEmail)?.name || m.senderEmail || 'Unknown').split('@')[0]}</div>
                                                                         <div className="text-[10px] text-slate-400 font-semibold">{m.dateString}</div>
                                                                     </div>
                                                                     <div className="text-[13px] text-slate-700 line-clamp-2 leading-snug font-medium">
@@ -1267,8 +1328,8 @@ export default function ChatApp({ user, onLogout }) {
                                                             ))}
                                                         </div>
                                                     )}
-                                                    
-                                                    {globalSearchResults.users.length === 0 && globalSearchResults.tags.length === 0 && globalSearchResults.messages.length === 0 && (
+
+                                                    {globalSearchResults.messages.length === 0 && (
                                                         <div className="text-center p-8 text-slate-400 font-medium text-sm flex flex-col items-center">
                                                             <i className="fa-solid fa-magnifying-glass text-3xl mb-3 text-slate-300"></i>
                                                             No matching results found across the workspace.
@@ -1278,18 +1339,8 @@ export default function ChatApp({ user, onLogout }) {
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     <div className="flex items-center gap-1 shrink-0 relative">
-                                      <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50" title="Filter Messages"><i className="fa-solid fa-sliders"></i></button>
-                                      {showFilterMenu && (
-                                        <div className="absolute top-[55px] right-24 bg-white rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in py-2 w-48 border border-slate-200">
-                                          {['all','tasks-pending','tasks-completed','messages','today','bookmarked'].map(f => (
-                                            <div key={f} onClick={() => { setChatFilter(f); setShowFilterMenu(false); }} className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors flex items-center gap-3 ${chatFilter === f ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}>
-                                              {f === 'bookmarked' ? 'BookMark' : f === 'all' ? 'All Content' : f.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
 
                                       <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
                                         <i className="fa-solid fa-calendar-alt"></i>
@@ -1357,11 +1408,11 @@ export default function ChatApp({ user, onLogout }) {
                                           </div>
                                         )}
                                       </div>
-                                        
+
                                       <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
-                                      
+
                                       {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
-                                        
+
                                     </div>
                                 </div>
 
@@ -1389,20 +1440,21 @@ export default function ChatApp({ user, onLogout }) {
                                 <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[90px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
                                     <i className="fa-solid fa-arrow-up"></i>
                                 </button>
-                                
+
                                 <ChatView
                                     messagesToRender={messagesToRender} messages={messages} activeGroup={activeGroup} user={user} currentUserData={currentUserData}
-                                    isVipAdmin={isVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo} setReplyingTo={setReplyingTo} 
-                                    toolPreferences={toolPreferences} dbUsers={dbUsers} groups={groups} setActiveGroup={setActiveGroup} setShowRightSidebar={setShowRightSidebar} 
+                                    isVipAdmin={isVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo} setReplyingTo={setReplyingTo}
+                                    toolPreferences={toolPreferences} dbUsers={dbUsers} groups={groups} setActiveGroup={setActiveGroup} setShowRightSidebar={setShowRightSidebar}
                                     setMobileSidebarOpen={setMobileSidebarOpen} pendingScrollTarget={pendingScrollTarget} setPendingScrollTarget={setPendingScrollTarget}
-                                    setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReactionIntercept} 
+                                    setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReactionIntercept}
                                     handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} handleDeleteMessage={deleteMessageDB}
-                                    chatInputRef={chatInputRef} editingMessageId={editingMessageId} editMessageText={editMessageText} setEditingMessageId={setEditingMessageId} 
-                                    setEditMessageText={setEditMessageText} handleSaveEdit={handleSaveEdit} setSelectedMessage={setSelectedMessage} 
-                                    setIsEditingTaskTitle={setIsEditingTaskTitle} messagesEndRef={messagesEndRef} chatContainerRef={chatContainerRef} 
-                                    isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId} unreadHighlightIds={unreadHighlightIds} 
+                                    chatInputRef={chatInputRef} editingMessageId={editingMessageId} editMessageText={editMessageText} setEditingMessageId={setEditingMessageId}
+                                    setEditMessageText={setEditMessageText} handleSaveEdit={handleSaveEdit} setSelectedMessage={setSelectedMessage}
+                                    setIsEditingTaskTitle={setIsEditingTaskTitle} messagesEndRef={messagesEndRef} chatContainerRef={chatContainerRef}
+                                    isAtBottom={isAtBottom} setIsAtBottom={setIsAtBottom} highlightedMsgId={highlightedMsgId} unreadHighlightIds={unreadHighlightIds}
                                     handleAddInlineComment={handleAddInlineComment} jumpToPrivateSource={(msgId, groupId) => navigateToMessageFromNotification(msgId, groupId)}
                                     customTags={customTags} setActiveReplies={setActiveReplies}
+                                    setActiveTaskSidebar={setActiveTaskSidebar}
                                 />
 
                                 <InputArea
@@ -1411,7 +1463,7 @@ export default function ChatApp({ user, onLogout }) {
                                     handleTypingEvent={handleTypingEvent} handlePaste={handlePaste} chatInputRef={chatInputRef} fileInputRef={fileInputRef}
                                     handleFileUpload={handleFileUpload} emojiPickerOpen={emojiPickerOpen} setEmojiPickerOpen={setEmojiPickerOpen}
                                     emojiPickerRef={emojiPickerRef} pendingFiles={pendingFiles} setPendingFiles={setPendingFiles} showFileRename={showFileRename}
-                                    setShowFileRename={setShowFileRename} 
+                                    setShowFileRename={setShowFileRename}
                                     uploadFileDirectly={async (pf) => {
                                         const latestInput = inputText.trim();
                                         let finalCaption = pf.caption || "";
@@ -1419,7 +1471,7 @@ export default function ChatApp({ user, onLogout }) {
                                         pf.caption = finalCaption; pf.text = finalCaption; setInputText("");
                                         if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
                                         await uploadAndSendFileDB(pf, setUploadProgress);
-                                    }} 
+                                    }}
                                     setActiveModal={setActiveModal}
                                     setPendingScheduledText={setPendingScheduledText} offlineDrafts={offlineDrafts} user={user} dbUsers={dbUsers}
                                     groups={groups} currentUserData={currentUserData} MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB} handleSendPendingFiles={handleSendPendingFiles}
@@ -1427,11 +1479,18 @@ export default function ChatApp({ user, onLogout }) {
                             </div>
                         )}
 
-                        {activeReplies ? (
-                            <RepliesSidebar 
-                                activeReplies={activeReplies} setActiveReplies={setActiveReplies} messages={messages} user={user} 
-                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleReactionIntercept={handleReactionIntercept} 
-                                deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} customTags={customTags} 
+                        {activeTaskSidebar ? (
+                            <TaskSidebar
+                                activeTask={activeTaskSidebar} setActiveTask={setActiveTaskSidebar} messages={messages} user={user}
+                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleReactionIntercept={handleReactionIntercept}
+                                deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} customTags={customTags}
+                                toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
+                            />
+                        ) : activeReplies ? (
+                            <RepliesSidebar
+                                activeReplies={activeReplies} setActiveReplies={setActiveReplies} messages={messages} user={user}
+                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleReactionIntercept={handleReactionIntercept}
+                                deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} customTags={customTags}
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
                             />
                         ) : showRightSidebar ? (
@@ -1441,7 +1500,7 @@ export default function ChatApp({ user, onLogout }) {
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]} 
+                              navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]}
                             />
                           </>
                         ) : null}

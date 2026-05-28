@@ -62,9 +62,9 @@ export default function LeftSidebar({
         {/* Header */}
         <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
           <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
-            <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
+            <div className="space-y-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <MemoizedAvatar
                   uid={user.uid}
                   url={currentUserData?.profilePicUrl}
@@ -82,7 +82,7 @@ export default function LeftSidebar({
                 </button>
                 
               </div>
-              <div className="flex items-center gap-1">
+              <div className="ml-auto flex items-center justify-end gap-1 shrink-0">
                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                   <button
                     onClick={() => {
@@ -110,7 +110,7 @@ export default function LeftSidebar({
                 </button>
               </div>
             </div>
-            <div className="text-xs text-white/90 break-words leading-tight text-center px-1">{currentUserData?.name || user.email.split('@')[0]}</div>
+            <div className="text-xs text-white/90 break-words leading-tight text-left px-1">{currentUserData?.name || user.email.split('@')[0]}</div>
             </div>
           </div>
         </div>
@@ -276,14 +276,14 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace v16.0 button (visible if user is admin) */}
+        {/* Admin Workspace v17.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v16.0
+              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v17.0
             </button>
           </div>
         )}

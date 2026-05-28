@@ -9,9 +9,14 @@ export default function InputArea({
   pendingFiles, setPendingFiles, showFileRename, setShowFileRename,
   uploadFileDirectly, setActiveModal, setPendingScheduledText,
   offlineDrafts, user, dbUsers, groups, currentUserData, MAX_FILE_SIZE_MB,
-  handleSendPendingFiles
+  handleSendPendingFiles,
+  composerVariant = 'chat',
+  containerClassName = '',
+  placeholder,
+  showScheduleButton = true,
+  showOfflineDrafts = true
 }) {
-  
+
   const [hasSelection, setHasSelection] = useState(false);
 
   const rawText = chatInputRef.current?.innerText || '';
@@ -21,7 +26,7 @@ export default function InputArea({
   const handleInput = () => {
       if (chatInputRef.current) {
           setInputText(chatInputRef.current.innerHTML);
-          handleTypingEvent();
+          handleTypingEvent?.();
       }
   };
 
@@ -38,7 +43,7 @@ export default function InputArea({
     const newHtml = html.replace(/@[^@\s<]*$/, `@${mentionName} `);
     chatInputRef.current.innerHTML = newHtml;
     setInputText(newHtml);
-    
+
     const range = document.createRange();
     const sel = window.getSelection();
     range.selectNodeContents(chatInputRef.current);
@@ -60,9 +65,9 @@ export default function InputArea({
   };
 
   return (
-    <div className="bg-white border-t border-gray-200 px-3 md:px-4 py-3 shrink-0 z-40 flex flex-col gap-2 safe-bottom w-full relative">
+    <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-3 safe-bottom'} shrink-0 z-40 flex flex-col gap-2 w-full relative ${containerClassName}`}>
       <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
-      
+
       {replyingTo && (
         <div className="bg-gray-50 px-4 py-2 flex items-center justify-between rounded-lg border border-gray-100 animate-in slide-in-from-bottom-1">
           <div className="flex flex-col overflow-hidden">
@@ -95,10 +100,10 @@ export default function InputArea({
           <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Peers</div>
           {dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).length > 0 ? (
             dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).map(u => (
-              <div 
-                key={u.uid} 
-                onMouseDown={(e) => e.preventDefault()} 
-                onClick={() => handleSelectMention(u.name)} 
+              <div
+                key={u.uid}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSelectMention(u.name)}
                 className="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 text-sm transition-colors"
               >
                 <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
@@ -112,10 +117,10 @@ export default function InputArea({
           <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t mt-1 pt-2">Departments</div>
           {groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).length > 0 ? (
              groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).map(g => (
-              <div 
-                key={g.id} 
-                onMouseDown={(e) => e.preventDefault()} 
-                onClick={() => handleSelectMention(g.name, true)} 
+              <div
+                key={g.id}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSelectMention(g.name, true)}
                 className="px-4 py-2.5 hover:bg-teal-50 cursor-pointer flex items-center gap-3 text-sm transition-colors"
               >
                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
@@ -142,7 +147,7 @@ export default function InputArea({
                   <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{(pf.file.size / 1024 / 1024).toFixed(2)} MB</span>
                 </div>
                 <textarea rows={1} value={pf.caption} onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)); }} placeholder="Add a caption..." className="w-full text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"></textarea>
-                
+
                 <label className="flex items-center gap-2 mt-2 select-none cursor-pointer w-fit">
                     <input type="checkbox" checked={pf.allowDownload !== false} onChange={(e) => {
                         const isAllowed = e.target.checked;
@@ -169,7 +174,7 @@ export default function InputArea({
         <button className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors shrink-0" onClick={() => fileInputRef.current.click()} disabled={isUploading}>
           <i className="fa-solid fa-plus text-xl"></i>
         </button>
-        
+
         <div className="relative shrink-0" ref={emojiPickerRef}>
           <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
             <i className="fa-regular fa-face-smile text-xl"></i>
@@ -184,39 +189,41 @@ export default function InputArea({
         </div>
 
         <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
-          <div 
-            contentEditable 
-            ref={chatInputRef} 
+          <div
+            contentEditable
+            ref={chatInputRef}
             onInput={handleInput}
             onMouseUp={checkSelection}
             onKeyUp={checkSelection}
-            onPaste={handlePaste} 
+            onPaste={handlePaste}
             suppressContentEditableWarning={true}
-            data-placeholder={isOnline ? "Type or Paste a message..." : "Offline - message will be queued"}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium" 
-            style={{ minHeight: '46px', maxHeight: '120px' }} 
-            onKeyDown={(e) => { 
+            data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
+            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium"
+            style={{ minHeight: '46px', maxHeight: '120px' }}
+            onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (inputText.trim() && inputText !== '<br>') handleSendOfflineAware();
               }
-            }} 
+            }}
           />
         </div>
 
-        <button onClick={() => { if (!inputText.trim() || inputText === '<br>') return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
-          <i className="fa-regular fa-clock text-xl"></i>
-        </button>
+        {showScheduleButton && (
+          <button onClick={() => { if (!inputText.trim() || inputText === '<br>') return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+            <i className="fa-regular fa-clock text-xl"></i>
+          </button>
+        )}
 
-        {offlineDrafts.length > 0 && (
+        {showOfflineDrafts && offlineDrafts.length > 0 && (
           <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
             <i className="fa-solid fa-inbox text-xl"></i>
             <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{offlineDrafts.length}</span>
           </button>
         )}
 
-        <button 
-          onClick={handleSendOfflineAware} 
+        <button
+          onClick={handleSendOfflineAware}
           disabled={!inputText.trim() || inputText === '<br>'}
           className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >

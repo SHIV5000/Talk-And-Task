@@ -13,7 +13,7 @@ export default function ChatView({
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
   unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
-  customTags, setActiveReplies 
+  customTags, setActiveReplies, setActiveTaskSidebar
 }) {
   
   const handleChatScroll = (e) => {
@@ -120,6 +120,7 @@ export default function ChatView({
                 handleAddInlineComment={handleAddInlineComment} 
                 customTags={customTags || []} 
                 setActiveReplies={setActiveReplies}
+                onOpenTask={(task) => { setActiveTaskSidebar?.(task); setShowRightSidebar?.(true); }}
                 />
             );
           })}
