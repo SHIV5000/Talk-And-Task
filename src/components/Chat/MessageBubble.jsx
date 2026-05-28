@@ -103,14 +103,29 @@ const MessageBubble = React.memo(({
 
   const playTaskSound = () => { try { const a = new Audio("/notify.mp3"); a.volume = 0.5; a.play().catch(()=>{}); } catch(_) {} };
 
-  const notifyTaskChange = async (actionText) => {
+  const logTaskAudit = async (action, previousState = "", newState = "") => {
+    try { await addDoc(collection(db, "Audit_Logs"), { taskId: msg.id, groupId: msg.groupId, actor_email: userEmail, action, previous_state: previousState, new_state: newState, timestamp: serverTimestamp() }); } catch(_) {}
+  };
+
+  const notifyTaskChange = async (actionText, eventType = "critical", routineKey = "") => {
     const involved = new Set();
     if (msg.senderEmail) involved.add(msg.senderEmail);
     (msg.taskData?.assignees || []).forEach(a => involved.add(a));
     involved.delete(userEmail);
     const uidsToNotify = dbUsers.filter(u => involved.has(u.email)).map(u => u.uid);
     for (const uid of uidsToNotify) {
-      try { await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `"${msg.text}" - ${actionText}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
+      try {
+        if (eventType === "routine") {
+          const bucket = Math.floor(Date.now() / (5 * 60 * 1000));
+          const key = `taskbatch_${msg.id}_${userEmail}_${routineKey}_${bucket}`;
+          const prev = Number(localStorage.getItem(key) || 0) + 1;
+          localStorage.setItem(key, String(prev));
+          if (prev % 3 !== 1) continue;
+          await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `${prev} ${routineKey} update(s) by ${(currentUserData?.name || (userEmail||"").split("@")[0])}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
+        } else {
+          await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `"${msg.text}" - ${actionText}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
+        }
+      } catch (e) {}
     }
   };
 
@@ -144,8 +159,8 @@ const MessageBubble = React.memo(({
         const now = new Date();
         const updatedTrail = [...(msg.taskData.trail || []), { action: "Update Added", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: inlineUpdateText }];
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": updatedTrail });
-        notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} updated the task.`);
-      playTaskSound();
+        notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} updated the task.`, "routine", "text");
+      logTaskAudit("task_update");
       setReviewComment("");
         setInlineUpdateText(""); setIsAddingUpdate(false);
     } catch(e) {}
@@ -184,6 +199,8 @@ const MessageBubble = React.memo(({
         tx.update(ref, { "taskData.assigneeStates": states, "taskData.status": "In Progress", "taskData.trail": [...(data.taskData?.trail || []), ...[newTrail[newTrail.length-1]]] });
       });
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} submitted completion for review ✅`);
+      logTaskAudit("submit_completed", "assigned", "submitted_completed");
+      logTaskAudit("review_again", "submitted_completed", "needs_review");
       playTaskSound();
     } catch(e) {}
   };
@@ -233,6 +250,7 @@ const MessageBubble = React.memo(({
       for (const em of removed) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Task revoked: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       for (const em of added) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `New task assignment: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} added new assignees 👤`);
+      logTaskAudit("reassign_or_revoke");
       playTaskSound();
       setIsDelegating(false); setDelegateSelection([]);
     } catch(e) {}
