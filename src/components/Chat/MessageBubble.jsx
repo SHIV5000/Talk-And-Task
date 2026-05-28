@@ -61,7 +61,9 @@ const MessageBubble = React.memo(({
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
   const isRevokedForMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'revoked');
   const isSubmittedForReviewMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'submitted_completed');
-  const ackRequiredLocked = msg.isTask && isAssignee && msg.taskData?.requireAck && !msg.taskData?.acknowledged;
+  const myAckMap = msg.taskData?.ackBy || {};
+  const myAcked = !!myAckMap[userEmail];
+  const ackRequiredLocked = msg.isTask && isAssignee && msg.taskData?.requireAck && !myAcked;
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = !isTaskCompleted || isSuperAdmin;
 
@@ -143,7 +145,7 @@ const MessageBubble = React.memo(({
         time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString()
       }];
       await updateDoc(doc(db, "messages", msg.id), {
-        "taskData.acknowledged": true,
+        [`taskData.ackBy.${userEmail}`]: true,
         "taskData.status": "Acknowledged",
         "taskData.trail": newTrail
       });
@@ -378,7 +380,7 @@ const MessageBubble = React.memo(({
                       )}
 
                       {/* 👇 UPDATED: Acknowledge button visible ONLY to Assignees */}
-                      {isAssignee && !isTaskCompleted && msg.taskData?.requireAck && !msg.taskData?.acknowledged && (
+                      {isAssignee && !isTaskCompleted && msg.taskData?.requireAck && !myAcked && (
                         <div className="mb-3">
                           <button
                             onClick={handleAcknowledge}
@@ -532,12 +534,6 @@ const MessageBubble = React.memo(({
                                           </div>
                                       )}
 
-                                      {isAuthor && editingTrailIdx !== idx && (
-                                          <div className="absolute top-1 right-1 hidden group-hover/editbox:flex gap-1.5 bg-white border border-slate-200 shadow-sm rounded-md px-1.5 py-1 z-20">
-                                              {t.comment && !t.fileUrl && <i className="fa-solid fa-pen text-[10px] text-indigo-500 cursor-pointer hover:scale-110" onClick={()=>{setEditingTrailIdx(idx); setTrailEditText(t.comment);}}></i>}
-                                              <i className="fa-solid fa-trash text-[10px] text-rose-500 cursor-pointer hover:scale-110" onClick={()=>handleInlineDeleteTrail(idx)}></i>
-                                          </div>
-                                      )}
 
                                     </div>
                                   </div>

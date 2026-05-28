@@ -490,6 +490,11 @@ export default function ChatApp({ user, onLogout }) {
     const messagesToRender = useMemo(() => {
         if(!activeGroup) return [];
         let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
+        filtered = filtered.filter(m => {
+            if (!m.isTask) return true;
+            const reviewer = m.taskData?.masterReviewerEmail || m.senderEmail;
+            return reviewer === user.email || (m.taskData?.assignees || []).includes(user.email);
+        });
 
         if (chatFilter === 'tasks-pending') filtered = filtered.filter(m => m.isTask && m.taskData?.status !== "Completed");
         else if (chatFilter === 'tasks-completed') filtered = filtered.filter(m => m.isTask && m.taskData?.status === "Completed");
