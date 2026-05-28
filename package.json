@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "setup:hooks": "node scripts/install-git-hooks.mjs",
     "notify:git-event": "node scripts/git-event-email.mjs manual",
-    "dev:notify": "node scripts/git-event-email.mjs app-run && vite"
+    "dev:notify": "node scripts/git-event-email.mjs app-run && vite",
+    "seed:school-demo": "node scripts/seed-school-demo-data.mjs --apply",
+    "seed:school-demo:dry-run": "node scripts/seed-school-demo-data.mjs",
+    "seed:school-demo:mock": "node scripts/seed-school-demo-data.mjs --mock-users"
   },
   "dependencies": {
     "react": "^18.2.0",

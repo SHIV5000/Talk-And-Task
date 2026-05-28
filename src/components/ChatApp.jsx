@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "15.0";
+const APP_VERSION = "16.0";
 const universalTaskFilters = [
   { key: 'all', label: 'All', icon: 'fa-layer-group' },
   { key: 'tasks-pending', label: 'Pending Tasks', icon: 'fa-hourglass-half' },
