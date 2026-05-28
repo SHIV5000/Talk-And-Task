@@ -57,6 +57,7 @@ const MessageBubble = React.memo(({
   const isAssignee = msg.isTask && msg.taskData?.assignees?.includes(userEmail); // 👈 ONLY assignees
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
   const isRevokedForMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'revoked');
+  const isSubmittedForReviewMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'submitted_completed');
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = !isTaskCompleted || isSuperAdmin;
 
@@ -97,6 +98,8 @@ const MessageBubble = React.memo(({
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [menuOpen, tagPickerOpen]);
+
+  const playTaskSound = () => { try { const a = new Audio("/notify.mp3"); a.volume = 0.5; a.play().catch(()=>{}); } catch(_) {} };
 
   const notifyTaskChange = async (actionText) => {
     const involved = new Set();
@@ -140,6 +143,7 @@ const MessageBubble = React.memo(({
         const updatedTrail = [...(msg.taskData.trail || []), { action: "Update Added", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: inlineUpdateText }];
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": updatedTrail });
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} updated the task.`);
+      playTaskSound();
         setInlineUpdateText(""); setIsAddingUpdate(false);
     } catch(e) {}
   };
@@ -168,9 +172,10 @@ const MessageBubble = React.memo(({
     if (!isAssignee || isRevokedForMe) return alert("Only active assignees can submit completion.");
     try {
       const now = new Date();
-      const newTrail = [...msg.taskData.trail, { action: "Completion Submitted", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "Creator" }];
+      const newTrail = [...msg.taskData.trail, { action: "Completion Submitted", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: senderName }];
       await updateDoc(doc(db, "messages", msg.id), { [`taskData.assigneeStates.${userEmail}`]: "submitted_completed", "taskData.status": "In Progress", "taskData.trail": newTrail });
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} submitted completion for review ✅`);
+      playTaskSound();
     } catch(e) {}
   };
 
@@ -181,6 +186,8 @@ const MessageBubble = React.memo(({
       const newTrail = [...(msg.taskData?.trail || []), { action: "Completion Accepted", by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: assigneeEmail }];
       const nextStatus = activeAssignees.every(e => (e === assigneeEmail ? 'accepted_completed' : (nextStates[e] || 'assigned')) === 'accepted_completed') ? 'Completed' : 'In Progress';
       await updateDoc(doc(db, "messages", msg.id), { "taskData.assigneeStates": nextStates, "taskData.status": nextStatus, "taskData.trail": newTrail });
+      const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Completion accepted: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+      playTaskSound();
     } catch(e) {}
   };
 
@@ -189,6 +196,8 @@ const MessageBubble = React.memo(({
       const now = new Date();
       const newTrail = [...(msg.taskData?.trail || []), { action: "Review Requested", by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: assigneeEmail }];
       await updateDoc(doc(db, "messages", msg.id), { [`taskData.assigneeStates.${assigneeEmail}`]: "needs_review", "taskData.status": "In Progress", "taskData.trail": newTrail });
+      const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Review again requested: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+      playTaskSound();
     } catch(e) {}
   };
 
@@ -214,6 +223,7 @@ const MessageBubble = React.memo(({
       for (const em of removed) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Task revoked: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       for (const em of added) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `New task assignment: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} added new assignees 👤`);
+      playTaskSound();
       setIsDelegating(false); setDelegateSelection([]);
     } catch(e) {}
   };
@@ -231,6 +241,7 @@ const MessageBubble = React.memo(({
         const newTrail = [...msg.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": newTrail });
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} attached a file 📎`);
+      playTaskSound();
         setTrailFileUploading(false); setTrailUploadProgress(100);
       });
     } catch(err) { setTrailFileUploading(false); } finally { if(inlineFileInputRef.current) inlineFileInputRef.current.value = ""; }
@@ -284,7 +295,7 @@ const MessageBubble = React.memo(({
             ) : (
               <>
                 {msg.isTask && (
-                  <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
+                  <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isSubmittedForReviewMe ? 'bg-amber-50 border-amber-200 opacity-80' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
                     <div className="p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
@@ -292,7 +303,7 @@ const MessageBubble = React.memo(({
                             {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${msg.taskData.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                            {isRevokedForMe ? "Revoked" : msg.taskData.status}
+                            {isRevokedForMe ? "Revoked" : isSubmittedForReviewMe ? "Sent for Review" : msg.taskData.status}
                           </span>
                           {msg.taskData.escalated && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">🚨 Escalated</span>
@@ -305,7 +316,7 @@ const MessageBubble = React.memo(({
                       
                       {isEditingTitle && canEditTask ? (
                         <div className="flex gap-2 mb-3" onClick={e=>e.stopPropagation()}>
-                          <input value={tempTitle} onChange={e=>setTempTitle(e.target.value)} className="w-full text-sm font-medium border border-indigo-500 p-1.5 rounded outline-none" autoFocus />
+                          <input value={tempTitle} onChange={e=>setTempTitle(e.target.value)} className="w-full text-sm font-medium border border-indigo-500 p-1.5 rounded outline-none" autoFocus onKeyDown={(e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
                           <button onClick={handleInlineSaveTitle} className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-semibold hover:bg-indigo-700">Save</button>
                           <button onClick={()=>{setIsEditingTitle(false); setTempTitle(msg.text);}} className="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded font-semibold hover:bg-slate-300">Cancel</button>
                         </div>
@@ -348,7 +359,7 @@ const MessageBubble = React.memo(({
                       </div>
                     </div>
 
-                    {isTaskParticipant && !isTaskCompleted && (
+                    {isTaskParticipant && !isTaskCompleted && !isSubmittedForReviewMe && (
                         <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
                            {trailFileUploading && <div className="mr-2 min-w-[120px]"><div className="h-1.5 bg-slate-200 rounded"><div className="h-full bg-indigo-600 rounded" style={{ width: `${Math.round(trailUploadProgress)}%` }} /></div><span className="text-[10px] font-bold text-indigo-500">Uploading {Math.round(trailUploadProgress)}%</span></div>}
@@ -391,7 +402,7 @@ const MessageBubble = React.memo(({
                                    className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`}
                                    title={!hasProofAttached ? 'You must attach a file to complete this task' : ''}
                                  >
-                                   Completed {myAssigneeState === "accepted_completed" ? "✅" : ""}
+                                   {isSubmittedForReviewMe ? "Sent for Review" : `Completed ${myAssigneeState === "accepted_completed" ? "✅" : ""}`}
                                  </button>
                               </>
                            )}
