@@ -168,9 +168,9 @@ const MessageBubble = React.memo(({
     if (!isAssignee || isRevokedForMe) return alert("Only active assignees can submit completion.");
     try {
       const now = new Date();
-      const newTrail = [...msg.taskData.trail, { action: "Marked Completed", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
-      await updateDoc(doc(db, "messages", msg.id), { "taskData.status": "Completed", "taskData.trail": newTrail });
-      notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} completed the task ✅`);
+      const newTrail = [...msg.taskData.trail, { action: "Completion Submitted", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "Creator" }];
+      await updateDoc(doc(db, "messages", msg.id), { [`taskData.assigneeStates.${userEmail}`]: "submitted_completed", "taskData.status": "In Progress", "taskData.trail": newTrail });
+      notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} submitted completion for review ✅`);
     } catch(e) {}
   };
 
