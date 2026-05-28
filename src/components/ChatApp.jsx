@@ -489,7 +489,7 @@ export default function ChatApp({ user, onLogout }) {
 
     const messagesToRender = useMemo(() => {
         if(!activeGroup) return [];
-        let filtered = messages.filter(m => m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
+        let filtered = messages.filter(m => !m.taskData?.isDeleted && m.groupId === activeGroup.id && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
         filtered = filtered.filter(m => {
             if (!m.isTask) return true;
             const reviewer = m.taskData?.masterReviewerEmail || m.senderEmail;
@@ -679,7 +679,7 @@ export default function ChatApp({ user, onLogout }) {
             const candidates = messages.filter(m => m.isTask && m.taskData?.assignees?.length && (!m.taskData?.assigneeStates || !m.taskData?.masterReviewerEmail));
             for (const m of candidates.slice(0, 20)) {
                 const states = Object.fromEntries((m.taskData.assignees || []).map(e => [e, 'assigned']));
-                await updateDoc(doc(db, "messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "" }).catch(() => {});
+                await updateDoc(doc(db, "messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "", "taskData.ackBy": m.taskData?.ackBy || {} }).catch(() => {});
             }
         };
         migrateAssigneeStates();
@@ -741,7 +741,7 @@ export default function ChatApp({ user, onLogout }) {
                 }],
                 requireAck: requireAck,
                 ackDeadline: ackDeadline ? ackDeadline.toISOString() : null,
-                acknowledged: false,
+                ackBy: {},
                 requireProof: requireProof,
                 escalated: false,
                 assigneeStates: Object.fromEntries(finalAssignees.map(e => [e, "assigned"])),

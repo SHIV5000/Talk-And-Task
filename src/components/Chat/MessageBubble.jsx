@@ -33,6 +33,8 @@ const MessageBubble = React.memo(({
   const [tempTitle, setTempTitle] = useState(msg.text);
   const [isDelegating, setIsDelegating] = useState(false);
   const [delegateSelection, setDelegateSelection] = useState([]);
+  const [delegateComment, setDelegateComment] = useState("");
+  const [delegateSearch, setDelegateSearch] = useState("");
   const [editingTrailIdx, setEditingTrailIdx] = useState(null);
   const [trailEditText, setTrailEditText] = useState("");
   const [trailFileUploading, setTrailFileUploading] = useState(false);
@@ -40,6 +42,7 @@ const MessageBubble = React.memo(({
   const [reviewComment, setReviewComment] = useState("");
   const [transferSelection, setTransferSelection] = useState([]);
   const [transferComment, setTransferComment] = useState("");
+  const [transferSearch, setTransferSearch] = useState("");
   
   const menuRef = useRef(null);
   const tagPickerRef = useRef(null);
@@ -54,24 +57,36 @@ const MessageBubble = React.memo(({
   const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
   const senderName = senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
   const senderAvatar = senderUser.profilePicUrl || null;
+  const getUserName = (email) => dbUsers?.find(u => u.email === email)?.name || (email || '').split('@')[0] || 'Unknown';
+  const sortedGroupUsers = [...(dbUsers || [])]
+    .filter(u => !activeGroup?.members || activeGroup.members.includes(u.email))
+    .sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''));
+
 
   // 👇 Visibility Flags
   const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
   const isAssignee = msg.isTask && msg.taskData?.assignees?.includes(userEmail); // 👈 ONLY assignees
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
-  const isRevokedForMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'revoked');
-  const isSubmittedForReviewMe = msg.isTask && (msg.taskData?.assigneeStates?.[userEmail] === 'submitted_completed');
-  const myAckMap = msg.taskData?.ackBy || {};
-  const myAcked = !!myAckMap[userEmail];
-  const ackRequiredLocked = msg.isTask && isAssignee && msg.taskData?.requireAck && !myAcked;
-  const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
-  const canEditTask = !isTaskCompleted || isSuperAdmin;
-
   const assigneeStates = msg.taskData?.assigneeStates || {};
   const masterReviewerEmail = msg.taskData?.masterReviewerEmail || msg.senderEmail;
   const isCreator = masterReviewerEmail === userEmail;
   const myAssigneeState = assigneeStates[userEmail] || (isAssignee ? 'assigned' : null);
-  const activeAssignees = (msg.taskData?.assignees || []).filter(e => assigneeStates[e] !== 'revoked');
+  const isRevokedForMe = msg.isTask && myAssigneeState === 'revoked';
+  const isSubmittedForReviewMe = msg.isTask && myAssigneeState === 'submitted_completed';
+  const isAcceptedForMe = msg.isTask && myAssigneeState === 'accepted_completed';
+  const isTransferredOutForMe = msg.isTask && myAssigneeState === 'transferred_out';
+  const isTransferredInForMe = msg.isTask && myAssigneeState === 'transferred_in';
+  const isNeedsReviewForMe = msg.isTask && myAssigneeState === 'needs_review';
+  const myAckMap = msg.taskData?.ackBy || {};
+  const myAcked = !!myAckMap[userEmail];
+  const ackRequiredLocked = msg.isTask && isAssignee && msg.taskData?.requireAck && !myAcked;
+  const isTaskReadOnlyForMe = isSubmittedForReviewMe || isAcceptedForMe || isTransferredOutForMe || isRevokedForMe;
+  const canUseWorkerControls = isAssignee && !isTaskCompleted && !ackRequiredLocked && !isTaskReadOnlyForMe;
+  const statusBadgeText = isTransferredOutForMe ? 'Task Transferred' : isTransferredInForMe ? 'Transferred Task' : isAcceptedForMe ? 'Completed' : isNeedsReviewForMe ? 'Under Review by Me' : isRevokedForMe ? 'Revoked' : isSubmittedForReviewMe ? 'Sent for Review' : msg.taskData?.status;
+  const statusBadgeClass = isTransferredOutForMe ? 'bg-[#800020]/10 text-[#800020] border-[#800020]/30' : isTransferredInForMe ? 'bg-purple-50 text-purple-700 border-purple-200' : isAcceptedForMe ? 'bg-teal-50 text-teal-700 border-teal-200' : isNeedsReviewForMe ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : isRevokedForMe ? 'bg-rose-50 text-rose-700 border-rose-200' : isSubmittedForReviewMe ? 'bg-amber-50 text-amber-700 border-amber-200' : msg.taskData?.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData?.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200';
+  const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
+  const canEditTask = (!isTaskCompleted || isSuperAdmin) && isCreator;
+  const activeAssignees = (msg.taskData?.assignees || []).filter(e => !['revoked', 'transferred_out'].includes(assigneeStates[e]));
   const allAccepted = activeAssignees.length > 0 && activeAssignees.every(e => assigneeStates[e] === 'accepted_completed');
 
 
@@ -138,18 +153,24 @@ const MessageBubble = React.memo(({
     e.stopPropagation();
     if (!window.confirm('Acknowledge this task? This confirms you have seen and accepted it.')) return;
     try {
-      const now = new Date();
-      const newTrail = [...(msg.taskData.trail || []), {
-        action: "Acknowledged",
-        by: userEmail,
-        time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString()
-      }];
-      await updateDoc(doc(db, "messages", msg.id), {
-        [`taskData.ackBy.${userEmail}`]: true,
-        "taskData.status": "Acknowledged",
-        "taskData.trail": newTrail
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "messages", msg.id);
+        const snap = await tx.get(ref);
+        const data = snap.data() || {};
+        const currentTrail = data.taskData?.trail || [];
+        const now = new Date();
+        tx.update(ref, {
+          [`taskData.ackBy.${userEmail}`]: true,
+          "taskData.status": data.taskData?.status === 'Pending' ? 'In Progress' : (data.taskData?.status || 'In Progress'),
+          "taskData.trail": [...currentTrail, {
+            action: `${getUserName(userEmail)} acknowledged the task.`,
+            by: userEmail,
+            time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString()
+          }]
+        });
       });
-      notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} acknowledged the task.`);
+      notifyTaskChange(`${getUserName(userEmail)} acknowledged the task.`);
+      logTaskAudit("acknowledged", "unacknowledged", "acknowledged");
     } catch(e) { alert("Failed to acknowledge."); }
   };
 
@@ -195,7 +216,7 @@ const MessageBubble = React.memo(({
     if (!isAssignee || isRevokedForMe) return alert("Only active assignees can submit completion.");
     try {
       const now = new Date();
-      const newTrail = [...msg.taskData.trail, { action: "Completion Submitted", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: senderName }];
+      const newTrail = [...msg.taskData.trail, { action: `${getUserName(userEmail)} submitted completion for review to ${getUserName(masterReviewerEmail)}.`, by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: getUserName(masterReviewerEmail) }];
       await runTransaction(db, async (tx) => {
         const ref = doc(db, "messages", msg.id);
         const snap = await tx.get(ref);
@@ -205,19 +226,21 @@ const MessageBubble = React.memo(({
       });
       notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} submitted completion for review ✅`);
       logTaskAudit("submit_completed", "assigned", "submitted_completed");
-      logTaskAudit("review_again", "submitted_completed", "needs_review");
       playTaskSound();
     } catch(e) {}
   };
 
   const handleCreatorAcceptCompletion = async (assigneeEmail) => {
+    if (!reviewComment || reviewComment.trim().length < 6) return alert("Completion comment must be at least 6 characters.");
     try {
       const nextStates = { ...(msg.taskData?.assigneeStates || {}), [assigneeEmail]: "accepted_completed" };
       const now = new Date();
-      const newTrail = [...(msg.taskData?.trail || []), { action: "Completion Accepted", by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: assigneeEmail }];
+      const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} marked ${getUserName(assigneeEmail)}'s work as completed.`, by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: getUserName(assigneeEmail), comment: reviewComment.trim() }];
       const nextStatus = activeAssignees.every(e => (e === assigneeEmail ? 'accepted_completed' : (nextStates[e] || 'assigned')) === 'accepted_completed') ? 'Completed' : 'In Progress';
       await updateDoc(doc(db, "messages", msg.id), { "taskData.assigneeStates": nextStates, "taskData.status": nextStatus, "taskData.trail": newTrail });
       const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Completion accepted: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+      logTaskAudit("mark_done", "submitted_completed", "accepted_completed");
+      setReviewComment("");
       playTaskSound();
     } catch(e) {}
   };
@@ -226,38 +249,32 @@ const MessageBubble = React.memo(({
     if (!reviewComment || reviewComment.trim().length < 6) return alert("Review comment must be at least 6 characters.");
     try {
       const now = new Date();
-      const newTrail = [...(msg.taskData?.trail || []), { action: "Review Requested", by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: assigneeEmail, comment: reviewComment.trim() }];
+      const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} requested rework from ${getUserName(assigneeEmail)}.`, by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: getUserName(assigneeEmail), comment: reviewComment.trim() }];
       await updateDoc(doc(db, "messages", msg.id), { [`taskData.assigneeStates.${assigneeEmail}`]: "needs_review", "taskData.status": "In Progress", "taskData.trail": newTrail });
       const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Review again requested: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+      logTaskAudit("review_again", "submitted_completed", "needs_review");
+      setReviewComment("");
       playTaskSound();
     } catch(e) {}
   };
 
   const handleInlineDelegateSubmit = async () => {
     if (delegateSelection.length === 0) return setIsDelegating(false);
+    if (!delegateComment || delegateComment.trim().length < 6) return alert("Delegate comment must be at least 6 characters.");
     try {
       const now = new Date();
-      // 👇 UPDATED: Ensure proper NAMES are mapped to the Trail (Not Email Prefixes)
-      const toNames = delegateSelection.map(email => {
-          const u = dbUsers.find(x => x.email === email);
-          return u ? u.name : email.split('@')[0];
-      }).join(', ');
-
-      const newTrail = [...msg.taskData.trail, { action: "Delegated", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames }];
-      const oldAssignees = msg.taskData.assignees || [];
-      const removed = oldAssignees.filter(e => !delegateSelection.includes(e));
-      const added = delegateSelection.filter(e => !oldAssignees.includes(e));
-      const nextStates = { ...(msg.taskData.assigneeStates || {}) };
-      removed.forEach(e => nextStates[e] = 'revoked');
-      added.forEach(e => nextStates[e] = 'assigned');
-      delegateSelection.forEach(e => { if (!nextStates[e] || nextStates[e] === 'revoked') nextStates[e] = 'assigned'; });
-      await updateDoc(doc(db, "messages", msg.id), { "taskData.assignees": delegateSelection, "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
-      for (const em of removed) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Task revoked: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
-      for (const em of added) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `New task assignment: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
-      notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} added new assignees 👤`);
-      logTaskAudit("reassign_or_revoke");
+      const toNames = delegateSelection.map(getUserName).join(', ');
+      const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} delegated task support to ${toNames}.`, by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: toNames, comment: delegateComment.trim() }];
+      const oldAssignees = msg.taskData?.assignees || [];
+      const nextAssignees = Array.from(new Set([...oldAssignees, ...delegateSelection]));
+      const nextStates = { ...(msg.taskData?.assigneeStates || {}) };
+      delegateSelection.forEach(e => { if (!nextStates[e] || ['revoked', 'transferred_out'].includes(nextStates[e])) nextStates[e] = 'assigned'; });
+      await updateDoc(doc(db, "messages", msg.id), { "taskData.assignees": nextAssignees, "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
+      for (const em of delegateSelection) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Delegated task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
+      notifyTaskChange(`${getUserName(userEmail)} delegated task support to ${toNames}.`);
+      logTaskAudit("worker_delegate");
       playTaskSound();
-      setIsDelegating(false); setDelegateSelection([]);
+      setIsDelegating(false); setDelegateSelection([]); setDelegateComment(""); setDelegateSearch("");
     } catch(e) {}
   };
 
@@ -272,10 +289,11 @@ const MessageBubble = React.memo(({
       nextStates[fromEmail] = 'transferred_out';
       transferSelection.forEach(e => { nextStates[e] = 'transferred_in'; });
       const mergedAssignees = Array.from(new Set([...(msg.taskData?.assignees || []), ...transferSelection]));
-      const newTrail = [...(msg.taskData?.trail || []), { action: 'Task Transferred', by: userEmail, time: now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: transferSelection.join(', '), comment: transferComment.trim() }];
+      const transferNames = transferSelection.map(getUserName).join(', ');
+      const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} transferred task from ${getUserName(fromEmail)} to ${transferNames}.`, by: userEmail, time: now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: transferNames, comment: transferComment.trim() }];
       await updateDoc(doc(db, 'messages', msg.id), { 'taskData.assignees': mergedAssignees, 'taskData.assigneeStates': nextStates, 'taskData.status': 'In Progress', 'taskData.trail': newTrail });
       for (const em of [fromEmail, ...transferSelection]) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db,'notifications'), { userId: u.uid, type: 'task', text: em===fromEmail ? `Task transferred from you: "${msg.text}"` : `Transferred task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
-      setTransferSelection([]); setTransferComment('');
+      setTransferSelection([]); setTransferComment(''); setTransferSearch('');
       playTaskSound();
     } catch(e) {}
   };
@@ -290,7 +308,7 @@ const MessageBubble = React.memo(({
       uploadTask.on('state_changed', (snap) => { setTrailUploadProgress((snap.bytesTransferred / (snap.totalBytes || 1)) * 100); }, () => { setTrailFileUploading(false); setTrailUploadProgress(0); }, async () => {
         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
         const now = new Date();
-        const newTrail = [...msg.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
+        const newTrail = [...msg.taskData.trail, { action: `${getUserName(userEmail)} uploaded file: ${file.name}.`, by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": newTrail });
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} attached a file 📎`);
       playTaskSound();
@@ -347,28 +365,27 @@ const MessageBubble = React.memo(({
             ) : (
               <>
                 {msg.isTask && (
-                  <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isSubmittedForReviewMe ? 'bg-amber-50 border-amber-200 opacity-80' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
+                  <div className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${isTransferredOutForMe ? 'bg-[#800020]/5 border-[#800020]/30 opacity-75' : isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isSubmittedForReviewMe ? 'bg-amber-50 border-amber-200 opacity-80' : isAcceptedForMe ? 'bg-teal-50 border-teal-200 opacity-90' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
                     <div className="p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${msg.taskData.priority === 'High' ? 'bg-rose-50 text-rose-700 border-rose-200' : msg.taskData.priority === 'Medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
                             {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
                           </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${msg.taskData.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                            {(msg.taskData?.assigneeStates?.[userEmail] === "transferred_out") ? "Task Transferred" : (msg.taskData?.assigneeStates?.[userEmail] === "transferred_in") ? "Transferred Task" : isRevokedForMe ? "Revoked" : isSubmittedForReviewMe ? "Sent for Review" : msg.taskData.status}
-                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${statusBadgeClass}`}>{statusBadgeText}</span>
                           {msg.taskData.escalated && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">🚨 Escalated</span>
                           )}
                         </div>
-                        <span className={`text-[11px] font-bold flex items-center gap-1 ${isTaskCompleted ? 'text-slate-400' : 'text-slate-500'}`}>
-                          <i className="fa-regular fa-calendar-check"></i> Due {formatTaskDateTime(msg.taskData.deadline)}
-                        </span>
+                        <div className={`text-[11px] font-bold flex items-center gap-3 ${isTaskCompleted ? 'text-slate-400' : 'text-slate-500'}`}>
+                          <span><i className="fa-regular fa-calendar-check mr-1"></i>Due {formatTaskDateTime(msg.taskData.deadline)}</span>
+                          <span title="Visible only to the master reviewer and assigned workers"><i className="fa-solid fa-lock mr-1"></i>Concerned only</span>
+                        </div>
                       </div>
                       
                       {isEditingTitle && canEditTask ? (
                         <div className="flex gap-2 mb-3" onClick={e=>e.stopPropagation()}>
-                          <input value={tempTitle} onChange={e=>setTempTitle(e.target.value)} className="w-full text-sm font-medium border border-indigo-500 p-1.5 rounded outline-none" autoFocus onKeyDown={(e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
+                          <input value={tempTitle} onChange={e=>setTempTitle(e.target.value)} className="w-full text-sm font-medium border border-indigo-500 p-1.5 rounded outline-none" autoFocus onKeyDown={(e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); handleInlineSaveTitle(); } }} />
                           <button onClick={handleInlineSaveTitle} className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-semibold hover:bg-indigo-700">Save</button>
                           <button onClick={()=>{setIsEditingTitle(false); setTempTitle(msg.text);}} className="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded font-semibold hover:bg-slate-300">Cancel</button>
                         </div>
@@ -411,35 +428,31 @@ const MessageBubble = React.memo(({
                       </div>
                     </div>
 
-                    {isTaskParticipant && !isTaskCompleted && !isSubmittedForReviewMe && !ackRequiredLocked && (
+                    {canUseWorkerControls && (
                         <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
                            {trailFileUploading && <div className="mr-2 min-w-[120px]"><div className="h-1.5 bg-slate-200 rounded"><div className="h-full bg-indigo-600 rounded" style={{ width: `${Math.round(trailUploadProgress)}%` }} /></div><span className="text-[10px] font-bold text-indigo-500">Uploading {Math.round(trailUploadProgress)}%</span></div>}
                            
                            {isDelegating ? (
-                              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded p-1 shadow-sm w-full md:w-auto flex-1">
-                                 <select value="" onChange={(e) => { if(!delegateSelection.includes(e.target.value)) setDelegateSelection([...delegateSelection, e.target.value]); }} className="text-[11px] p-1 w-full outline-none">
-                                    <option value="">+ Add Assignee</option>
-                                    {dbUsers.map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
-                                 </select>
-                                 <div className="flex items-center gap-1">
-                                    {/* 👇 UPDATED: Display Names instead of Email Prefixes in selection pills */}
-                                    {delegateSelection.map(e => {
-                                        const u = dbUsers.find(x => x.email === e);
-                                        const displayName = u ? u.name : e.split('@')[0];
-                                        return (
-                                            <span key={e} onClick={()=>setDelegateSelection(delegateSelection.filter(x=>x!==e))} className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded cursor-pointer hover:bg-rose-100 hover:text-rose-600 truncate max-w-[60px]">
-                                                @{displayName}
-                                            </span>
-                                        );
-                                    })}
+                              <div className="bg-white border border-slate-200 rounded-lg p-2 shadow-sm w-full space-y-2">
+                                 <input value={delegateSearch} onChange={(e)=>setDelegateSearch(e.target.value)} placeholder="Search users to delegate..." className="w-full text-[11px] border rounded px-2 py-1" />
+                                 <div className="max-h-32 overflow-y-auto grid grid-cols-1 gap-1">
+                                   {sortedGroupUsers.filter(u => u.email !== userEmail && (u.name || u.email || '').toLowerCase().includes(delegateSearch.toLowerCase())).map(u => (
+                                     <label key={u.uid} className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5">
+                                       <input type="checkbox" checked={delegateSelection.includes(u.email)} onChange={(e)=> setDelegateSelection(prev => e.target.checked ? [...new Set([...prev, u.email])] : prev.filter(x=>x!==u.email))} />
+                                       <span>{u.name || u.email}</span>
+                                     </label>
+                                   ))}
                                  </div>
-                                 <button onClick={handleInlineDelegateSubmit} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded font-bold hover:bg-indigo-700">Save</button>
-                                 <button onClick={()=>{setIsDelegating(false); setDelegateSelection([]);}} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold">X</button>
+                                 <input value={delegateComment} onChange={(e)=>setDelegateComment(e.target.value)} placeholder="Delegate comment (min 6 chars)" className="w-full text-[11px] border rounded px-2 py-1" />
+                                 <div className="flex items-center justify-end gap-2">
+                                   <button onClick={handleInlineDelegateSubmit} disabled={delegateSelection.length===0 || delegateComment.trim().length<6} className="text-xs bg-indigo-600 disabled:opacity-50 text-white px-2 py-1 rounded font-bold hover:bg-indigo-700">Save</button>
+                                   <button onClick={()=>{setIsDelegating(false); setDelegateSelection([]); setDelegateComment(''); setDelegateSearch('');}} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold">X</button>
+                                 </div>
                               </div>
                            ) : isAddingUpdate ? (
                               <div className="flex items-center gap-2 bg-white border border-slate-200 rounded p-1 shadow-sm w-full">
-                                 <input type="text" value={inlineUpdateText} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type a quick update..." className="flex-1 text-[12px] p-1 outline-none font-medium text-slate-700" autoFocus />
+                                 <input type="text" value={inlineUpdateText} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type a quick update..." className="flex-1 text-[12px] p-1 outline-none font-medium text-slate-700" autoFocus onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
                                  <button onClick={submitInlineUpdate} className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-bold hover:bg-indigo-700">Post</button>
                                  <button onClick={()=>setIsAddingUpdate(false)} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold">Cancel</button>
                               </div>
@@ -454,7 +467,7 @@ const MessageBubble = React.memo(({
                                    className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`}
                                    title={!hasProofAttached ? 'You must attach a file to complete this task' : ''}
                                  >
-                                   {isSubmittedForReviewMe ? "Sent for Review" : `Completed ${myAssigneeState === "accepted_completed" ? "✅" : ""}`}
+                                   {isAcceptedForMe ? "Completed ✅" : "Completed"}
                                  </button>
                               </>
                            )}
@@ -465,16 +478,22 @@ const MessageBubble = React.memo(({
                       <div className="bg-blue-50 border-t border-blue-200 p-2 flex flex-col gap-2">
                         {(msg.taskData?.assignees || []).filter(email => (assigneeStates[email] || 'assigned') === 'submitted_completed').map(email => (
                           <div key={email} className="flex items-center justify-between gap-2 text-xs">
-                            <span className="font-semibold text-blue-700">{email}</span>
+                            <span className="font-semibold text-blue-700">{getUserName(email)}</span>
                             <div className="flex flex-col gap-1">
                               <input value={reviewComment} onChange={(e)=>setReviewComment(e.target.value)} placeholder="Review comment (min 6 chars)" className="text-[11px] border rounded px-1.5 py-1" />
                               <div className="flex gap-2">
                                 <button onClick={(e)=>{e.stopPropagation(); handleCreatorAcceptCompletion(email);}} className="px-2 py-1 rounded bg-emerald-600 text-white font-bold">Mark Done</button>
                                 <button disabled={(reviewComment||'').trim().length<6} onClick={(e)=>{e.stopPropagation(); handleCreatorReviewAgain(email);}} className="px-2 py-1 rounded bg-amber-500 disabled:opacity-50 text-white font-bold">Review Again</button>
                               </div>
-                              <select multiple value={transferSelection} onChange={(e)=>setTransferSelection(Array.from(e.target.selectedOptions).map(o=>o.value))} className="text-[11px] border rounded px-1 py-1">
-                                {dbUsers.filter(u => u.email !== email).map(u => <option key={u.uid} value={u.email}>{u.name}</option>)}
-                              </select>
+                              <input value={transferSearch} onChange={(e)=>setTransferSearch(e.target.value)} placeholder="Search users to transfer..." className="text-[11px] border rounded px-1.5 py-1" />
+                              <div className="max-h-32 overflow-y-auto border rounded bg-white p-1 space-y-1">
+                                {sortedGroupUsers.filter(u => u.email !== email && (u.name || u.email || '').toLowerCase().includes(transferSearch.toLowerCase())).map(u => (
+                                  <label key={u.uid} className="flex items-center gap-2 text-[11px] text-slate-700 hover:bg-slate-50 rounded px-1 py-0.5">
+                                    <input type="checkbox" checked={transferSelection.includes(u.email)} onChange={(e)=>setTransferSelection(prev => e.target.checked ? [...new Set([...prev, u.email])] : prev.filter(x=>x!==u.email))} />
+                                    <span>{u.name || u.email}</span>
+                                  </label>
+                                ))}
+                              </div>
                               <input value={transferComment} onChange={(e)=>setTransferComment(e.target.value)} placeholder="Transfer comment (min 6 chars)" className="text-[11px] border rounded px-1.5 py-1" />
                               <button disabled={(transferComment||'').trim().length<6 || transferSelection.length===0} onClick={(e)=>{e.stopPropagation(); handleTransferTask(email);}} className="px-2 py-1 rounded bg-rose-600 disabled:opacity-50 text-white font-bold">Transfer Task</button>
                             </div>
@@ -513,18 +532,9 @@ const MessageBubble = React.memo(({
                                       {t.to && <span> to <span className="font-semibold text-indigo-600">@{t.to}</span></span>}
                                       
                                       {t.comment && !t.fileUrl && (
-                                         editingTrailIdx === idx ? (
-                                            <div className="flex items-center gap-2 mt-2 bg-slate-50 p-1.5 rounded border border-slate-200">
-                                               <input value={trailEditText} onChange={e=>setTrailEditText(e.target.value)} className="flex-1 border border-slate-300 p-1 text-xs rounded font-medium outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" autoFocus />
-                                               <button onClick={()=>handleInlineEditTrail(idx)} className="text-emerald-600 hover:text-emerald-700 bg-white shadow-sm rounded p-1"><i className="fa-solid fa-check"></i></button>
-                                               <button onClick={()=>setEditingTrailIdx(null)} className="text-rose-600 hover:text-rose-700 bg-white shadow-sm rounded p-1"><i className="fa-solid fa-xmark"></i></button>
-                                            </div>
-                                         ) : (
-                                            <div className="mt-1 pl-2 border-l-[3px] border-slate-200 text-slate-500 italic relative">
-                                                "{t.comment}"
-                                                {t.isEdited && <span className="text-[9px] text-slate-400 ml-1 not-italic">(edited)</span>}
-                                            </div>
-                                         )
+                                        <div className="mt-1 pl-2 border-l-[3px] border-slate-200 text-slate-500 italic relative">
+                                          "{t.comment}"
+                                        </div>
                                       )}
 
                                       {t.fileUrl && (
