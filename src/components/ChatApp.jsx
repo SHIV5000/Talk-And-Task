@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "17.0";
+const APP_VERSION = "18.0";
 const universalTaskFilters = [
   { key: 'all', label: 'All', icon: 'fa-layer-group' },
   { key: 'tasks-pending', label: 'Pending Tasks', icon: 'fa-hourglass-half' },
@@ -1417,10 +1417,8 @@ export default function ChatApp({ user, onLogout }) {
                                 </div>
 
                                 <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
-                                  <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-indigo-600 text-white px-3 py-1.5 text-[11px] font-extrabold tracking-wide shadow-sm" title="Current app version">
-                                    <i className="fa-solid fa-code-branch text-[10px]"></i> v{APP_VERSION}
-                                  </span>
-                                  <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 px-1">Universal Task Bar</span>
+                                  <span className="shrink-0 text-[11px] font-bold tracking-wide text-slate-400 px-1" title="Current app version">Ver. {APP_VERSION}</span>
+                                  <span className="shrink-0 text-[11px] font-black tracking-wide text-slate-500 px-1">{(currentUserData?.name || user.email.split('@')[0])}'s Talk & Task Bar</span>
                                   {universalTaskFilters.map((f) => (
                                     <button
                                       key={f.key}
