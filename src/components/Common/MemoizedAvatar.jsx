@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import InlineSvgIcon from './InlineSvgIcon.jsx';
 
 const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", isGroup = false, extraClasses = "", imageLoading = "eager" }) => {
   const cachedUrl = useMemo(() => {
@@ -28,7 +29,7 @@ const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", is
     <div 
       className={`${sizeClass} ${isGroup ? 'rounded-2xl bg-rose-50 text-[#800020] border border-rose-100' : 'rounded-full bg-[#dfe5e7] text-[#54656f]'} flex items-center justify-center font-bold text-sm shadow-sm ${extraClasses}`}
     >
-      {isGroup ? <i className="fa-solid fa-users"></i> : (name || '').substring(0,2).toUpperCase()}
+      {isGroup ? <InlineSvgIcon name="users" className="w-4 h-4" /> : (name || '').substring(0,2).toUpperCase()}
     </div>
   );
 });

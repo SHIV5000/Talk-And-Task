@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'; // 👈 FIXED IMPORT
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import InlineSvgIcon from '../Common/InlineSvgIcon.jsx';
 import { EMOJI_LIST, lockExtension } from '../../utils/helpers.js';
 
 export default function InputArea({
@@ -74,7 +75,7 @@ export default function InputArea({
             <div className="text-sm font-semibold text-primary">{(replyingTo.sender||"").split('@')[0]}</div>
             <div className="text-xs text-text-secondary truncate">"{replyingTo.text || replyingTo.fileName}"</div>
           </div>
-          <button onClick={()=>setReplyingTo(null)} className="text-primary hover:text-primary-hover"><i className="fa-solid fa-xmark"></i></button>
+          <button onClick={()=>setReplyingTo(null)} className="text-primary hover:text-primary-hover"><InlineSvgIcon name="close" className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -90,7 +91,7 @@ export default function InputArea({
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#800000] hover:scale-110 transition-transform border border-white shadow" title="Maroon"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#006400] hover:scale-110 transition-transform border border-white shadow" title="Dark Green"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput(); }} className="w-5 h-5 rounded-full bg-blue-700 hover:scale-110 transition-transform border border-white shadow" title="Blue"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput(); }} className="ml-auto px-2 h-7 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput(); }} className="ml-auto px-2 h-7 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting">Clear</button>
       </div>
 
       {mentionQuery !== null && (
@@ -122,7 +123,7 @@ export default function InputArea({
                 className="px-4 py-2.5 hover:bg-teal-50 cursor-pointer flex items-center gap-3 text-sm transition-colors"
               >
                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                  <i className="fa-solid fa-users text-xs"></i>
+                  <InlineSvgIcon name="users" className="w-4 h-4" />
                 </div>
                 <span className="font-medium text-slate-700">{g.name}</span>
               </div>
@@ -137,7 +138,7 @@ export default function InputArea({
         <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-bottom-2 z-20 space-y-3">
           {pendingFiles.map((pf) => (
             <div key={pf.id} className="flex items-start gap-3 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-              <div className="mt-1 w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600"><i className="fa-solid fa-file-lines text-xl"></i></div>
+              <div className="mt-1 w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600"><InlineSvgIcon name="file" className="w-5 h-5" /></div>
               <div className="flex-1 space-y-2.5">
                 <div className="flex items-center gap-2">
                   <input type="text" value={pf.customName.replace(/\.[^/.]+$/, '').replace('__SECURE__', '')} onChange={(e) => { const newName = lockExtension(pf.file.name, e.target.value); setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, customName: pf.allowDownload === false ? `__SECURE__${newName}` : newName } : f)); }} className="flex-1 text-sm font-bold text-slate-800 outline-none border-b border-transparent focus:border-indigo-500 bg-transparent py-0.5" placeholder="File name" />
@@ -152,16 +153,16 @@ export default function InputArea({
                         const cleanedName = pf.customName.replace('__SECURE__', '');
                         setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, allowDownload: isAllowed, customName: isAllowed ? cleanedName : `__SECURE__${cleanedName}` } : f));
                     }} className="w-4 h-4 accent-indigo-600 cursor-pointer" />
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{pf.allowDownload !== false ? '✅ Public Download Allowed' : '🔒 Secure (View Only)'}</span>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{pf.allowDownload !== false ? 'Public Download Allowed' : 'Secure (View Only)'}</span>
                 </label>
               </div>
-              <button onClick={() => { setPendingFiles(prev => prev.filter(f => f.id !== pf.id)); if (pendingFiles.length === 1) setShowFileRename(false); }} className="text-slate-400 hover:text-rose-500 p-2"><i className="fa-solid fa-trash-can text-lg"></i></button>
+              <button onClick={() => { setPendingFiles(prev => prev.filter(f => f.id !== pf.id)); if (pendingFiles.length === 1) setShowFileRename(false); }} className="text-slate-400 hover:text-rose-500 p-2"><InlineSvgIcon name="close" className="w-5 h-5" /></button>
             </div>
           ))}
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => { setPendingFiles([]); setShowFileRename(false); }} className="text-slate-500 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-slate-100 transition-colors">Cancel</button>
             <button onClick={handleSendPendingFiles} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-600/30 transition-all">
-              <i className="fa-solid fa-paper-plane"></i> Send {pendingFiles.length > 1 ? `All (${pendingFiles.length})` : ''}
+              <InlineSvgIcon name="send" className="w-4 h-4" /> Send {pendingFiles.length > 1 ? `All (${pendingFiles.length})` : ''}
             </button>
           </div>
         </div>
@@ -170,12 +171,12 @@ export default function InputArea({
       <div className="flex items-end gap-2">
         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
         <button className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors shrink-0" onClick={() => fileInputRef.current.click()} disabled={isUploading}>
-          <i className="fa-solid fa-plus text-xl"></i>
+          <InlineSvgIcon name="attach" className="w-5 h-5" />
         </button>
 
         <div className="relative shrink-0" ref={emojiPickerRef}>
           <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
-            <i className="fa-regular fa-face-smile text-xl"></i>
+            <InlineSvgIcon name="smile" className="w-5 h-5" />
           </button>
           {emojiPickerOpen && (
             <div className="emoji-picker-popup shadow-2xl border border-slate-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
@@ -209,13 +210,13 @@ export default function InputArea({
 
         {showScheduleButton && (
           <button onClick={() => { if (!inputText.trim() || inputText === '<br>') return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
-            <i className="fa-regular fa-clock text-xl"></i>
+            <InlineSvgIcon name="calendar" className="w-5 h-5" />
           </button>
         )}
 
         {showOfflineDrafts && offlineDrafts.length > 0 && (
           <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
-            <i className="fa-solid fa-inbox text-xl"></i>
+            <InlineSvgIcon name="file" className="w-5 h-5" />
             <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{offlineDrafts.length}</span>
           </button>
         )}
@@ -225,7 +226,7 @@ export default function InputArea({
           disabled={!inputText.trim() || inputText === '<br>'}
           className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
-          <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
+          <InlineSvgIcon name="send" className="w-5 h-5 ml-[-2px]" />
         </button>
       </div>
     </div>

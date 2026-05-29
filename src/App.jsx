@@ -17,7 +17,7 @@ const deploymentInfo = {
   source: typeof __BUILD_SOURCE_REPO__ !== 'undefined' ? __BUILD_SOURCE_REPO__ : 'unknown',
 };
 
-const APP_VERSION = "20.0";
+const APP_VERSION = "21.0";
 
 function FallbackScreen({ error }) {
   return (

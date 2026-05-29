@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import InlineSvgIcon from '../Common/InlineSvgIcon.jsx';
 
 export default function LeftSidebar({
   user,
@@ -56,7 +57,7 @@ export default function LeftSidebar({
           mobileSidebarOpen
             ? 'mobile-sidebar-panel open flex'
             : 'hidden md:flex'
-        } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
+        } w-[30%] min-w-[300px] max-w-[400px] bg-[#3730A3] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
         style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
@@ -78,7 +79,7 @@ export default function LeftSidebar({
                   className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                   title="Search teams & people"
                 >
-                  <i className="fa-solid fa-search"></i>
+                  <InlineSvgIcon name="search" className="w-4 h-4" />
                 </button>
                 
               </div>
@@ -93,20 +94,20 @@ export default function LeftSidebar({
                     className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                     title="New Group (Group Name, Members)"
                   >
-                    <i className="fa-solid fa-plus"></i>
+                    <InlineSvgIcon name="plus" className="w-4 h-4" />
                   </button>
                 )}
                 <button
                   onClick={() => setActiveModal('edit_profile')}
                   className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                 >
-                  <i className="fa-solid fa-gear"></i>
+                  <InlineSvgIcon name="settings" className="w-4 h-4" />
                 </button>
                 <button
                   onClick={onLogout}
                   className="text-white/95 bg-white/10 hover:bg-rose-500/30 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                 >
-                  <i className="fa-solid fa-power-off"></i>
+                  <InlineSvgIcon name="logout" className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -117,7 +118,7 @@ export default function LeftSidebar({
         {/* Search */}
         <div className={`border-b border-white/10 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
           <div className="bg-white/10 rounded-lg flex items-center px-3 py-2 focus-within:bg-white/20 transition-all">
-            <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
+            <InlineSvgIcon name="search" className="w-4 h-4 mr-2 opacity-70" />
             <input
               type="text"
               placeholder="Search teams & people..."
@@ -130,7 +131,7 @@ export default function LeftSidebar({
                 onClick={() => setSidebarSearch('')}
                 className="text-white/70 hover:text-white ml-1"
               >
-                <i className="fa-solid fa-xmark text-xs"></i>
+                <InlineSvgIcon name="close" className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
@@ -145,6 +146,7 @@ export default function LeftSidebar({
             scrollbarColor: 'rgba(255, 255, 255, 0.25) transparent',
           }}
         >
+          <div className="sidebar-section-label px-4 pt-6 pb-2">Groups</div>
           {myGroups.map(g => {
             const hasUnread = messages.some(
               m =>
@@ -192,6 +194,7 @@ export default function LeftSidebar({
             );
           })}
 
+          <div className="sidebar-section-label px-4 pt-5 pb-2">Members</div>
           {dmUsers.map(u => {
             const dmIdList = [user.uid, u.uid].sort();
             const dmIdStr = dmIdList.join('_');
@@ -242,7 +245,7 @@ export default function LeftSidebar({
                     sizeClass="w-[49px] h-[49px]"
                   />
                   {isOnline && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-[#312E81] rounded-full online-rail shadow-sm" />
+                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-[#3730A3] rounded-full online-rail shadow-sm" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
@@ -275,14 +278,14 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace v20.0 button (visible if user is admin) */}
+        {/* Admin Workspace v21.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v20.0
+              <InlineSvgIcon name="shield" className="w-4 h-4" /> Admin Workspace v21.0
             </button>
           </div>
         )}

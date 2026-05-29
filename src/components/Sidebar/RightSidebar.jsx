@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import InlineSvgIcon from '../Common/InlineSvgIcon.jsx';
 
 const DATE_FMT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
 const formatDDMMMYY = (value) => {
@@ -69,11 +70,11 @@ export default function RightSidebar({
     <div className="w-full shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2" style={{ width: `${sidebarWidth || 380}px` }}>
       <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0 shadow-sm">
         <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-layer-group text-sm"></i></div>
+          <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600"><InlineSvgIcon name="task" className="w-4 h-4" /></div>
           Task Hub
         </h2>
         <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 flex items-center justify-center transition-colors">
-          <i className="fa-solid fa-xmark text-lg"></i>
+          <InlineSvgIcon name="close" className="w-5 h-5" />
         </button>
       </div>
 
@@ -85,7 +86,7 @@ export default function RightSidebar({
              ))}
            </select>
            <button onClick={() => setShowDateFilters(v => !v)} className={`w-10 h-[38px] rounded-xl border transition-colors flex items-center justify-center ${showDateFilters || startDate || endDate ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`} title="Date filters">
-             <i className="fa-solid fa-calendar-days"></i>
+             <InlineSvgIcon name="calendar" className="w-4 h-4" />
            </button>
          </div>
 
@@ -113,11 +114,11 @@ export default function RightSidebar({
               <div key={task.id} onClick={() => navigateToMessageFromNotification?.(task.id, task.groupId)} title="Show original task in main chat" className={`bg-white border rounded-2xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isHidden ? 'border-slate-200 opacity-80 bg-slate-50/60' : 'border-slate-200 hover:border-indigo-300'}`}>
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1.5 mb-2.5">
                   <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDone ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>{isHidden ? 'Archived' : task.taskData.status}</span>
-                  <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap"><i className="fa-regular fa-calendar mr-1"></i>{formatDDMMMYY(task.taskData.deadline)}</span>
+                  <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap"><InlineSvgIcon name="calendar" className="w-3.5 h-3.5 mr-1" />{formatDDMMMYY(task.taskData.deadline)}</span>
                 </div>
                 <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone ? 'text-slate-600 opacity-80' : 'text-slate-800'}`}>
                   <span className="inline-flex items-start gap-1.5">
-                    {isDone && <i className="fa-solid fa-circle-check text-teal-500 mt-0.5 shrink-0"></i>}
+                    {isDone && <InlineSvgIcon name="check" className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />}
                     <span>{task.text}</span>
                   </span>
                 </div>

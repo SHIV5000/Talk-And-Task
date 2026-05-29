@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { formatMessageText } from '../../utils/helpers.js';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import InlineSvgIcon from '../Common/InlineSvgIcon.jsx';
 import { db, storage } from '../../firebase.js';
 import { doc, updateDoc, collection, addDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -88,8 +89,8 @@ const MessageBubble = React.memo(({
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = taskSidebarMode && (!isTaskCompleted || isSuperAdmin) && isCreator;
   const canPinItem = currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(userEmail) || (msg.isTask && msg.senderEmail === userEmail);
-  const bubbleWidthClass = isThreadView ? 'max-w-full' : msg.isTask ? 'max-w-[min(82%,760px)]' : 'max-w-[min(78%,720px)]';
-  const taskShellClass = msg.isTask ? 'border-2 border-indigo-100 border-l-[6px] rounded-2xl' : '';
+  const bubbleWidthClass = isThreadView || taskSidebarMode ? 'max-w-full w-full' : 'w-1/2 max-w-[50%]';
+  const taskShellClass = msg.isTask ? 'task-card-shell' : '';
   const activeAssignees = (msg.taskData?.assignees || []).filter(e => !['revoked', 'transferred_out'].includes(assigneeStates[e]));
   const allAccepted = activeAssignees.length > 0 && activeAssignees.every(e => assigneeStates[e] === 'accepted_completed');
 
@@ -359,20 +360,20 @@ const MessageBubble = React.memo(({
             </div>
             
             <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-indigo-600 hover:bg-slate-100 p-1.5 w-6 h-6 rounded-full flex items-center justify-center">
-              <i className="fa-solid fa-ellipsis-vertical text-[14px]"></i>
+              <InlineSvgIcon name="more" className="w-4 h-4" />
             </button>
             
             {menuOpen && (
               <div ref={menuRef} className="absolute top-8 right-2 z-[120] bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
                 
-                {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setActiveTaskSidebar?.(null); setActiveReplies(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply in Replies</button>}
+                {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setActiveTaskSidebar?.(null); setActiveReplies(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><InlineSvgIcon name="reply" className="w-5 h-5" /> Reply in Replies</button>}
                 
-                {msg.isTask && !taskSidebarMode && <button onClick={() => { setMenuOpen(false); onOpenTask?.(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"><i className="fa-solid fa-up-right-from-square w-5"></i> Open Task Sidebar</button>}
-                {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
-                <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
-                <button onClick={() => { setMenuOpen(false); handleToggleBookmark(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600"><i className={`fa-solid fa-bookmark w-5 ${isBookmarked ? 'text-indigo-600' : ''}`}></i> {isBookmarked ? 'Unbookmark' : 'Bookmark'}</button>
-                {canPinItem && <button onClick={() => { setMenuOpen(false); handleTogglePin(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className={`fa-solid fa-thumbtack w-5 ${msg.isPinned ? 'text-indigo-600' : ''}`}></i> {msg.isPinned ? 'Unpin' : 'Pin'}</button>}
-                {canModify && toolPreferences?.delete && (!msg.isTask || taskSidebarMode) && <button onClick={() => { setMenuOpen(false); handleDeleteMessage(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-500 hover:bg-rose-50"><i className="fa-solid fa-trash w-5"></i> Delete</button>}
+                {msg.isTask && !taskSidebarMode && <button onClick={() => { setMenuOpen(false); onOpenTask?.(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"><InlineSvgIcon name="external" className="w-5 h-5" /> Open Task Sidebar</button>}
+                {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><InlineSvgIcon name="task" className="w-5 h-5" /> Convert to Task</button>}
+                <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><InlineSvgIcon name="calendar" className="w-5 h-5" /> Set Reminder</button>
+                <button onClick={() => { setMenuOpen(false); handleToggleBookmark(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600"><InlineSvgIcon name="pin" className={`w-5 h-5 ${isBookmarked ? 'text-indigo-600' : ''}`} /> {isBookmarked ? 'Unbookmark' : 'Bookmark'}</button>
+                {canPinItem && <button onClick={() => { setMenuOpen(false); handleTogglePin(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><InlineSvgIcon name="pin" className={`w-5 h-5 ${msg.isPinned ? 'text-indigo-600' : ''}`} /> {msg.isPinned ? 'Unpin' : 'Pin'}</button>}
+                {canModify && toolPreferences?.delete && (!msg.isTask || taskSidebarMode) && <button onClick={() => { setMenuOpen(false); handleDeleteMessage(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-500 hover:bg-rose-50"><InlineSvgIcon name="close" className="w-5 h-5" /> Delete</button>}
               </div>
             )}
             
@@ -389,16 +390,16 @@ const MessageBubble = React.memo(({
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${msg.taskData.priority === 'High' ? 'bg-rose-50 text-rose-700 border-rose-200' : msg.taskData.priority === 'Medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                            {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
+                            <span className={`priority-dot ${msg.taskData.priority === 'High' ? 'priority-dot-high' : msg.taskData.priority === 'Medium' ? 'priority-dot-medium' : 'priority-dot-low'}`} aria-hidden="true"></span>{msg.taskData.priority || 'Medium'}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${statusBadgeClass}`}>{statusBadgeText}</span>
                           {msg.taskData.escalated && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">🚨 Escalated</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">Escalated</span>
                           )}
                         </div>
                         <div className={`text-[11px] font-bold flex items-center gap-3 flex-wrap shrink-0 ${isTaskCompleted ? 'text-slate-400' : 'text-slate-500'}`}>
-                          <span><i className="fa-regular fa-calendar-check mr-1"></i>Due {formatTaskDateTime(msg.taskData.deadline)}</span>
-                          <span title="Visible only to the master reviewer and assigned workers"><i className="fa-solid fa-lock mr-1"></i>Concerned only</span>
+                          <span><InlineSvgIcon name="calendar" className="w-3.5 h-3.5 mr-1" />Due {formatTaskDateTime(msg.taskData.deadline)}</span>
+                          <span title="Visible only to the master reviewer and assigned workers"><InlineSvgIcon name="lock" className="w-3.5 h-3.5 mr-1" />Concerned only</span>
                         </div>
                       </div>
                       
@@ -422,7 +423,7 @@ const MessageBubble = React.memo(({
                             onClick={handleAcknowledge}
                             className="w-full px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs font-bold text-yellow-700 hover:bg-yellow-100 transition-colors"
                           >
-                            <i className="fa-solid fa-check mr-1"></i> Acknowledge Task
+                            <InlineSvgIcon name="check" className="w-4 h-4 mr-1" /> Acknowledge Task
                           </button>
                           {msg.taskData.ackDeadline && (
                             <div className="text-[10px] text-yellow-600 mt-1 text-center">
@@ -486,7 +487,7 @@ const MessageBubble = React.memo(({
                                    className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 hover:-translate-y-0.5 hover:shadow-md transition-all ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`}
                                    title={!hasProofAttached ? 'You must attach a file to complete this task' : ''}
                                  >
-                                   {isAcceptedForMe ? "Completed ✅" : "Completed"}
+                                   {isAcceptedForMe ? "Completed" : "Completed"}
                                  </button>
                               </>
                            )}
@@ -524,7 +525,7 @@ const MessageBubble = React.memo(({
 
                     
                     {!taskSidebarMode && (
-                      <div className="px-3 pb-3 text-[11px] font-bold text-indigo-600 flex items-center gap-1"><i className="fa-solid fa-up-right-from-square"></i> Open in Task Sidebar to update</div>
+                      <div className="px-3 pb-3 text-[11px] font-bold text-indigo-600 flex items-center gap-1"><InlineSvgIcon name="external" className="w-3.5 h-3.5" /> Open in Task Sidebar to update</div>
                     )}
                     {taskSidebarMode && (
                       <button onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); setIsDelegating(false); }} className={`w-full border-t border-slate-200 py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isTaskCompleted ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}>
@@ -555,7 +556,7 @@ const MessageBubble = React.memo(({
 
                                       {t.fileUrl && (
                                           <div className="mt-2 flex items-center gap-2 p-1.5 border border-slate-200 rounded-md bg-slate-50 cursor-pointer hover:bg-slate-100 relative" onClick={() => window.open(t.fileUrl, '_blank')}>
-                                             <i className="fa-solid fa-file text-indigo-500 text-lg"></i>
+                                             <InlineSvgIcon name="file" className="w-5 h-5 text-indigo-500" />
                                              <span className="text-xs font-bold text-slate-600 truncate">{t.fileName}</span>
                                           </div>
                                       )}
@@ -573,7 +574,7 @@ const MessageBubble = React.memo(({
                 )}
 
                 {!msg.isTask && msg.isPrivateMention && !msg.isPrivateForward && (
-                  <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><i className="fa-solid fa-lock"></i> PRIVATE</div>
+                  <div className="text-xs font-semibold flex items-center gap-1 mb-2 text-purple-700"><InlineSvgIcon name="lock" className="w-3.5 h-3.5" /> PRIVATE</div>
                 )}
                 
                 {!msg.isTask && msg.isPrivateForward && (
@@ -612,10 +613,10 @@ const MessageBubble = React.memo(({
                        </div>
                     ) : (
                        <div className={`flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 w-fit max-w-[220px] shadow-sm ${!isSecure ? 'cursor-pointer hover:bg-slate-100' : 'cursor-default opacity-90'}`} onClick={(e) => { e.stopPropagation(); if(!isSecure) window.open(msg.fileUrl, '_blank'); }}>
-                          <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center text-indigo-500 shadow-sm shrink-0"><i className="fa-solid fa-file-lines text-lg"></i></div>
+                          <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center text-indigo-500 shadow-sm shrink-0"><InlineSvgIcon name="file" className="w-5 h-5" /></div>
                           <div className="flex-1 overflow-hidden min-w-0 flex flex-col">
                              <p className="text-sm font-bold text-slate-700 truncate">{displayFileName}</p>
-                             {isSecure && <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mt-0.5"><i className="fa-solid fa-lock"></i> Download Restricted</span>}
+                             {isSecure && <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mt-0.5"><InlineSvgIcon name="lock" className="w-3 h-3" /> Download Restricted</span>}
                           </div>
                           {!isSecure && <i className="fa-solid fa-download text-slate-400 pr-1 hover:text-indigo-600 transition-colors"></i>}
                        </div>
@@ -664,7 +665,7 @@ const MessageBubble = React.memo(({
                         <button onClick={(e) => { e.stopPropagation(); setTagPickerOpen(!tagPickerOpen); }}
                             className={`h-8 px-2 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors shadow-sm ${hasReactions ? '' : 'opacity-0 group-hover/msg:opacity-100'}`}
                         >
-                            <i className="fa-solid fa-plus text-[11px]"></i><span className="text-[10px] font-bold ml-[3px] mt-[1px]"><i className="fa-regular fa-face-smile"></i></span>
+                            <InlineSvgIcon name="smile" className="w-4 h-4" />
                         </button>
                         
                         {tagPickerOpen && (
@@ -736,7 +737,7 @@ const MessageBubble = React.memo(({
                 
                 {!msg.isTask && !isThreadView && replyCount > 0 && (
                     <button onClick={(e) => { e.stopPropagation(); setActiveTaskSidebar?.(null); setActiveReplies(msg); }} className="flex items-center gap-2 px-3 py-1.5 mt-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-lg transition-colors border border-indigo-200 shadow-sm w-fit group/threadbtn">
-                        <i className="fa-solid fa-comments group-hover/threadbtn:scale-110 transition-transform"></i> View {replyCount} Replies
+                        <InlineSvgIcon name="reply" className="w-4 h-4 group-hover/threadbtn:scale-110 transition-transform" /> View {replyCount} Replies
                     </button>
                 )}
             </div>

@@ -7,6 +7,7 @@ import LeftSidebar from './Sidebar/LeftSidebar.jsx';
 import UploadOverlay from './Common/UploadOverlay.jsx';
 import Toast from './Common/Toast.jsx';
 import MemoizedAvatar from './Common/MemoizedAvatar.jsx';
+import InlineSvgIcon from './Common/InlineSvgIcon.jsx';
 import ChatView from './Chat/ChatView.jsx';
 import InputArea from './Chat/InputArea.jsx';
 import ModalManager from './Modals/ModalManager.jsx';
@@ -25,7 +26,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "20.0";
+const APP_VERSION = "21.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -43,7 +44,7 @@ const THEME_FONTS = {
 const FONT_SCALE = { compact: '0.94rem', normal: '1rem', comfortable: '1.06rem', large: '1.13rem' };
 const universalTaskFilters = [
   { key: 'all', label: 'All', icon: 'fa-layer-group' },
-  { key: 'tasks-pending', label: 'Pending Tasks', icon: 'fa-hourglass-half' },
+  { key: 'tasks-pending', label: 'Pending', icon: 'fa-hourglass-half' },
   { key: 'tasks-completed', label: 'Completed', icon: 'fa-circle-check' },
   { key: 'messages', label: 'Messages', icon: 'fa-comment-dots' },
   { key: 'today', label: 'Today', icon: 'fa-calendar-day' },
@@ -121,7 +122,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     };
 
     return (
-        <div className="w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
+        <div className="replies-panel w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
             <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
                 <div>
@@ -129,11 +130,11 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                     <span className="text-[11px] text-slate-500 font-medium">Replies Panel</span>
                 </div>
                 <div className="flex items-center gap-1">
-                    <button onClick={() => repliesScrollRef.current?.scrollTo({ top: repliesScrollRef.current.scrollHeight, behavior: 'smooth' })} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors" title="Scroll to latest reply"><i className="fa-solid fa-arrow-down"></i></button>
-                    <button onClick={() => setActiveReplies(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                    <button onClick={() => repliesScrollRef.current?.scrollTo({ top: repliesScrollRef.current.scrollHeight, behavior: 'smooth' })} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors" title="Scroll to latest reply"><InlineSvgIcon name="arrowDown" className="w-5 h-5" /></button>
+                    <button onClick={() => setActiveReplies(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><InlineSvgIcon name="close" className="w-5 h-5" /></button>
                 </div>
             </div>
-            <div ref={repliesScrollRef} className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
+            <div ref={repliesScrollRef} className="replies-thread-body flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
                 <MessageBubble
                     msg={activeReplies} userEmail={user.email} currentUserData={currentUserData} dbUsers={dbUsers}
                     groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB}
@@ -200,13 +201,13 @@ const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserDat
     if (!liveTask) return null;
     const taskGroup = groups.find(g => g.id === liveTask.groupId) || activeGroup;
     return (
-        <div className="w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
+        <div className="task-sidebar-panel w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
                 <div className="min-w-0">
-                    <h3 className="font-bold text-slate-800 leading-tight flex items-center gap-2"><i className="fa-regular fa-square-check text-indigo-600"></i> Task Sidebar</h3>
+                    <h3 className="font-bold text-slate-800 leading-tight flex items-center gap-2"><InlineSvgIcon name="task" className="w-4 h-4 text-indigo-600" /> Task Sidebar</h3>
                     <span className="text-[11px] text-slate-500 font-medium truncate block">Updates, uploads and review actions happen here</span>
                 </div>
-                <button onClick={() => setActiveTask(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                <button onClick={() => setActiveTask(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><InlineSvgIcon name="close" className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll">
                 <MessageBubble
@@ -1308,7 +1309,7 @@ export default function ChatApp({ user, onLogout }) {
                                     <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
 
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
-                                        {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
+                                        {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" isGroup={true} /> : <div className="w-10 h-10 rounded-[9px] bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><InlineSvgIcon name="users" className="w-5 h-5" /></div>}
                                         <div className="flex flex-col min-w-0 flex-1">
                                             <span className={`text-[16px] font-bold leading-tight truncate text-slate-800`}>{activeGroup.name}</span>
                                             <span className="text-[13px] text-indigo-500 truncate max-w-[150px] lg:max-w-[400px]">
@@ -1323,7 +1324,7 @@ export default function ChatApp({ user, onLogout }) {
 
                                     <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
                                         <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
-                                            <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
+                                            <InlineSvgIcon name="search" className="w-5 h-5 text-indigo-400 mr-2" />
                                             <input
                                                type="text"
                                                placeholder="Search messages and tasks..."
@@ -1332,7 +1333,7 @@ export default function ChatApp({ user, onLogout }) {
                                                onChange={(e) => setSearchQuery(e.target.value)}
                                                onFocus={() => setIsSearchFocused(true)}
                                             />
-                                            {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button>}
+                                            {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><InlineSvgIcon name="close" className="w-3.5 h-3.5" /></button>}
                                         </div>
 
                                         {isSearchFocused && globalSearchResults && (
@@ -1380,12 +1381,12 @@ export default function ChatApp({ user, onLogout }) {
                                     <div className="flex items-center gap-1 shrink-0 relative">
 
                                       <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
-                                        <i className="fa-solid fa-calendar-alt"></i>
+                                        <InlineSvgIcon name="calendar" className="w-5 h-5" />
                                       </button>
 
                                       <div className="relative">
                                         <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px] relative`}>
-                                          <i className="fa-solid fa-bell"></i>
+                                          <InlineSvgIcon name="bell" className="w-5 h-5" />
                                           {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
                                         </button>
 
@@ -1446,7 +1447,7 @@ export default function ChatApp({ user, onLogout }) {
                                         )}
                                       </div>
 
-                                      <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                      <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><InlineSvgIcon name="task" className="w-5 h-5" /></button>
 
                                       {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
 
@@ -1455,25 +1456,25 @@ export default function ChatApp({ user, onLogout }) {
 
                                 <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
                                   <span className="shrink-0 text-[11px] font-bold tracking-wide text-slate-400 px-1" title="Current app version">Ver. {APP_VERSION}</span>
-                                  <span className="shrink-0 text-[11px] font-black tracking-wide text-slate-500 px-1">{(currentUserData?.name || user.email.split('@')[0])}'s Talk & Task Bar</span>
-                                  {universalTaskFilters.map((f) => (
+                                  <span className="version-divider" aria-hidden="true"></span>
+                                  {universalTaskFilters.slice(0, 5).map((f) => (
                                     <button
                                       key={f.key}
                                       onClick={() => setChatFilter(f.key)}
                                       className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:shadow-sm ${chatFilter === f.key ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600'}`}
                                       title={`Show ${f.label.toLowerCase()}`}
                                     >
-                                      <i className={`fa-solid ${f.icon} text-[10px]`}></i>{f.label}
+                                      {f.label}
                                     </button>
                                   ))}
                                 </div>
 
                                 <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[122px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
-                                    <i className="fa-solid fa-arrow-down"></i>
+                                    <InlineSvgIcon name="arrowDown" className="w-5 h-5" />
                                 </button>
 
                                 <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[90px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
-                                    <i className="fa-solid fa-arrow-up"></i>
+                                    <InlineSvgIcon name="arrowUp" className="w-5 h-5" />
                                 </button>
 
                                 <ChatView
