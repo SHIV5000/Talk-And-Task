@@ -95,7 +95,15 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
                 const data = docSnapshot.data(); 
                 setCurrentUserData(data);
                 if (!profileForm.name && data.name) {
-                    setProfileForm({ name: (data.name || "").split('@')[0], fontSize: data.fontSize || "text-[14.2px]", fontFamily: data.fontFamily || "font-sans" });
+                    setProfileForm({
+                        name: (data.name || "").split('@')[0],
+                        fontSize: data.fontSize || "text-[14.2px]",
+                        fontFamily: data.fontFamily || "font-sans",
+                        themeFont: data.themeFont || "Inter",
+                        accentColor: data.accentColor || "indigo",
+                        displayMode: data.displayMode || "light",
+                        fontScale: data.fontScale || "normal",
+                    });
                 }
                 if (data.toolPreferences) setToolPreferences(prev => ({ ...prev, ...data.toolPreferences }));
             }

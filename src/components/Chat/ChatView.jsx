@@ -119,8 +119,9 @@ export default function ChatView({
                 jumpToPrivateSource={jumpToPrivateSource} 
                 handleAddInlineComment={handleAddInlineComment} 
                 customTags={customTags || []} 
-                setActiveReplies={setActiveReplies}
-                onOpenTask={(task) => { setActiveTaskSidebar?.(task); setShowRightSidebar?.(true); }}
+                setActiveReplies={(msg) => { setActiveTaskSidebar?.(null); setActiveReplies?.(msg); }}
+                setActiveTaskSidebar={setActiveTaskSidebar}
+                onOpenTask={(task) => { setActiveReplies?.(null); setActiveTaskSidebar?.(task); setShowRightSidebar?.(true); }}
                 />
             );
           })}

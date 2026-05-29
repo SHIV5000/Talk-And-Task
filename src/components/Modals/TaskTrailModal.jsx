@@ -154,7 +154,7 @@ export default function TaskTrailModal({
                   <i className={`fa-solid fa-chevron-${showDelegateDropdown ? 'up' : 'down'} text-text-secondary`}></i>
                 </button>
                 {showDelegateDropdown && (
-                  <div className="absolute bottom-[105%] left-0 w-full bg-white border border-gray-200 shadow-xl max-h-48 overflow-y-auto z-50 rounded-xl py-1">
+                  <div className="absolute bottom-[105%] left-0 w-full bg-white border border-gray-200 shadow-xl max-h-48 overflow-y-auto z-[130] rounded-xl py-1">
                     {(activeGroup?.id === 'demo' ? dbUsers : dbUsers.filter(u => activeGroup?.members?.includes(u.email))).map(u => (
                       <label key={u.uid} className="flex items-center gap-3 cursor-pointer px-4 py-2.5 hover:bg-gray-50 transition-colors">
                         <input type="checkbox" checked={delegateAssignees.includes(u.email)}

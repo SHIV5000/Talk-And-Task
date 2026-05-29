@@ -25,7 +25,22 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "18.0";
+const APP_VERSION = "19.0";
+const THEME_ACCENTS = {
+  indigo: '#4f46e5',
+  teal: '#0f766e',
+  rose: '#e11d48',
+  amber: '#d97706',
+  emerald: '#059669',
+};
+const THEME_FONTS = {
+  Inter: "Inter, Segoe UI, sans-serif",
+  Roboto: "Roboto, Arial, sans-serif",
+  Nunito: "Nunito, Arial, sans-serif",
+  Poppins: "Poppins, Arial, sans-serif",
+  System: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+};
+const FONT_SCALE = { compact: '0.94rem', normal: '1rem', comfortable: '1.06rem', large: '1.13rem' };
 const universalTaskFilters = [
   { key: 'all', label: 'All', icon: 'fa-layer-group' },
   { key: 'tasks-pending', label: 'Pending Tasks', icon: 'fa-hourglass-half' },
@@ -36,7 +51,7 @@ const universalTaskFilters = [
 ];
 
 // 👇 UPDATED: Slack Sidebar Input uses matching WYSIWYG Editor 👇
-const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage }) => {
+const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage, sidebarWidth }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeReplies.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
     const [threadPendingFiles, setThreadPendingFiles] = useState([]);
@@ -53,7 +68,10 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
 
     useEffect(() => {
         const scrollToLatest = () => repliesScrollRef.current?.scrollTo({ top: repliesScrollRef.current.scrollHeight, behavior: "smooth" });
-        const timer = setTimeout(scrollToLatest, 80);
+        const timer = setTimeout(() => {
+            scrollToLatest();
+            threadInputRef.current?.focus();
+        }, 80);
         return () => clearTimeout(timer);
     }, [activeReplies?.id, threadMessages.length]);
 
@@ -103,7 +121,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     };
 
     return (
-        <div className="w-80 md:w-96 bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative">
+        <div className="w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
             <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
                 <div>
@@ -177,12 +195,12 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     )
 };
 
-const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage, chatInputRef }) => {
+const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage, chatInputRef, sidebarWidth }) => {
     const liveTask = messages.find(m => m.id === activeTask?.id) || activeTask;
     if (!liveTask) return null;
     const taskGroup = groups.find(g => g.id === liveTask.groupId) || activeGroup;
     return (
-        <div className="w-80 md:w-96 bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative">
+        <div className="w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
                 <div className="min-w-0">
                     <h3 className="font-bold text-slate-800 leading-tight flex items-center gap-2"><i className="fa-regular fa-square-check text-indigo-600"></i> Task Sidebar</h3>
@@ -267,7 +285,7 @@ export default function ChatApp({ user, onLogout }) {
     const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
 
     const [adminForm, setAdminForm] = useState({ uid: '', name: '', email: '', isAdmin: false, canCreateGroups: false });
-    const [profileForm, setProfileForm] = useState({ name: "", fontSize: "text-[14.2px]", fontFamily: "font-sans" });
+    const [profileForm, setProfileForm] = useState({ name: "", fontSize: "text-[14.2px]", fontFamily: "font-sans", themeFont: "Inter", accentColor: "indigo", displayMode: "light", fontScale: "normal" });
     const [groupForm, setGroupForm] = useState({ name: "", members: [], admins: [], profilePicUrl: null });
     const [editingGroup, setEditingGroup] = useState(null);
     const [adminFilterUser, setAdminFilterUser] = useState("");
@@ -339,6 +357,19 @@ export default function ChatApp({ user, onLogout }) {
         globalAnnouncement
     } = useWorkspaceData(user, profileForm, setProfileForm);
 
+    useEffect(() => {
+        const root = document.documentElement;
+        const accent = currentUserData?.accentColor || profileForm.accentColor || 'indigo';
+        const font = currentUserData?.themeFont || profileForm.themeFont || 'Inter';
+        const mode = currentUserData?.displayMode || profileForm.displayMode || 'light';
+        const scale = currentUserData?.fontScale || profileForm.fontScale || 'normal';
+        root.style.setProperty('--app-accent', THEME_ACCENTS[accent] || THEME_ACCENTS.indigo);
+        root.style.setProperty('--app-font-family', THEME_FONTS[font] || THEME_FONTS.Inter);
+        root.style.setProperty('--app-font-size', FONT_SCALE[scale] || FONT_SCALE.normal);
+        root.dataset.theme = mode;
+        root.classList.toggle('dark', mode === 'dark' || !!toolPreferences?.darkMode);
+    }, [currentUserData?.accentColor, currentUserData?.themeFont, currentUserData?.displayMode, currentUserData?.fontScale, profileForm.accentColor, profileForm.themeFont, profileForm.displayMode, profileForm.fontScale, toolPreferences?.darkMode]);
+
     const {
         messages, typingStatus, isOnline, offlineDrafts,
         logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
@@ -348,13 +379,6 @@ export default function ChatApp({ user, onLogout }) {
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast
     });
 
-    useEffect(() => {
-        if (toolPreferences?.darkMode) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    }, [toolPreferences?.darkMode]);
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -648,6 +672,19 @@ export default function ChatApp({ user, onLogout }) {
             setTimeout(() => { setPendingScrollTarget(msgId); }, 50);
         }
     }, [groups, dbUsers, user.uid, user.email, messages]);
+
+    const scrollToTaskInMainChat = useCallback((msgId, targetGroupId) => {
+        setChatFilter('all');
+        setSearchQuery('');
+        const targetMsg = messages.find(m => m.id === msgId);
+        const resolvedGroupId = targetMsg?.groupId || targetGroupId;
+        const targetGroup = groups.find(g => g.id === resolvedGroupId) || activeGroup;
+        if (targetGroup && activeGroup?.id !== targetGroup.id) setActiveGroup(targetGroup);
+        setActiveTaskSidebar(null);
+        setActiveReplies(null);
+        setShowRightSidebar(true);
+        setTimeout(() => setPendingScrollTarget(msgId), 80);
+    }, [activeGroup, groups, messages]);
 
     const handleSendOfflineAware = async () => {
         if (!inputText.trim() || inputText === '<br>' || !activeGroup) return;
@@ -1068,7 +1105,7 @@ export default function ChatApp({ user, onLogout }) {
         e.preventDefault();
         const file = profilePicInputRef.current?.files[0];
         try {
-            let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily };
+            let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily, themeFont: profileForm.themeFont || 'Inter', accentColor: profileForm.accentColor || 'indigo', displayMode: profileForm.displayMode || 'light', fontScale: profileForm.fontScale || 'normal' };
             if (file) {
                 setProfileUploadProgress(10);
                 const uniqueFileName = `${user.uid}_${Date.now()}_avatar.webp`;
@@ -1163,7 +1200,7 @@ export default function ChatApp({ user, onLogout }) {
     }
 
     return (
-        <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative font-sans transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900">
+        <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
 
             {globalAnnouncement?.isActive && globalAnnouncement.id !== dismissedBroadcastId && (
                 <div className={`flex items-center justify-between px-4 py-3 shrink-0 shadow-md relative z-[100] ${
@@ -1311,7 +1348,7 @@ export default function ChatApp({ user, onLogout }) {
                                                             <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
                                                             {/* 👇 UPDATED: Universal Click Routing routes directly to threads 👇 */}
                                                             {globalSearchResults.messages.map(m => (
-                                                                <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
+                                                                <div key={m.id} onClick={() => { setIsSearchFocused(false); m.isTask ? scrollToTaskInMainChat(m.id, m.groupId) : navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
                                                                     <div className="flex justify-between items-center">
                                                                         <div className="text-[11px] font-extrabold text-indigo-600">{(dbUsers.find(u => u.email === m.senderEmail)?.name || m.senderEmail || 'Unknown').split('@')[0]}</div>
                                                                         <div className="text-[10px] text-slate-400 font-semibold">{m.dateString}</div>
@@ -1353,7 +1390,7 @@ export default function ChatApp({ user, onLogout }) {
                                         </button>
 
                                         {showNotifications && (
-                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
+                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
                                             <div className="p-3.5 bg-slate-50 flex justify-between items-center border-b border-slate-200">
                                               <span className="text-[14px] font-bold text-slate-800 uppercase tracking-wide">Activity Feed</span>
                                               <button onClick={() => genericNotifications.map(n => updateDoc(doc(db, "notifications", n.id), { isRead: true }))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
@@ -1478,19 +1515,25 @@ export default function ChatApp({ user, onLogout }) {
                         )}
 
                         {activeTaskSidebar ? (
+                          <>
+                            <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task sidebar" />
                             <TaskSidebar
                                 activeTask={activeTaskSidebar} setActiveTask={setActiveTaskSidebar} messages={messages} user={user}
                                 currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleReactionIntercept={handleReactionIntercept}
                                 deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} customTags={customTags}
-                                toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
+                                toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
+                          </>
                         ) : activeReplies ? (
+                          <>
+                            <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize replies sidebar" />
                             <RepliesSidebar
                                 activeReplies={activeReplies} setActiveReplies={setActiveReplies} messages={messages} user={user}
                                 currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleReactionIntercept={handleReactionIntercept}
                                 deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} customTags={customTags}
-                                toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef}
+                                toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
+                          </>
                         ) : showRightSidebar ? (
                           <>
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task hub" />
@@ -1498,7 +1541,7 @@ export default function ChatApp({ user, onLogout }) {
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={navigateToMessageFromNotification} archivedTasks={[]}
+                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]}
                             />
                           </>
                         ) : null}

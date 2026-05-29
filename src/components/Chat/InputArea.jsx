@@ -78,25 +78,23 @@ export default function InputArea({
         </div>
       )}
 
-      {/* Floating True WYSIWYG Toolbar */}
-      {hasSelection && (
-        <div className="absolute bottom-full left-4 mb-2 z-50 bg-slate-800 text-white rounded-lg shadow-xl px-2 py-1.5 flex items-center gap-1 animate-in fade-in zoom-in-95">
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded font-bold text-sm transition-colors" title="Bold">B</button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded italic font-serif text-sm transition-colors" title="Italic">I</button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded underline text-sm transition-colors" title="Underline">U</button>
-           <div className="w-px h-5 bg-slate-600 mx-1"></div>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded text-xs transition-colors" title="Superscript">x²</button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-700 rounded text-xs transition-colors" title="Subscript">x₂</button>
-           <div className="w-px h-5 bg-slate-600 mx-1"></div>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#800000] hover:scale-110 ml-1 transition-transform border border-white/20 shadow-inner" title="Maroon"></button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#006400] hover:scale-110 ml-1.5 transition-transform border border-white/20 shadow-inner" title="Dark Green"></button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#0000FF'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#0000FF] hover:scale-110 ml-1.5 transition-transform border border-white/20 shadow-inner" title="Blue"></button>
-           <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#FF8C00'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#FF8C00] hover:scale-110 mx-1.5 transition-transform border border-white/20 shadow-inner" title="Dark Orange"></button>
-        </div>
-      )}
+      {/* Permanent compact rich-text toolbar */}
+      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/90 px-2 py-1 shadow-sm input-toolbar">
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg font-bold text-sm transition-colors" title="Bold">B</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg italic font-serif text-sm transition-colors" title="Italic">I</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg underline text-sm transition-colors" title="Underline">U</button>
+        <div className="w-px h-5 bg-slate-200 mx-1"></div>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Superscript">x²</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Subscript">x₂</button>
+        <div className="w-px h-5 bg-slate-200 mx-1"></div>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#800000] hover:scale-110 transition-transform border border-white shadow" title="Maroon"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#006400] hover:scale-110 transition-transform border border-white shadow" title="Dark Green"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput(); }} className="w-5 h-5 rounded-full bg-blue-700 hover:scale-110 transition-transform border border-white shadow" title="Blue"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput(); }} className="ml-auto px-2 h-7 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
+      </div>
 
       {mentionQuery !== null && (
-        <div className="absolute bottom-[100%] left-4 bg-white shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto z-50 py-2 mb-2 border border-slate-200 animate-in fade-in zoom-in-95">
+        <div className="absolute bottom-[100%] left-4 bg-white shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto z-[130] py-2 mb-2 border border-slate-200 animate-in fade-in zoom-in-95">
           <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Peers</div>
           {dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).length > 0 ? (
             dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).map(u => (
@@ -198,8 +196,8 @@ export default function InputArea({
             onPaste={handlePaste}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium"
-            style={{ minHeight: '46px', maxHeight: '120px' }}
+            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium resize-y min-h-[46px]"
+            style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();

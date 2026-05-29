@@ -78,7 +78,7 @@ export default function RightSidebar({
       </div>
 
       <div className="p-4 bg-white border-b border-slate-200 shrink-0 space-y-3">
-         <div className="flex items-center gap-2">
+         <div className="flex items-center justify-between gap-2 min-w-0">
            <select value={filter} onChange={(e)=>setFilter(e.target.value)} className="flex-1 modern-date-input">
              {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
                <option key={f} value={f}>{f} ({filterCounts[f] || 0})</option>
@@ -110,10 +110,10 @@ export default function RightSidebar({
             const isDone = task.taskData.status === 'Completed';
             const isHidden = hiddenTaskIds.includes(task.id);
             return (
-              <div key={task.id} onClick={() => navigateToMessageFromNotification?.(task.id, task.groupId)} className={`bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isHidden ? 'border-slate-200 opacity-80 bg-slate-50/60' : 'border-slate-200 hover:border-indigo-300'}`}>
-                <div className="flex justify-between items-start mb-2.5">
+              <div key={task.id} onClick={() => navigateToMessageFromNotification?.(task.id, task.groupId)} title="Show original task in main chat" className={`bg-white border rounded-2xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isHidden ? 'border-slate-200 opacity-80 bg-slate-50/60' : 'border-slate-200 hover:border-indigo-300'}`}>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1.5 mb-2.5">
                   <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDone ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>{isHidden ? 'Archived' : task.taskData.status}</span>
-                  <span className="text-[10px] font-bold text-slate-500"><i className="fa-regular fa-calendar mr-1"></i>{formatDDMMMYY(task.taskData.deadline)}</span>
+                  <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap"><i className="fa-regular fa-calendar mr-1"></i>{formatDDMMMYY(task.taskData.deadline)}</span>
                 </div>
                 <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone ? 'text-slate-600 opacity-80' : 'text-slate-800'}`}>
                   <span className="inline-flex items-start gap-1.5">
@@ -121,7 +121,7 @@ export default function RightSidebar({
                     <span>{task.text}</span>
                   </span>
                 </div>
-                <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-100">
+                <div className="flex flex-col gap-2 pt-3 mt-1 border-t border-slate-100">
                   <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-md truncate max-w-[120px] shadow-sm">{group?.name || 'Direct Task'}</span>
                   <div className="flex items-center gap-2">
                     {!isHidden && <button onClick={(e)=>{e.stopPropagation(); updateHidden([...new Set([...hiddenTaskIds, task.id])]);}} className="text-[10px] font-bold text-rose-500 hover:text-rose-700">Archive</button>}
