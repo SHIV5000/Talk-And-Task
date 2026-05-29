@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import useChatEngine from '../hooks/useChatEngine';
+import useChatEngine from '../../hooks/useChatEngine';
 import MessageBubble from './MessageBubble'; // your existing component
 
 export default function ChatView({ groupId }) {

@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useAuth } from '../contexts/AuthContext';
 import useWorkspaceData from '../hooks/useWorkspaceData';
-import LeftSidebar from './LeftSidebar';
-import ChatView from './ChatView';
-import RightSidebar from './RightSidebar';
+import LeftSidebar from './Sidebar/LeftSidebar';
+import ChatView from './Chat/ChatView';
+import RightSidebar from './Sidebar/RightSidebar';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
+import AdminPanel from './Admin/AdminPanel';
 
 export default function ChatApp() {
   const { workspaceId, workspaceList, switchWorkspace, activeWorkspace } = useWorkspace();

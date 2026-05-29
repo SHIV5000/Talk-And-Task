@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import useChatEngine from '../hooks/useChatEngine';
-import { addToOfflineQueue, getAndClearOfflineQueue } from '../utils/offlineQueue';
-import { useWorkspace } from '../contexts/WorkspaceContext';
-import { useAuth } from '../contexts/AuthContext';
+import useChatEngine from '../../hooks/useChatEngine';
+import { addToOfflineQueue, getAndClearOfflineQueue } from '../../utils/offlineQueue';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function InputArea({ groupId }) {
   const [text, setText] = useState('');
