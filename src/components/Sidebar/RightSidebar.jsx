@@ -11,132 +11,93 @@ const formatDDMMMYY = (value) => {
 };
 
 export default function RightSidebar({
-  showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
-  archivedTasks, groups, dbUsers, navigateToMessageFromNotification,
-  sidebarWidth,
+  width,
+  showRightSidebar,
+  setShowRightSidebar,
+  tasksAssignedToMe,
+  tasksAssignedByMe,
+  groups,
+  dbUsers,
+  user,
+  setActiveGroup,
+  setSelectedMessage,
+  setIsEditingTaskTitle,
+  setActiveModal,
 }) {
-  const [filter, setFilter] = useState('All');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [hiddenTaskIds, setHiddenTaskIds] = useState([]);
-  const [showDateFilters, setShowDateFilters] = useState(false);
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('rightSidebarHiddenTasks_v1') || '[]');
-      if (Array.isArray(saved)) setHiddenTaskIds(saved);
-    } catch (e) {}
-  }, []);
-
-  const updateHidden = (next) => {
-    setHiddenTaskIds(next);
-    try { localStorage.setItem('rightSidebarHiddenTasks_v1', JSON.stringify(next)); } catch (e) {}
-  };
-
-  const allTasks = useMemo(() => {
-    const map = new Map();
-    tasksAssignedToMe.forEach(t => map.set(t.id, t));
-    tasksAssignedByMe.forEach(t => map.set(t.id, t));
-    archivedTasks.forEach(t => map.set(t.id, t));
-    return Array.from(map.values());
-  }, [tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
-
-
-  const filteredTasks = useMemo(() => {
-    let res = [];
-    if (filter === 'Archived') res = allTasks.filter(t => hiddenTaskIds.includes(t.id));
-    else if (filter === 'Assigned To Me') res = tasksAssignedToMe.filter(t => !hiddenTaskIds.includes(t.id));
-    else if (filter === 'Created By Me') res = tasksAssignedByMe.filter(t => !hiddenTaskIds.includes(t.id));
-    else {
-      res = allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id));
-      if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
-      if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
-    }
-    if (startDate) res = res.filter(t => new Date(t.taskData.deadline) >= new Date(startDate));
-    if (endDate) res = res.filter(t => new Date(t.taskData.deadline) <= new Date(endDate));
-    return res.sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime());
-  }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, hiddenTaskIds, startDate, endDate]);
-
-  const filterCounts = {
-    All: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id)).length,
-    Pending: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id) && t.taskData.status !== 'Completed').length,
-    Completed: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id) && t.taskData.status === 'Completed').length,
-    'Assigned To Me': tasksAssignedToMe.filter(t => !hiddenTaskIds.includes(t.id)).length,
-    'Created By Me': tasksAssignedByMe.filter(t => !hiddenTaskIds.includes(t.id)).length,
-    Archived: hiddenTaskIds.length,
-  };
+  if (!showRightSidebar) return null;
 
   return (
-    <div className="w-full shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2" style={{ width: `${sidebarWidth || 380}px` }}>
-      <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0 shadow-sm">
-        <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600"><InlineSvgIcon name="task" className="w-4 h-4" /></div>
-          Task Hub
-        </h2>
-        <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 flex items-center justify-center transition-colors">
-          <InlineSvgIcon name="close" className="w-5 h-5" />
-        </button>
+    // Replaced w-80 with dynamic inline width to allow resizing
+    <div style={{ width: width || 320 }} className="absolute right-0 md:relative h-full bg-[#f8fafc] border-l border-slate-200 flex flex-col shrink-0 z-40 animate-in slide-in-from-right shadow-[rgba(0,0,0,0.08)_-2px_0_15px]">
+      <div className="h-[59px] bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 z-10 border-b border-slate-200/60 safe-top">
+        <div className="font-medium text-[16px] text-[#111b21] flex items-center gap-2"><i className="fa-solid fa-list-check text-[#54656f]"></i> Task Hub</div>
+        <button onClick={() => setShowRightSidebar(false)} className="w-10 h-10 rounded-full hover:bg-black/5 text-[#54656f] transition-colors flex items-center justify-center text-[19px]"><i className="fa-solid fa-xmark"></i></button>
       </div>
-
-      <div className="p-4 bg-white border-b border-slate-200 shrink-0 space-y-3">
-         <div className="flex items-center justify-between gap-2 min-w-0">
-           <select value={filter} onChange={(e)=>setFilter(e.target.value)} className="flex-1 modern-date-input">
-             {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
-               <option key={f} value={f}>{f} ({filterCounts[f] || 0})</option>
-             ))}
-           </select>
-           <button onClick={() => setShowDateFilters(v => !v)} className={`w-10 h-[38px] rounded-xl border transition-colors flex items-center justify-center ${showDateFilters || startDate || endDate ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`} title="Date filters">
-             <InlineSvgIcon name="calendar" className="w-4 h-4" />
-           </button>
-         </div>
-
-         {showDateFilters && (
-           <div className="grid grid-cols-2 gap-2">
-               <div>
-                 <label className="text-[10px] font-semibold text-slate-500 mb-1 block">From</label>
-                 <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="modern-date-input" title="Start Date" />
-               </div>
-               <div>
-                 <label className="text-[10px] font-semibold text-slate-500 mb-1 block">To</label>
-                 <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="modern-date-input" title="End Date" />
-               </div>
-           </div>
-         )}
-         {(startDate || endDate) && <button onClick={()=>{setStartDate(''); setEndDate('');}} className="w-full text-xs font-semibold text-rose-600 hover:text-rose-700 py-1.5 rounded-lg bg-rose-50 border border-rose-100">Clear date range</button>}
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll space-y-3 bg-slate-50">
-         {filteredTasks.length === 0 ? <div className="text-sm text-slate-400 italic text-center py-8 bg-white border border-slate-100 rounded-xl shadow-sm">No tasks match criteria.</div> : filteredTasks.map(task => {
-            const group = groups.find(g => g.id === task.groupId);
-            const isDone = task.taskData.status === 'Completed';
-            const isHidden = hiddenTaskIds.includes(task.id);
-            return (
-              <div key={task.id} onClick={() => navigateToMessageFromNotification?.(task.id, task.groupId)} title="Show original task in main chat" className={`bg-white border rounded-2xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isHidden ? 'border-slate-200 opacity-80 bg-slate-50/60' : 'border-slate-200 hover:border-indigo-300'}`}>
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1.5 mb-2.5">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDone ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>{isHidden ? 'Archived' : task.taskData.status}</span>
-                  <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap"><InlineSvgIcon name="calendar" className="w-3.5 h-3.5 mr-1" />{formatDDMMMYY(task.taskData.deadline)}</span>
-                </div>
-                <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone ? 'text-slate-600 opacity-80' : 'text-slate-800'}`}>
-                  <span className="inline-flex items-start gap-1.5">
-                    {isDone && <InlineSvgIcon name="check" className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />}
-                    <span>{task.text}</span>
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2 pt-3 mt-1 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-md truncate max-w-[120px] shadow-sm">{group?.name || 'Direct Task'}</span>
-                  <div className="flex items-center gap-2">
-                    {!isHidden && <button onClick={(e)=>{e.stopPropagation(); updateHidden([...new Set([...hiddenTaskIds, task.id])]);}} className="text-[10px] font-bold text-rose-500 hover:text-rose-700">Archive</button>}
-                    {isHidden && <button onClick={(e)=>{e.stopPropagation(); updateHidden(hiddenTaskIds.filter(id=>id!==task.id));}} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700">Unarchive</button>}
-                    <div className="flex -space-x-1.5">
-                      {(task.taskData.assignees || []).slice(0, 3).map(email => {
-                        const assignee = dbUsers.find(u => u.email === email);
-                        return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses="border-2 border-white shadow-sm" imageLoading="eager" />;
-                      })}
+      <div className="flex-1 overflow-y-auto flex flex-col p-3 gap-4 bg-white">
+        
+        {/* Assigned to Me */}
+        <div className="rounded-xl overflow-hidden flex flex-col flex-1 min-h-0">
+          <div className="px-3 py-2 text-[12px] font-bold text-[#00a884] uppercase tracking-wider flex items-center gap-2"><i className="fa-solid fa-inbox"></i> Assigned To Me</div>
+          <div className="overflow-y-auto flex-1 space-y-1">
+            {tasksAssignedToMe.length === 0 ? (
+              <div className="text-[13px] font-medium text-slate-400 text-center p-6 mt-4">Inbox zero!</div>
+            ) : (
+              tasksAssignedToMe.map(task => {
+                const groupObj = groups.find(g => g.id === task.groupId);
+                const isTaskDM = !groupObj;
+                const groupNameStr = isTaskDM ? 'Direct Message' : groupObj.name;
+                return (
+                  <div key={task.id} onClick={() => {
+                    if (groupObj) setActiveGroup(groupObj);
+                    else {
+                      const otherUid = task.groupId.replace(user.uid, '').replace('_', '');
+                      const otherUser = dbUsers.find(u => u.uid === otherUid);
+                      if (otherUser) setActiveGroup({ id: task.groupId, name: otherUser.name, isDM: true, members: [user.email, otherUser.email] });
+                    }
+                    setSelectedMessage(task); setIsEditingTaskTitle(false); setActiveModal('task_trail');
+                  }} className="p-3 bg-white hover:bg-[#f5f6f6] rounded-lg cursor-pointer border-b border-slate-100 transition-all">
+                    <div className="font-medium text-[14px] text-[#111b21] truncate mb-1">{task.text || 'File Task'}</div>
+                    <div className="flex justify-between items-center mt-1.5">
+                      <span className={`text-[12px] truncate max-w-[120px] font-semibold ${isTaskDM ? 'text-[#54656f]' : 'text-[#800020]'}`}>{groupNameStr}</span>
+                      <span className="text-[11px] font-semibold text-[#ea0038]">Due {new Date(task.taskData.deadline).toLocaleDateString()}</span>
                     </div>
                   </div>
-                </div>
-              </div>
-            )})}
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Assigned By Me */}
+        <div className="rounded-xl overflow-hidden flex flex-col flex-1 min-h-0 border-t border-slate-100 pt-3">
+          <div className="px-3 py-2 text-[12px] font-bold text-[#00a884] uppercase tracking-wider flex items-center gap-2"><i className="fa-solid fa-paper-plane"></i> Assigned By Me</div>
+          <div className="overflow-y-auto flex-1 space-y-1">
+            {tasksAssignedByMe.length === 0 ? (
+              <div className="text-[13px] font-medium text-slate-400 text-center p-6 mt-4">No active delegations</div>
+            ) : (
+              tasksAssignedByMe.map(task => {
+                const groupObj = groups.find(g => g.id === task.groupId);
+                const isTaskDM = !groupObj;
+                return (
+                  <div key={task.id} onClick={() => {
+                    if (groupObj) setActiveGroup(groupObj);
+                    else {
+                      const otherUid = task.groupId.replace(user.uid, '').replace('_', '');
+                      const otherUser = dbUsers.find(u => u.uid === otherUid);
+                      if (otherUser) setActiveGroup({ id: task.groupId, name: otherUser.name, isDM: true, members: [user.email, otherUser.email] });
+                    }
+                    setSelectedMessage(task); setIsEditingTaskTitle(false); setActiveModal('task_trail');
+                  }} className="p-3 bg-white hover:bg-[#f5f6f6] rounded-lg cursor-pointer border-b border-slate-100 transition-all">
+                    <div className="font-medium text-[14px] text-[#111b21] truncate mb-1">{task.text || 'File Task'}</div>
+                    <div className="text-[12px] text-[#54656f] truncate mb-1.5">To: {(task.taskData.assignees||[]).map(a=>(a||"").split('@')[0]).join(', ')}</div>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm ${task.taskData.status==='Pending'?'bg-amber-100 text-amber-700':'bg-[#d1e8ff] text-blue-700'}`}>{task.taskData.status}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   );

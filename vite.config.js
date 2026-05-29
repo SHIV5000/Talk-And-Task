@@ -30,40 +30,25 @@ function getGitInfo() {
 const gitInfo = getGitInfo();
 
 export default defineConfig({
-  define: {
-    __BUILD_BRANCH_NAME__: JSON.stringify(gitInfo.branchName),
-    __BUILD_COMMIT_HASH__: JSON.stringify(gitInfo.commitHash),
-    __BUILD_COMMIT_SUBJECT__: JSON.stringify(gitInfo.commitSubject),
-    __BUILD_COMMIT_DATE__: JSON.stringify(gitInfo.commitDate),
-    __BUILD_SOURCE_REPO__: JSON.stringify(gitInfo.sourceRepo),
-  },
-  plugins: [
+  plugins:[
     react(),
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
+        // This glob pattern is more reliable for Vercel builds
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         cleanupOutdatedCaches: true,
-        skipWaiting: true,
-        clientsClaim: true,
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.googleapis\.com\/.*/,
-            handler: 'NetworkOnly',
-          },
-        ],
       },
       manifest: {
         name: 'Talk & Task Enterprise',
         short_name: 'Talk&Task',
         description: 'Corporate Coordination Portal',
-        theme_color: '#4F46E5',
-        background_color: '#f0f2f5',
+        theme_color: '#1e293b',
+        background_color: '#f8fafc',
         display: 'standalone',
-        orientation: 'portrait',
-        icons: [
+        icons:[
           { src: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icon-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: '/icon-512x512.png', sizes: '512x512', type: 'image/png' }
         ]
       }
     })
