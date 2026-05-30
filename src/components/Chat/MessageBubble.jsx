@@ -424,13 +424,13 @@ const MessageBubble = React.memo(({
                       )}
                       
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center -space-x-2 relative group/assignees">
+                        <div className="assignees flex items-center -space-x-2 relative group/assignees">
                           {(msg.taskData.assignees || []).slice(0, 3).map(email => {
                             const assignee = dbUsers?.find(u => u.email === email);
-                            return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses={`border-2 ${isTaskCompleted ? 'border-slate-50 opacity-70' : 'border-white'} relative z-10`} />;
+                            return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-7 h-7" extraClasses={`border-2 ${isTaskCompleted ? 'border-slate-50 opacity-70' : 'border-white'} relative z-10`} />;
                           })}
                           {(msg.taskData.assignees || []).length > 3 && (
-                            <div className={`w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-600 border-2 ${isTaskCompleted ? 'border-slate-50' : 'border-white'} relative z-10`}>
+                            <div className={`w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-600 border-2 ${isTaskCompleted ? 'border-slate-50' : 'border-white'} relative z-10`}>
                               +{msg.taskData.assignees.length - 3}
                             </div>
                           )}
@@ -439,7 +439,7 @@ const MessageBubble = React.memo(({
                     </div>
 
                     {canUseWorkerControls && (
-                        <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
+                        <div className="worker-controls bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
                            {trailFileUploading && <div className="mr-2 min-w-[120px]"><div className="h-1.5 bg-slate-200 rounded"><div className="h-full bg-indigo-600 rounded" style={{ width: `${Math.round(trailUploadProgress)}%` }} /></div><span className="text-[10px] font-bold text-indigo-500">Uploading {Math.round(trailUploadProgress)}%</span></div>}
                            
@@ -468,9 +468,9 @@ const MessageBubble = React.memo(({
                               </div>
                            ) : (
                               <>
-                                 <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Delegate</button>
+                                 <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="worker-btn delegate-btn px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Delegate</button>
                                  <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Attach</button>
-                                 <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Update</button>
+                                 <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="worker-btn update-btn px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Update</button>
                                  <button 
                                    onClick={handleInlineComplete} 
                                    disabled={!hasProofAttached}

@@ -145,6 +145,7 @@ export default function LeftSidebar({
             scrollbarColor: 'rgba(255, 255, 255, 0.25) transparent',
           }}
         >
+          <div className="section-label px-3 pt-3 pb-1">GROUPS</div>
           {myGroups.map(g => {
             const hasUnread = messages.some(
               m =>
@@ -160,16 +161,16 @@ export default function LeftSidebar({
                   setMobileSidebarOpen(false);
                 }}
                 className={`flex items-center min-h-[72px] py-2 cursor-pointer transition-colors relative ${
-                  activeGroup?.id === g.id ? 'bg-white/10' : 'hover:bg-white/5'
+                  activeGroup?.id === g.id ? 'active-group-item bg-[#4F6F8F]' : 'hover:bg-white/5'
                 } pl-3 pr-4`}
               >
                 <MemoizedAvatar
                   uid={g.id}
                   url={g.profilePicUrl}
                   name={g.name}
-                  sizeClass="w-[49px] h-[49px]"
+                  sizeClass="w-[30px] h-[30px]"
                   isGroup={true}
-                  extraClasses={`mr-3 shrink-0 group-avatar-ring ${hasUnread ? 'group-avatar-ring-unread' : 'group-avatar-ring-read'}`}
+                  extraClasses={`mr-3 shrink-0 group-avatar-ring ${hasUnread ? 'ring-green' : 'ring-maroon'}`}
                 />
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
@@ -192,6 +193,7 @@ export default function LeftSidebar({
             );
           })}
 
+          <div className="section-label px-3 pt-4 pb-1">MEMBERS</div>
           {dmUsers.map(u => {
             const dmIdList = [user.uid, u.uid].sort();
             const dmIdStr = dmIdList.join('_');
@@ -230,7 +232,7 @@ export default function LeftSidebar({
                 }}
                 className={`flex items-center min-h-[72px] py-2 cursor-pointer transition-colors relative ${
                   activeGroup?.id === dmIdStr
-                    ? 'bg-white/10'
+                    ? 'active-group-item bg-[#4F6F8F]'
                     : 'hover:bg-white/5'
                 } pl-3 pr-4`}
               >
@@ -239,7 +241,7 @@ export default function LeftSidebar({
                     uid={u.uid}
                     url={u.profilePicUrl}
                     name={u.name}
-                    sizeClass="w-[49px] h-[49px]"
+                    sizeClass="w-[30px] h-[30px]"
                   />
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
@@ -252,7 +254,7 @@ export default function LeftSidebar({
                       {u.name}
                     </span>
                   </div>
-                  <div className={`member-status-line ${isOnline ? 'member-status-line-online' : 'member-status-line-offline'}`} />
+                  <div className={`status-line ${isOnline ? 'online' : 'offline'}`} />
                   <div className="flex justify-between items-center mt-1">
                     <span
                       className={`text-xs truncate pr-4 ${
@@ -273,14 +275,14 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace v20.0 button (visible if user is admin) */}
+        {/* Admin Workspace v19.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v20.0
+              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v19.0
             </button>
           </div>
         )}

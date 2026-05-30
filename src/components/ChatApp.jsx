@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "20.0";
+const APP_VERSION = "19.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -1308,23 +1308,19 @@ export default function ChatApp({ user, onLogout }) {
                                     <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
 
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
-                                        {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
+                                        {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="chat-header-avatar w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="chat-header-avatar w-10 h-10" isGroup={true} /> : <div className="chat-header-avatar w-10 h-10 rounded-xl border border-[#E7E9EC] flex items-center justify-center text-white shadow-sm"><i className="fa-solid fa-users"></i></div>}
                                         <div className="flex flex-col min-w-0 flex-1">
                                             <span className={`text-[16px] font-bold leading-tight truncate text-slate-800`}>{activeGroup.name}</span>
-                                            <span className="text-[13px] text-indigo-500 truncate max-w-[150px] lg:max-w-[400px]">
-                                                {activeGroup.isDM ? 'End-to-Server Encrypted' :
-                                                    (dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).length > 0)
-                                                    ? dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).map(u=>u.name.split(' ')[0]).join(', ') + ' (Online)'
-                                                    : `${activeGroup.members?.length||0} Members`
-                                                }
+                                            <span className="online-badge text-[13px] text-[#5B8C5A] truncate max-w-[150px] lg:max-w-[400px]">
+                                                {activeGroup.isDM ? 'End-to-Server Encrypted' : `${dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).length} online`}
                                             </span>
                                         </div>
                                     </div>
 
-                                    <span className="shrink-0 text-[13px] font-semibold text-[#2E3A46] hidden lg:inline-flex items-center">● {currentUserData?.name || user.email.split('@')[0]}</span>
+                                    <span className="shrink-0 header-user-name text-[13px] font-semibold text-[#2E3A46] hidden lg:inline-flex items-center gap-1.5"><span className="user-dot"></span>{currentUserData?.name || user.email.split('@')[0]}</span>
 
                                     <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
-                                        <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
+                                        <div className="header-search bg-[#F4F6F8] rounded-[20px] flex items-center px-3 py-1.5 shadow-inner border border-[#E7E9EC] focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
                                             <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
                                             <input
                                                type="text"
@@ -1464,7 +1460,7 @@ export default function ChatApp({ user, onLogout }) {
                                       <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`header-icon-btn w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
 
                                       {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
-                                      <span className="shrink-0 text-[11px] font-bold tracking-wide text-slate-400 px-1" title="Current app version">Ver. {APP_VERSION}</span>
+                                      <span className="shrink-0 version-text text-[10px] font-bold tracking-wide text-[#9AA4AF] px-1" title="Current app version">Ver. {APP_VERSION}</span>
 
                                     </div>
                                 </div>

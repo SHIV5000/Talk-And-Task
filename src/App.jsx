@@ -95,21 +95,6 @@ export default function App() {
       const result = await signInWithPopup(auth, provider);
       const loggedInUser = result.user;
 
-      const sessionsRef = collection(db, "user_sessions");
-      const activeSessionsSnap = await getDocs(query(sessionsRef, where("uid", "==", loggedInUser.uid), where("status", "==", "active")));
-      const activeSessions = activeSessionsSnap.docs.filter(d => d.id !== localSessionId);
-      if (activeSessions.length > 0) {
-        const kill = window.confirm(`You already have ${activeSessions.length} active session(s). Click OK to kill old session(s) and continue, or Cancel to abort this login.`);
-        if (!kill) {
-          await updateDoc(doc(db, "user_sessions", localSessionId), { status: "ended", endedAt: serverTimestamp() }).catch(() => {});
-    await signOut(auth);
-          return;
-        }
-        for (const s of activeSessions) {
-          await updateDoc(doc(db, "user_sessions", s.id), { status: "killed", endedAt: serverTimestamp() }).catch(() => {});
-        }
-      }
-
       const usersSnap = await getDocs(query(collection(db, "users"), where("uid", "==", loggedInUser.uid)));
       const isMaster = (loggedInUser.email || '').toLowerCase() === 'shivsuri1@gmail.com';
 
