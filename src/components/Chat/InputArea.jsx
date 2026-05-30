@@ -89,7 +89,8 @@ export default function InputArea({
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#800000] hover:scale-110 transition-transform border border-white shadow" title="Maroon"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#006400] hover:scale-110 transition-transform border border-white shadow" title="Dark Green"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput(); }} className="w-5 h-5 rounded-full bg-blue-700 hover:scale-110 transition-transform border border-white shadow" title="Blue"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput(); }} className="w-5 h-5 rounded-full bg-blue-700 hover:scale-110 transition-transform border border-white shadow" title="Dark Blue"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#cc5500'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#cc5500] hover:scale-110 transition-transform border border-white shadow" title="Dark Orange"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput(); }} className="ml-auto px-2 h-7 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
       </div>
 
@@ -112,7 +113,7 @@ export default function InputArea({
             <div className="px-4 py-2 text-xs text-slate-400 italic">No users found</div>
           )}
 
-          <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t mt-1 pt-2">Departments</div>
+          <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t mt-1 pt-2">Groups</div>
           {groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).length > 0 ? (
              groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).map(g => (
               <div
@@ -128,7 +129,7 @@ export default function InputArea({
               </div>
             ))
           ) : (
-            <div className="px-4 py-2 text-xs text-slate-400 italic">No departments found</div>
+            <div className="px-4 py-2 text-xs text-slate-400 italic">No groups found</div>
           )}
         </div>
       )}

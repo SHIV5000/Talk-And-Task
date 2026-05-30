@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "19.0";
+const APP_VERSION = "20.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -47,6 +47,10 @@ const universalTaskFilters = [
   { key: 'tasks-completed', label: 'Completed', icon: 'fa-circle-check' },
   { key: 'messages', label: 'Messages', icon: 'fa-comment-dots' },
   { key: 'today', label: 'Today', icon: 'fa-calendar-day' },
+  { key: 'scheduled', label: 'Scheduled', icon: 'fa-clock' },
+  { key: 'files', label: 'Files', icon: 'fa-paperclip' },
+  { key: 'date-range', label: 'By Date', icon: 'fa-calendar-days' },
+  { key: 'task', label: 'Task', icon: 'fa-list-check' },
   { key: 'bookmarked', label: 'Bookmarked', icon: 'fa-bookmark' },
 ];
 
@@ -592,6 +596,10 @@ export default function ChatApp({ user, onLogout }) {
         else if (chatFilter === 'tasks-completed') filtered = filtered.filter(m => m.isTask && m.taskData?.status === "Completed");
         else if (chatFilter === 'messages') filtered = filtered.filter(m => !m.isTask);
         else if (chatFilter === 'today') filtered = filtered.filter(m => m.dateString === new Date().toISOString().split('T')[0]);
+        else if (chatFilter === 'scheduled') filtered = filtered.filter(m => m.scheduledFor || m.hasReminder);
+        else if (chatFilter === 'files') filtered = filtered.filter(m => !!m.fileUrl);
+        else if (chatFilter === 'date-range') filtered = filtered.filter(m => m.dateString === new Date().toISOString().split('T')[0]);
+        else if (chatFilter === 'task') filtered = filtered.filter(m => m.isTask);
         else if (chatFilter === 'bookmarked') filtered = filtered.filter(m => m.bookmarkedBy?.includes(user.email));
 
         if (!searchQuery.trim() && (chatFilter === 'all' || chatFilter === 'messages')) {
@@ -1304,7 +1312,7 @@ export default function ChatApp({ user, onLogout }) {
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0 chat-main-panel">
-                                <div className="h-[59px] bg-white flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
+                                <div className="bg-white flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
                                     <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
 
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
@@ -1446,16 +1454,14 @@ export default function ChatApp({ user, onLogout }) {
                                         )}
                                       </div>
 
-                                      <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
-
                                       {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
 
                                     </div>
                                 </div>
 
                                 <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
+                                  <span className="shrink-0 text-[11px] font-black tracking-wide text-slate-600 px-1">{currentUserData?.name || user.email.split('@')[0]}</span>
                                   <span className="shrink-0 text-[11px] font-bold tracking-wide text-slate-400 px-1" title="Current app version">Ver. {APP_VERSION}</span>
-                                  <span className="shrink-0 text-[11px] font-black tracking-wide text-slate-500 px-1">{(currentUserData?.name || user.email.split('@')[0])}'s Talk & Task Bar</span>
                                   {universalTaskFilters.map((f) => (
                                     <button
                                       key={f.key}
@@ -1514,7 +1520,7 @@ export default function ChatApp({ user, onLogout }) {
                             </div>
                         )}
 
-                        {activeTaskSidebar ? (
+                        {false && activeTaskSidebar ? (
                           <>
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task sidebar" />
                             <TaskSidebar
@@ -1524,7 +1530,7 @@ export default function ChatApp({ user, onLogout }) {
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
                           </>
-                        ) : activeReplies ? (
+                        ) : false && activeReplies ? (
                           <>
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize replies sidebar" />
                             <RepliesSidebar
@@ -1534,14 +1540,14 @@ export default function ChatApp({ user, onLogout }) {
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
                           </>
-                        ) : showRightSidebar ? (
+                        ) : true ? (
                           <>
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task hub" />
                             <RightSidebar
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]}
+                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages}
                             />
                           </>
                         ) : null}
