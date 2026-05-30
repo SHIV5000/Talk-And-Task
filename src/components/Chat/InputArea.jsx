@@ -80,17 +80,19 @@ export default function InputArea({
       )}
 
       {/* Permanent compact rich-text toolbar */}
-      <div className="flex items-center gap-1 rounded-full border border-[#E7E9EC] bg-[#F4F6F8] px-2 py-1 shadow-sm input-toolbar">
+      <div className="input-toolbar flex items-center gap-1 rounded-full border border-[#E7E9EC] bg-[#F4F6F8] px-2 py-1 shadow-sm">
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 font-bold text-sm transition-colors" title="Bold">B</button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 italic font-serif text-sm transition-colors" title="Italic">I</button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 underline text-sm transition-colors" title="Underline">U</button>
+        <button onMouseDown={(e) => { e.preventDefault(); fileInputRef.current?.click(); }} className="toolbar-circle-btn" title="Attach"><i className="fa-solid fa-paperclip"></i></button>
+        <button onMouseDown={(e) => { e.preventDefault(); setEmojiPickerOpen(!emojiPickerOpen); }} className="toolbar-circle-btn" title="Emoji"><i className="fa-regular fa-face-smile"></i></button>
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 text-xs transition-colors" title="Superscript">x²</button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 text-xs transition-colors" title="Subscript">x₂</button>
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#800000] hover:scale-110 transition-transform border border-white shadow" title="Maroon"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#006400] hover:scale-110 transition-transform border border-white shadow" title="Dark Green"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput(); }} className="w-5 h-5 rounded-full bg-blue-700 hover:scale-110 transition-transform border border-white shadow" title="Blue"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="toolbar-color-btn w-5 h-5 rounded-full bg-[#800000] hover:scale-110 transition-transform border border-white shadow" title="Maroon"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="toolbar-color-btn w-5 h-5 rounded-full bg-[#006400] hover:scale-110 transition-transform border border-white shadow" title="Dark Green"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput(); }} className="toolbar-color-btn w-5 h-5 rounded-full bg-blue-700 hover:scale-110 transition-transform border border-white shadow" title="Blue"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput(); }} className="ml-auto px-2 h-7 rounded-full bg-white/70 text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
       </div>
 
@@ -197,7 +199,7 @@ export default function InputArea({
             onPaste={handlePaste}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium resize-y min-h-[46px]"
+            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-[10px] px-[14px] w-full overflow-y-auto font-medium resize-y min-h-[46px]"
             style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -224,7 +226,7 @@ export default function InputArea({
         <button
           onClick={handleSendOfflineAware}
           disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+          className={`main-send-btn shrink-0 w-10 h-10 flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-[#4F6F8F] text-white hover:bg-[#435f7a] shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
           <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
         </button>

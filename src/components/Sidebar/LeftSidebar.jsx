@@ -63,8 +63,8 @@ export default function LeftSidebar({
         <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
           <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
             <div className="space-y-2.5">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 shrink-0">
+            <div className="left-sidebar-icon-row flex items-center gap-2">
+              <div className="left-sidebar-icon-row flex items-center gap-2 shrink-0">
                 <MemoizedAvatar
                   uid={user.uid}
                   url={currentUserData?.profilePicUrl}
@@ -82,7 +82,7 @@ export default function LeftSidebar({
                 </button>
                 
               </div>
-              <div className="ml-auto flex items-center justify-end gap-1 shrink-0">
+              <div className="left-sidebar-icon-row ml-auto flex items-center justify-end gap-1 shrink-0">
                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                   <button
                     onClick={() => {
@@ -273,14 +273,14 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace v19.0 button (visible if user is admin) */}
+        {/* Admin Workspace v20.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v19.0
+              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v20.0
             </button>
           </div>
         )}

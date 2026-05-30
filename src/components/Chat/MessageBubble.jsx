@@ -342,25 +342,16 @@ const MessageBubble = React.memo(({
       
       <div className={`${bubbleWidthClass} ${taskShellClass} message-bubble-v19 w-fit min-w-0 bg-white rounded-[24px] shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-[18px] py-3 relative ${msg.isMine ? 'message-bubble-sent' : 'message-bubble-received'} break-words flex flex-col`}>
         
-        {!isThreadView && msg.isMine && (
-            <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Sent">
-                <i className="fa-solid fa-arrow-up text-[13px] text-green-700" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
-            </div>
-        )}
-        {!isThreadView && !msg.isMine && (
-            <div className="absolute -top-2.5 -left-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Received">
-                <i className="fa-solid fa-arrow-down text-[13px] text-orange-600" style={{WebkitTextStroke: '1.5px currentColor'}}></i>
-            </div>
-        )}
-
         <div className="flex-1 w-full">
             <div className="flex items-baseline mb-1 pr-10">
               <span className="text-xs font-semibold text-indigo-600">{senderName}</span>
             </div>
             
-            <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity text-slate-400 hover:text-indigo-600 hover:bg-slate-100 p-1.5 w-6 h-6 rounded-full flex items-center justify-center">
-              <i className="fa-solid fa-ellipsis-vertical text-[14px]"></i>
-            </button>
+            {!msg.isTask && (
+              <button onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }} className="message-menu-trigger absolute flex items-center justify-center">
+                <i className="fa-solid fa-ellipsis-vertical"></i>
+              </button>
+            )}
             
             {menuOpen && (
               <div ref={menuRef} className="absolute top-8 right-2 z-[120] bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
@@ -725,8 +716,6 @@ const MessageBubble = React.memo(({
                        <span className="text-[11px] font-bold ml-1 tracking-wide">
                        {seenByOthers ? (
                            <span className="text-[#006400]">Seen</span>
-                       ) : deliveredCount > 0 ? (
-                           <span className="text-[#CC5500]">Delivered</span>
                        ) : (
                            <span className="text-[#CC5500]">Sent</span>
                        )}

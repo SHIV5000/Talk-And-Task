@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "19.0";
+const APP_VERSION = "20.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -1379,14 +1379,14 @@ export default function ChatApp({ user, onLogout }) {
                                         )}
                                     </div>
 
-                                    <div className="flex items-center gap-1 shrink-0 relative">
+                                    <div className="header-actions icon-btns flex items-center gap-1 shrink-0 relative">
 
-                                      <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
+                                      <button onClick={() => setActiveModal('active_schedules')} className={`header-icon-btn w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
                                         <i className="fa-solid fa-calendar-alt"></i>
                                       </button>
 
                                       <div className="relative">
-                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px] relative`}>
+                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`header-icon-btn w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px] relative`}>
                                           <i className="fa-solid fa-bell"></i>
                                           {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
                                         </button>
@@ -1448,7 +1448,7 @@ export default function ChatApp({ user, onLogout }) {
                                         )}
                                       </div>
 
-                                      <div className="hidden xl:flex items-center gap-2 overflow-x-auto custom-sidebar-scroll max-w-[460px]">
+                                      <div className="filter-chips hidden xl:flex items-center gap-2 overflow-x-auto custom-sidebar-scroll max-w-[460px]">
                                         {universalTaskFilters.map((f) => (
                                           <button
                                             key={f.key}
@@ -1461,7 +1461,7 @@ export default function ChatApp({ user, onLogout }) {
                                         ))}
                                       </div>
 
-                                      <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
+                                      <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`header-icon-btn w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
 
                                       {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
                                       <span className="shrink-0 text-[11px] font-bold tracking-wide text-slate-400 px-1" title="Current app version">Ver. {APP_VERSION}</span>
