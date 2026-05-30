@@ -65,11 +65,11 @@ export default function InputArea({
   };
 
   return (
-    <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-3 safe-bottom'} shrink-0 z-40 flex flex-col gap-2 w-full relative ${containerClassName}`}>
+    <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3' : 'bg-white/95 border-t border-slate-200 px-3 md:px-5 py-3 safe-bottom'} shrink-0 z-40 flex flex-col gap-2 w-full relative ${containerClassName}`}>
       <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
 
       {replyingTo && (
-        <div className="bg-gray-50 px-4 py-2 flex items-center justify-between rounded-lg border border-gray-100 animate-in slide-in-from-bottom-1">
+        <div className="bg-slate-50 px-4 py-2 flex items-center justify-between rounded-2xl border border-slate-200 animate-in slide-in-from-bottom-1">
           <div className="flex flex-col overflow-hidden">
             <div className="text-sm font-semibold text-primary">{(replyingTo.sender||"").split('@')[0]}</div>
             <div className="text-xs text-text-secondary truncate">"{replyingTo.text || replyingTo.fileName}"</div>
@@ -79,7 +79,7 @@ export default function InputArea({
       )}
 
       {/* Permanent compact rich-text toolbar */}
-      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/90 px-2 py-1 shadow-sm input-toolbar">
+      <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50/80 px-2 py-1 input-toolbar">
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg font-bold text-sm transition-colors" title="Bold">B</button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg italic font-serif text-sm transition-colors" title="Italic">I</button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg underline text-sm transition-colors" title="Underline">U</button>
@@ -169,12 +169,12 @@ export default function InputArea({
 
       <div className="flex items-end gap-2">
         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
-        <button className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors shrink-0" onClick={() => fileInputRef.current.click()} disabled={isUploading}>
+        <button className="w-[42px] h-[42px] flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition-colors shrink-0" onClick={() => fileInputRef.current.click()} disabled={isUploading}>
           <i className="fa-solid fa-plus text-xl"></i>
         </button>
 
         <div className="relative shrink-0" ref={emojiPickerRef}>
-          <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+          <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition-colors">
             <i className="fa-regular fa-face-smile text-xl"></i>
           </button>
           {emojiPickerOpen && (
@@ -186,7 +186,7 @@ export default function InputArea({
           )}
         </div>
 
-        <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
+        <div className="flex-1 bg-slate-50 rounded-2xl flex items-end overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/15 transition-all border border-slate-200 focus-within:border-indigo-300 focus-within:bg-white">
           <div
             contentEditable
             ref={chatInputRef}
@@ -195,7 +195,7 @@ export default function InputArea({
             onKeyUp={checkSelection}
             onPaste={handlePaste}
             suppressContentEditableWarning={true}
-            data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
+            data-placeholder={placeholder || (isOnline ? "Write a message or task update..." : "Offline - message will be queued")}
             className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium resize-y min-h-[46px]"
             style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)' }}
             onKeyDown={(e) => {
@@ -208,13 +208,13 @@ export default function InputArea({
         </div>
 
         {showScheduleButton && (
-          <button onClick={() => { if (!inputText.trim() || inputText === '<br>') return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+          <button onClick={() => { if (!inputText.trim() || inputText === '<br>') return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition-colors">
             <i className="fa-regular fa-clock text-xl"></i>
           </button>
         )}
 
         {showOfflineDrafts && offlineDrafts.length > 0 && (
-          <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+          <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-[42px] h-[42px] flex justify-center items-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition-colors">
             <i className="fa-solid fa-inbox text-xl"></i>
             <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{offlineDrafts.length}</span>
           </button>
@@ -223,7 +223,7 @@ export default function InputArea({
         <button
           onClick={handleSendOfflineAware}
           disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
           <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
         </button>

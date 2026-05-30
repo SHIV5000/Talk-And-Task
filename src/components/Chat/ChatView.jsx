@@ -52,8 +52,8 @@ export default function ChatView({
   }, [pendingScrollTarget, setPendingScrollTarget]);
 
   return (
-    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] bg-slate-50 relative">
-      <div className="flex flex-col min-h-full justify-end py-4 pb-10">
+    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-3 md:px-[7%] bg-[#F7F8FA] relative">
+      <div className="flex flex-col min-h-full justify-end py-5 pb-8">
         
         {toolPreferences?.showWatermark !== false && (
           <div className="doodle-watermark">
@@ -70,13 +70,13 @@ export default function ChatView({
         )}
 
         <div className="text-center mb-6 mt-4 relative z-[1]">
-          <span className="text-[12.5px] text-slate-500 bg-slate-200/50 px-4 py-1.5 rounded-lg shadow-sm font-medium border border-slate-200">
+          <span className="text-[12px] text-slate-500 bg-white/80 px-4 py-1.5 rounded-full font-medium border border-slate-200/80">
             <i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.
           </span>
         </div>
 
         {pinnedMessages.length > 0 && (
-          <div className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
+          <div className="sticky top-2 z-10 bg-white/95 rounded-2xl p-3 mb-6 cursor-pointer hover:bg-white transition-colors border border-slate-200 shadow-sm" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
             <div className="flex justify-between items-center text-xs text-slate-500 font-medium mb-1">
               <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
             </div>

@@ -36,11 +36,11 @@ export default function LeftSidebar({
           background: transparent;
         }
         .custom-sidebar-scroll::-webkit-scrollbar-thumb {
-          background-color: rgba(255, 255, 255, 0.25);
+          background-color: rgba(148, 163, 184, 0.35);
           border-radius: 10px;
         }
         .custom-sidebar-scroll::-webkit-scrollbar-thumb:hover {
-          background-color: rgba(255, 255, 255, 0.4);
+          background-color: rgba(100, 116, 139, 0.45);
         }
       `}</style>
 
@@ -56,12 +56,12 @@ export default function LeftSidebar({
           mobileSidebarOpen
             ? 'mobile-sidebar-panel open flex'
             : 'hidden md:flex'
-        } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
+        } w-[30%] min-w-[300px] max-w-[400px] bg-[#F8FAFC] text-slate-700 border-r border-slate-200 flex-col shrink-0 h-full`}
         style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
-        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
-          <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
+        <div className="shrink-0 border-b border-slate-200 safe-top px-3 py-3">
+          <div className="bg-white rounded-2xl px-3 py-3 border border-slate-200">
             <div className="space-y-2.5">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 shrink-0">
@@ -75,7 +75,7 @@ export default function LeftSidebar({
                 />
                 <button
                   onClick={() => setShowSearch(prev => !prev)}
-                  className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                  className="text-slate-500 bg-slate-100 hover:bg-slate-200 hover:text-slate-800 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                   title="Search teams & people"
                 >
                   <i className="fa-solid fa-search"></i>
@@ -90,7 +90,7 @@ export default function LeftSidebar({
                       setEditingGroup(null);
                       setActiveModal('group_form_modal');
                     }}
-                    className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                    className="text-slate-500 bg-slate-100 hover:bg-slate-200 hover:text-slate-800 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                     title="New Group (Group Name, Members)"
                   >
                     <i className="fa-solid fa-plus"></i>
@@ -98,13 +98,13 @@ export default function LeftSidebar({
                 )}
                 <button
                   onClick={() => setActiveModal('edit_profile')}
-                  className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                  className="text-slate-500 bg-slate-100 hover:bg-slate-200 hover:text-slate-800 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                 >
                   <i className="fa-solid fa-gear"></i>
                 </button>
                 <button
                   onClick={onLogout}
-                  className="text-white/95 bg-white/10 hover:bg-rose-500/30 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                  className="text-slate-500 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
                 >
                   <i className="fa-solid fa-power-off"></i>
                 </button>
@@ -115,20 +115,20 @@ export default function LeftSidebar({
         </div>
 
         {/* Search */}
-        <div className={`border-b border-white/10 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
-          <div className="bg-white/10 rounded-lg flex items-center px-3 py-2 focus-within:bg-white/20 transition-all">
+        <div className={`border-b border-slate-200 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
+          <div className="bg-white rounded-xl flex items-center px-3 py-2 border border-slate-200 focus-within:border-indigo-300 transition-all">
             <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
             <input
               type="text"
               placeholder="Search teams & people..."
               value={sidebarSearch}
               onChange={e => setSidebarSearch(e.target.value)}
-              className="bg-transparent outline-none flex-1 text-sm placeholder-white/50"
+              className="bg-transparent outline-none flex-1 text-sm placeholder-slate-400"
             />
             {sidebarSearch && (
               <button
                 onClick={() => setSidebarSearch('')}
-                className="text-white/70 hover:text-white ml-1"
+                className="text-slate-400 hover:text-slate-700 ml-1"
               >
                 <i className="fa-solid fa-xmark text-xs"></i>
               </button>
@@ -142,7 +142,7 @@ export default function LeftSidebar({
           className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-sidebar-scroll"
           style={{
             scrollbarWidth: 'thin', /* Ensures Firefox respects the thin scrollbar */
-            scrollbarColor: 'rgba(255, 255, 255, 0.25) transparent',
+            scrollbarColor: 'rgba(148, 163, 184, 0.35) transparent',
           }}
         >
           {myGroups.map(g => {
@@ -160,8 +160,8 @@ export default function LeftSidebar({
                   setMobileSidebarOpen(false);
                 }}
                 className={`flex items-center min-h-[72px] py-2 cursor-pointer transition-colors relative ${
-                  activeGroup?.id === g.id ? 'bg-white/10' : 'hover:bg-white/5'
-                } pl-3 pr-4`}
+                  activeGroup?.id === g.id ? 'bg-white border-l-4 border-indigo-400 shadow-sm' : 'hover:bg-white/70'
+                } pl-3 pr-4 mx-2 my-1 rounded-2xl`}
               >
                 <MemoizedAvatar
                   uid={g.id}
@@ -171,14 +171,14 @@ export default function LeftSidebar({
                   isGroup={true}
                   extraClasses="mr-3 shrink-0"
                 />
-                <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
+                <div className="flex-1 min-w-0 overflow-hidden border-b border-slate-200/70 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span className="font-medium text-[14.5px] leading-tight break-words whitespace-normal pr-2">
                       {g.name}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs opacity-70 truncate">
+                    <span className="text-xs text-slate-500 truncate">
                       {`${g.members?.length || 0} Members`}
                     </span>
                     {hasUnread && (
@@ -230,9 +230,9 @@ export default function LeftSidebar({
                 }}
                 className={`flex items-center min-h-[72px] py-2 cursor-pointer transition-colors relative ${
                   activeGroup?.id === dmIdStr
-                    ? 'bg-white/10'
-                    : 'hover:bg-white/5'
-                } pl-3 pr-4`}
+                    ? 'bg-white border-l-4 border-indigo-400 shadow-sm'
+                    : 'hover:bg-white/70'
+                } pl-3 pr-4 mx-2 my-1 rounded-2xl`}
               >
                 <div className="relative mr-3 shrink-0">
                   <MemoizedAvatar
@@ -242,10 +242,10 @@ export default function LeftSidebar({
                     sizeClass="w-[49px] h-[49px]"
                   />
                   {isOnline && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-[#312E81] rounded-full online-rail shadow-sm" />
+                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-white rounded-full online-rail shadow-sm" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
+                <div className="flex-1 min-w-0 overflow-hidden border-b border-slate-200/70 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span
                       className={`text-[14.5px] leading-tight break-words whitespace-normal pr-2 ${
@@ -258,7 +258,7 @@ export default function LeftSidebar({
                   <div className="flex justify-between items-center">
                     <span
                       className={`text-xs truncate pr-4 ${
-                        unreadInfo.total > 0 ? 'font-semibold' : 'opacity-70'
+                        unreadInfo.total > 0 ? 'font-semibold text-slate-700' : 'text-slate-500'
                       }`}
                     >
                       {statusText}
@@ -277,10 +277,10 @@ export default function LeftSidebar({
 
         {/* Admin Workspace v19.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
-          <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
+          <div className="p-3 bg-white border-t border-slate-200 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
-              className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <i className="fa-solid fa-shield-halved"></i> Admin Workspace v19.0
             </button>
