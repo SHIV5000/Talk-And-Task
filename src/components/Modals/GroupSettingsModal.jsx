@@ -38,7 +38,7 @@ export default function GroupSettingsModal({
             ) : (
                <div className="text-xl font-bold text-slate-800 truncate">{activeGroup.name}</div>
             )}
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Team Info</div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Group Info</div>
           </div>
         </div>
 
@@ -48,7 +48,9 @@ export default function GroupSettingsModal({
           <div className="space-y-1.5 p-2 bg-white border border-slate-200 rounded-xl shadow-sm">
             {dbUsers.map(u => {
               const baseMembers = groupForm.members?.length ? groupForm.members : (activeGroup.members || []);
+              const baseAdmins = groupForm.admins?.length ? groupForm.admins : (activeGroup.admins || []);
               const isMember = baseMembers.includes(u.email);
+              const memberAdmin = baseAdmins.includes(u.email);
               return (
                 <label key={u.uid} className={`flex items-center gap-3 p-2 rounded-lg transition-colors border border-transparent ${isAdmin ? 'hover:bg-slate-50 hover:border-slate-200 hover:shadow-sm cursor-pointer' : ''}`}>
                   <input type="checkbox" disabled={!isAdmin || activeGroup.admins?.includes(u.email)} checked={isMember}
@@ -60,7 +62,10 @@ export default function GroupSettingsModal({
                       setGroupForm({...groupForm, members: newMembers});
                     }} className="w-4 h-4 accent-indigo-600 disabled:opacity-40 rounded" />
                   <span className="text-[14px] font-semibold text-slate-700 flex-1 truncate">{u.name}</span>
-                  {activeGroup.admins?.includes(u.email) && <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded uppercase tracking-wider shadow-sm">Admin</span>}
+                  {isMember && isAdmin && (
+                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); const admins = memberAdmin ? baseAdmins.filter(a => a !== u.email) : [...new Set([...baseAdmins, u.email])]; setGroupForm({...groupForm, admins, members: [...new Set([...baseMembers, u.email])]}); }} className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shadow-sm border ${memberAdmin ? 'text-indigo-600 bg-indigo-50 border-indigo-100' : 'text-slate-500 bg-slate-50 border-slate-200'}`}>{memberAdmin ? 'Admin' : 'Make Admin'}</button>
+                  )}
+                  {isMember && !isAdmin && memberAdmin && <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded uppercase tracking-wider shadow-sm">Admin</span>}
                 </label>
               );
             })}
@@ -71,7 +76,7 @@ export default function GroupSettingsModal({
         <div className="flex gap-3 p-5 border-t border-slate-100 shrink-0 bg-white z-10">
           <button onClick={() => setActiveModal(null)} className="flex-1 text-slate-500 font-bold hover:bg-slate-100 py-3 rounded-xl transition-colors">Close</button>
           {isAdmin && (
-            <button onClick={() => onGroupUpdate({ members: groupForm.members, name: groupForm.name })} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(79,70,229,0.3)] hover:bg-indigo-700 transition-all hover:-translate-y-0.5">Save Changes</button>
+            <button onClick={() => onGroupUpdate({ members: groupForm.members, admins: groupForm.admins, name: groupForm.name })} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(79,70,229,0.3)] hover:bg-indigo-700 transition-all hover:-translate-y-0.5">Save Changes</button>
           )}
         </div>
 

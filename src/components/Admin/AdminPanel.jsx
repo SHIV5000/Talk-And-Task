@@ -655,16 +655,16 @@ export default function AdminPanel({
               </div>
             </div>
 
-            {/* Teams Section - TABLE view */}
+            {/* Groups Section - TABLE view */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1 min-h-0">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Teams</h2>
+                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Groups</h2>
                 <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>New Group</button>
               </div>
               {(editingGroup || groupForm?.name || groupForm?.members?.length > 0) && (
                 <div className="p-5 border-b border-slate-200 bg-slate-50">
                   <form onSubmit={(e) => { e.preventDefault(); handleGroupSubmit(e); }} className="space-y-4 max-w-3xl">
-                    <div><label className="text-xs font-bold text-slate-500 block mb-1">Team Name</label><input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} className="w-full bg-white border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-indigo-500" required /></div>
+                    <div><label className="text-xs font-bold text-slate-500 block mb-1">Group Name</label><input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} className="w-full bg-white border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-indigo-500" required /></div>
                     <div><label className="text-xs font-bold text-slate-500 block mb-1">Avatar</label><input type="file" onChange={handleGroupPicUpload} className="text-sm" /> {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-indigo-600 ml-2">{Math.round(groupPicUploadProgress)}%</span>}</div>
                     <div>
                       <div className="flex justify-between items-center mb-2"><label className="text-xs font-bold text-slate-500">Members</label><div className="flex gap-2"><button type="button" onClick={() => setGroupForm({ ...groupForm, members: dbUsers.map((u) => u.email) })} className="text-xs text-indigo-600 font-bold hover:underline">Select All</button><button type="button" onClick={() => setGroupForm({ ...groupForm, members: [] })} className="text-xs text-rose-500 font-bold hover:underline">Clear</button></div></div>
@@ -680,17 +680,17 @@ export default function AdminPanel({
                     </div>
                     <div className="flex justify-end gap-3">
                       <button type="button" onClick={() => { setEditingGroup(null); setGroupForm({ name: '', members: [], profilePicUrl: null }); }} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50">Cancel</button>
-                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Save Team</button>
+                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Save Group</button>
                     </div>
                   </form>
                 </div>
               )}
-              {/* Teams Table */}
+              {/* Groups Table */}
               <div className="overflow-y-auto custom-sidebar-scroll flex-1">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0">
                     <tr>
-                      <th className="px-4 py-3">Team Name</th>
+                      <th className="px-4 py-3">Group Name</th>
                       <th className="px-4 py-3">Members</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
@@ -710,7 +710,7 @@ export default function AdminPanel({
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); }} className="text-indigo-600 hover:text-indigo-800 mr-2" title="Edit"><i className="fa-solid fa-pencil"></i></button>
-                          <button onClick={async () => { if (!window.confirm('Delete this team?')) return; await deleteDoc(doc(db, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
+                          <button onClick={async () => { if (!window.confirm('Delete this group?')) return; await deleteDoc(doc(db, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
                         </td>
                       </tr>
                     ))}
@@ -734,7 +734,7 @@ export default function AdminPanel({
                   <option value="Completed">Completed</option>
                 </select>
                 <select value={taskGroupFilter} onChange={(e) => setTaskGroupFilter(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold">
-                  <option value="">All Teams</option>
+                  <option value="">All Groups</option>
                   {groups.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
                 </select>
                 <input type="text" value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks..." className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold w-48" />
@@ -751,7 +751,7 @@ export default function AdminPanel({
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Assignees</th>
                       <th className="px-4 py-3">Due Date</th>
-                      <th className="px-4 py-3">Team</th>
+                      <th className="px-4 py-3">Group</th>
                       <th className="px-4 py-3">Actions</th>
                     </tr>
                   </thead>
