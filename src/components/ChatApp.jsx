@@ -121,12 +121,12 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     };
 
     return (
-        <div className="w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
+        <div className="right-sidebar-container open w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl z-50 absolute right-0 md:relative overflow-hidden" style={{ '--right-sidebar-width': `${sidebarWidth || 320}px` }}>
             <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
                 <div>
-                    <h3 className="font-bold text-slate-800 leading-tight">Replies</h3>
-                    <span className="text-[11px] text-slate-500 font-medium">Replies Panel</span>
+                    <h3 className="font-bold text-slate-800 leading-tight">Replies Hub</h3>
+                    <span className="text-[11px] text-slate-500 font-medium">Reply,Review Happens Here.</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <button onClick={() => repliesScrollRef.current?.scrollTo({ top: repliesScrollRef.current.scrollHeight, behavior: 'smooth' })} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors" title="Scroll to latest reply"><i className="fa-solid fa-arrow-down"></i></button>
@@ -200,11 +200,11 @@ const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserDat
     if (!liveTask) return null;
     const taskGroup = groups.find(g => g.id === liveTask.groupId) || activeGroup;
     return (
-        <div className="w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
+        <div className="right-sidebar-container open w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl z-50 absolute right-0 md:relative overflow-hidden" style={{ '--right-sidebar-width': `${sidebarWidth || 320}px` }}>
             <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
                 <div className="min-w-0">
-                    <h3 className="font-bold text-slate-800 leading-tight flex items-center gap-2"><i className="fa-regular fa-square-check text-indigo-600"></i> Task Sidebar</h3>
-                    <span className="text-[11px] text-slate-500 font-medium truncate block">Updates, uploads and review actions happen here</span>
+                    <h3 className="font-bold text-slate-800 leading-tight flex items-center gap-2"><i className="fa-regular fa-square-check text-indigo-600"></i> Task Hub</h3>
+                    <span className="text-[11px] text-slate-500 font-medium truncate block">Updates, Uploads and Review Actions Happen Here.</span>
                 </div>
                 <button onClick={() => setActiveTask(null)} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
             </div>
@@ -1321,6 +1321,8 @@ export default function ChatApp({ user, onLogout }) {
                                         </div>
                                     </div>
 
+                                    <span className="shrink-0 text-[13px] font-semibold text-[#2E3A46] hidden lg:inline-flex items-center">● {currentUserData?.name || user.email.split('@')[0]}</span>
+
                                     <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
                                         <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
                                             <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
@@ -1446,27 +1448,27 @@ export default function ChatApp({ user, onLogout }) {
                                         )}
                                       </div>
 
+                                      <div className="hidden xl:flex items-center gap-2 overflow-x-auto custom-sidebar-scroll max-w-[460px]">
+                                        {universalTaskFilters.map((f) => (
+                                          <button
+                                            key={f.key}
+                                            onClick={() => setChatFilter(f.key)}
+                                            className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:shadow-sm ${chatFilter === f.key ? 'border-[#4F6F8F]/30 bg-[#F4F6F8] text-[#4F6F8F] shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-[#4F6F8F]/30 hover:text-[#4F6F8F]'}`}
+                                            title={`Show ${f.label.toLowerCase()}`}
+                                          >
+                                            <i className={`fa-solid ${f.icon} text-[10px]`}></i>{f.label}
+                                          </button>
+                                        ))}
+                                      </div>
+
                                       <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
 
                                       {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
+                                      <span className="shrink-0 text-[11px] font-bold tracking-wide text-slate-400 px-1" title="Current app version">Ver. {APP_VERSION}</span>
 
                                     </div>
                                 </div>
 
-                                <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
-                                  <span className="shrink-0 text-[11px] font-bold tracking-wide text-slate-400 px-1" title="Current app version">Ver. {APP_VERSION}</span>
-                                  <span className="shrink-0 text-[11px] font-black tracking-wide text-slate-500 px-1">{(currentUserData?.name || user.email.split('@')[0])}'s Talk & Task Bar</span>
-                                  {universalTaskFilters.map((f) => (
-                                    <button
-                                      key={f.key}
-                                      onClick={() => setChatFilter(f.key)}
-                                      className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:shadow-sm ${chatFilter === f.key ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600'}`}
-                                      title={`Show ${f.label.toLowerCase()}`}
-                                    >
-                                      <i className={`fa-solid ${f.icon} text-[10px]`}></i>{f.label}
-                                    </button>
-                                  ))}
-                                </div>
 
                                 <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[122px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
                                     <i className="fa-solid fa-arrow-down"></i>

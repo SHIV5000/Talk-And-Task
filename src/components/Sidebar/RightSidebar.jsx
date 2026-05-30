@@ -66,12 +66,15 @@ export default function RightSidebar({
   };
 
   return (
-    <div className="w-full shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2" style={{ width: `${sidebarWidth || 380}px` }}>
+    <div className={`right-sidebar-container ${showRightSidebar ? 'open' : ''} w-full shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 overflow-hidden`} style={{ '--right-sidebar-width': `${sidebarWidth || 320}px` }}>
       <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0 shadow-sm">
-        <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-layer-group text-sm"></i></div>
-          Task Hub
-        </h2>
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
+            <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-layer-group text-sm"></i></div>
+            Task Hub
+          </h2>
+          <span className="text-[11px] text-slate-500 font-medium truncate block">Updates, Uploads and Review Actions Happen Here.</span>
+        </div>
         <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 flex items-center justify-center transition-colors">
           <i className="fa-solid fa-xmark text-lg"></i>
         </button>

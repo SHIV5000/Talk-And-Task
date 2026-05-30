@@ -21,7 +21,7 @@ export default function InputArea({
 
   const rawText = chatInputRef.current?.innerText || '';
   const lastWord = rawText.trim() ? rawText.split(/\s/).pop() : '';
-  const mentionQuery = lastWord.startsWith('@') ? lastWord.substring(1).toLowerCase() : null;
+  const mentionQuery = !activeGroup?.isDM && lastWord.startsWith('@') ? lastWord.substring(1).toLowerCase() : null;
 
   const handleInput = () => {
       if (chatInputRef.current) {
@@ -40,7 +40,8 @@ export default function InputArea({
     const mentionName = isGroup ? name.replace(/\s+/g, '') : name;
     chatInputRef.current.focus();
     const html = chatInputRef.current.innerHTML;
-    const newHtml = html.replace(/@[^@\s<]*$/, `@${mentionName} `);
+    const chipHtml = `<span class="mention-chip" contenteditable="false">@${mentionName}</span>&nbsp;`;
+    const newHtml = html.replace(/@[^@\s<]*$/, chipHtml);
     chatInputRef.current.innerHTML = newHtml;
     setInputText(newHtml);
 
@@ -79,18 +80,18 @@ export default function InputArea({
       )}
 
       {/* Permanent compact rich-text toolbar */}
-      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/90 px-2 py-1 shadow-sm input-toolbar">
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg font-bold text-sm transition-colors" title="Bold">B</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg italic font-serif text-sm transition-colors" title="Italic">I</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg underline text-sm transition-colors" title="Underline">U</button>
+      <div className="flex items-center gap-1 rounded-full border border-[#E7E9EC] bg-[#F4F6F8] px-2 py-1 shadow-sm input-toolbar">
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 font-bold text-sm transition-colors" title="Bold">B</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 italic font-serif text-sm transition-colors" title="Italic">I</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 underline text-sm transition-colors" title="Underline">U</button>
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Superscript">x²</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Subscript">x₂</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 text-xs transition-colors" title="Superscript">x²</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-full bg-white/70 text-xs transition-colors" title="Subscript">x₂</button>
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#800000] hover:scale-110 transition-transform border border-white shadow" title="Maroon"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full bg-[#006400] hover:scale-110 transition-transform border border-white shadow" title="Dark Green"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput(); }} className="w-5 h-5 rounded-full bg-blue-700 hover:scale-110 transition-transform border border-white shadow" title="Blue"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput(); }} className="ml-auto px-2 h-7 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput(); }} className="ml-auto px-2 h-7 rounded-full bg-white/70 text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
       </div>
 
       {mentionQuery !== null && (
@@ -186,7 +187,7 @@ export default function InputArea({
           )}
         </div>
 
-        <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
+        <div className="flex-1 bg-white rounded-[24px] flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[#4F6F8F]/25 transition-all border border-[#E7E9EC] focus-within:border-[#4F6F8F]">
           <div
             contentEditable
             ref={chatInputRef}

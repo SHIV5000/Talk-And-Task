@@ -88,8 +88,8 @@ const MessageBubble = React.memo(({
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
   const canEditTask = taskSidebarMode && (!isTaskCompleted || isSuperAdmin) && isCreator;
   const canPinItem = currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(userEmail) || (msg.isTask && msg.senderEmail === userEmail);
-  const bubbleWidthClass = isThreadView ? 'max-w-full' : msg.isTask ? 'max-w-[min(82%,760px)]' : 'max-w-[min(78%,720px)]';
-  const taskShellClass = msg.isTask ? 'border-2 border-indigo-100 border-l-[6px] rounded-2xl' : '';
+  const bubbleWidthClass = isThreadView ? 'max-w-full' : msg.isTask ? 'max-w-[70%]' : 'max-w-[min(78%,720px)]';
+  const taskShellClass = msg.isTask ? `task-card-v19 ${msg.isMine ? 'sent' : ''} border-2 border-indigo-100 border-l-[6px] rounded-[20px]` : '';
   const activeAssignees = (msg.taskData?.assignees || []).filter(e => !['revoked', 'transferred_out'].includes(assigneeStates[e]));
   const allAccepted = activeAssignees.length > 0 && activeAssignees.every(e => assigneeStates[e] === 'accepted_completed');
 
@@ -336,11 +336,11 @@ const MessageBubble = React.memo(({
   };
 
   return (
-    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-[120]' : 'relative z-[1]'}`}>
+    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isTask ? 'justify-start' : msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-[120]' : 'relative z-[1]'}`}>
       
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
       
-      <div className={`${bubbleWidthClass} ${taskShellClass} w-fit min-w-0 bg-white rounded-2xl shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
+      <div className={`${bubbleWidthClass} ${taskShellClass} message-bubble-v19 w-fit min-w-0 bg-white rounded-[24px] shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-[18px] py-3 relative ${msg.isMine ? 'message-bubble-sent' : 'message-bubble-received'} break-words flex flex-col`}>
         
         {!isThreadView && msg.isMine && (
             <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Sent">
@@ -365,7 +365,7 @@ const MessageBubble = React.memo(({
             {menuOpen && (
               <div ref={menuRef} className="absolute top-8 right-2 z-[120] bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
                 
-                {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setActiveTaskSidebar?.(null); setActiveReplies(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply in Replies</button>}
+                {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setActiveTaskSidebar?.(null); setActiveReplies(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply in Replies</button>}
                 
                 {msg.isTask && !taskSidebarMode && <button onClick={() => { setMenuOpen(false); onOpenTask?.(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"><i className="fa-solid fa-up-right-from-square w-5"></i> Open Task Sidebar</button>}
                 {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
@@ -384,7 +384,7 @@ const MessageBubble = React.memo(({
             ) : (
               <>
                 {msg.isTask && (
-                  <div onClick={(e) => { if (msg.isTask && !taskSidebarMode) { e.stopPropagation(); onOpenTask?.(msg); } }} className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${!taskSidebarMode ? 'cursor-pointer hover:ring-2 hover:ring-indigo-200' : ''} ${isTransferredOutForMe ? 'bg-[#800020]/5 border-[#800020]/30 opacity-75' : isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isSubmittedForReviewMe ? 'bg-amber-50 border-amber-200 opacity-80' : isAcceptedForMe ? 'bg-teal-50 border-teal-200 opacity-90' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
+                  <div onClick={(e) => { if (msg.isTask && !taskSidebarMode) { e.stopPropagation(); onOpenTask?.(msg); } }} className={`mt-2 task-card-v19 border rounded-[20px] overflow-hidden shadow-sm transition-all ${!taskSidebarMode ? 'cursor-pointer hover:ring-2 hover:ring-indigo-200' : ''} ${isTransferredOutForMe ? 'bg-[#800020]/5 border-[#800020]/30 opacity-75' : isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isSubmittedForReviewMe ? 'bg-amber-50 border-amber-200 opacity-80' : isAcceptedForMe ? 'bg-teal-50 border-teal-200 opacity-90' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
                     <div className="p-3">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -628,7 +628,7 @@ const MessageBubble = React.memo(({
 
         <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-end justify-between gap-3 w-full">
             <div className="flex flex-wrap items-center gap-1.5 flex-1">
-                {Object.entries(msg.reactions || {}).map(([tagLabel, users]) => {
+                {!msg.isTask && Object.entries(msg.reactions || {}).map(([tagLabel, users]) => {
                     const isEmoji = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(tagLabel) || STANDARD_EMOJIS.includes(tagLabel);
                     const isMe = users.includes(userEmail);
                     
@@ -724,11 +724,11 @@ const MessageBubble = React.memo(({
                    {msg.isMine && !msg.isTask && (
                        <span className="text-[11px] font-bold ml-1 tracking-wide">
                        {seenByOthers ? (
-                           <span className="text-green-700">Seen</span>
+                           <span className="text-[#006400]">Seen</span>
                        ) : deliveredCount > 0 ? (
-                           <span className="text-orange-600">Delivered</span>
+                           <span className="text-[#CC5500]">Delivered</span>
                        ) : (
-                           <span className="text-blue-800">Sent</span>
+                           <span className="text-[#CC5500]">Sent</span>
                        )}
                        </span>
                    )}

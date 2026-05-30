@@ -56,7 +56,7 @@ export default function LeftSidebar({
           mobileSidebarOpen
             ? 'mobile-sidebar-panel open flex'
             : 'hidden md:flex'
-        } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
+        } w-[30%] min-w-[300px] max-w-[400px] bg-[#2E3A46] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
         style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
@@ -169,7 +169,7 @@ export default function LeftSidebar({
                   name={g.name}
                   sizeClass="w-[49px] h-[49px]"
                   isGroup={true}
-                  extraClasses="mr-3 shrink-0"
+                  extraClasses={`mr-3 shrink-0 group-avatar-ring ${hasUnread ? 'group-avatar-ring-unread' : 'group-avatar-ring-read'}`}
                 />
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
@@ -241,9 +241,6 @@ export default function LeftSidebar({
                     name={u.name}
                     sizeClass="w-[49px] h-[49px]"
                   />
-                  {isOnline && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-[#312E81] rounded-full online-rail shadow-sm" />
-                  )}
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
@@ -255,7 +252,8 @@ export default function LeftSidebar({
                       {u.name}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className={`member-status-line ${isOnline ? 'member-status-line-online' : 'member-status-line-offline'}`} />
+                  <div className="flex justify-between items-center mt-1">
                     <span
                       className={`text-xs truncate pr-4 ${
                         unreadInfo.total > 0 ? 'font-semibold' : 'opacity-70'
