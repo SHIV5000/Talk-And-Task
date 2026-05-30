@@ -21,7 +21,7 @@ const MessageBubble = React.memo(({
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
   jumpToPrivateSource, handleAddInlineComment, customTags = [], setActiveReplies, setActiveTaskSidebar, isThreadView = false,
-  onOpenTask, taskSidebarMode = false
+  onOpenTask, taskSidebarMode = false, threadExpanded = false, onToggleThread
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false); 
@@ -54,6 +54,7 @@ const MessageBubble = React.memo(({
   const isEditingThis = editingMessageId === msg.id;
   const seenByOthers = (msg.seenBy || []).filter(e => e !== userEmail).length > 0;
   const deliveredCount = (msg.deliveredTo || []).filter(e => e !== userEmail).length;
+  const mentionsMe = (msg.mentionEmails || []).includes(userEmail);
 
   const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
   const senderName = senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
@@ -82,13 +83,13 @@ const MessageBubble = React.memo(({
   const myAcked = !!myAckMap[userEmail];
   const ackRequiredLocked = msg.isTask && isAssignee && msg.taskData?.requireAck && !myAcked;
   const isTaskReadOnlyForMe = isSubmittedForReviewMe || isAcceptedForMe || isTransferredOutForMe || isRevokedForMe;
-  const canUseWorkerControls = taskSidebarMode && isAssignee && !isTaskCompleted && !ackRequiredLocked && !isTaskReadOnlyForMe;
+  const canUseWorkerControls = isAssignee && !isTaskCompleted && !ackRequiredLocked && !isTaskReadOnlyForMe;
   const statusBadgeText = isTransferredOutForMe ? 'Task Transferred' : isTransferredInForMe ? 'Transferred Task' : isAcceptedForMe ? 'Completed' : isNeedsReviewForMe ? 'Under Review by Me' : isRevokedForMe ? 'Revoked' : isSubmittedForReviewMe ? 'Sent for Review' : msg.taskData?.status;
   const statusBadgeClass = isTransferredOutForMe ? 'bg-[#800020]/10 text-[#800020] border-[#800020]/30' : isTransferredInForMe ? 'bg-purple-50 text-purple-700 border-purple-200' : isAcceptedForMe ? 'bg-teal-50 text-teal-700 border-teal-200' : isNeedsReviewForMe ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : isRevokedForMe ? 'bg-rose-50 text-rose-700 border-rose-200' : isSubmittedForReviewMe ? 'bg-amber-50 text-amber-700 border-amber-200' : msg.taskData?.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData?.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200';
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
-  const canEditTask = taskSidebarMode && (!isTaskCompleted || isSuperAdmin) && isCreator;
+  const canEditTask = (!isTaskCompleted || isSuperAdmin) && isCreator;
   const canPinItem = currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(userEmail) || (msg.isTask && msg.senderEmail === userEmail);
-  const bubbleWidthClass = isThreadView ? 'max-w-full' : msg.isTask ? 'max-w-[min(82%,760px)]' : 'max-w-[min(78%,720px)]';
+  const bubbleWidthClass = isThreadView ? 'w-full max-w-full' : 'w-[80%] max-w-[80%]';
   const taskShellClass = msg.isTask ? 'border-2 border-indigo-100 border-l-[6px] rounded-2xl' : '';
   const activeAssignees = (msg.taskData?.assignees || []).filter(e => !['revoked', 'transferred_out'].includes(assigneeStates[e]));
   const allAccepted = activeAssignees.length > 0 && activeAssignees.every(e => assigneeStates[e] === 'accepted_completed');
@@ -336,11 +337,11 @@ const MessageBubble = React.memo(({
   };
 
   return (
-    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-[120]' : 'relative z-[1]'}`}>
+    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted || mentionsMe ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-[120]' : 'relative z-[1]'}`}>
       
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
       
-      <div className={`${bubbleWidthClass} ${taskShellClass} w-fit min-w-0 bg-white rounded-2xl shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
+      <div className={`${bubbleWidthClass} ${taskShellClass} min-w-0 bg-white ${msg.isTask ? 'rounded-2xl' : msg.isMine ? 'rounded-[22px] rounded-tr-md before:absolute before:-right-2 before:top-4 before:border-y-8 before:border-l-8 before:border-y-transparent before:border-l-white' : 'rounded-[22px] rounded-tl-md before:absolute before:-left-2 before:top-4 before:border-y-8 before:border-r-8 before:border-y-transparent before:border-r-white'} shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
         
         {!isThreadView && msg.isMine && (
             <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Sent">
@@ -365,9 +366,9 @@ const MessageBubble = React.memo(({
             {menuOpen && (
               <div ref={menuRef} className="absolute top-8 right-2 z-[120] bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
                 
-                {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setActiveTaskSidebar?.(null); setActiveReplies(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply in Replies</button>}
+                {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setReplyingTo(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply</button>}
                 
-                {msg.isTask && !taskSidebarMode && <button onClick={() => { setMenuOpen(false); onOpenTask?.(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"><i className="fa-solid fa-up-right-from-square w-5"></i> Open Task Sidebar</button>}
+                {msg.isTask && !taskSidebarMode && <button onClick={() => { setMenuOpen(false); setIsTaskExpanded(prev => !prev); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"><i className="fa-solid fa-list-check w-5"></i> Toggle Task Details</button>}
                 {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
                 <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
                 <button onClick={() => { setMenuOpen(false); handleToggleBookmark(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600"><i className={`fa-solid fa-bookmark w-5 ${isBookmarked ? 'text-indigo-600' : ''}`}></i> {isBookmarked ? 'Unbookmark' : 'Bookmark'}</button>
@@ -384,7 +385,7 @@ const MessageBubble = React.memo(({
             ) : (
               <>
                 {msg.isTask && (
-                  <div onClick={(e) => { if (msg.isTask && !taskSidebarMode) { e.stopPropagation(); onOpenTask?.(msg); } }} className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${!taskSidebarMode ? 'cursor-pointer hover:ring-2 hover:ring-indigo-200' : ''} ${isTransferredOutForMe ? 'bg-[#800020]/5 border-[#800020]/30 opacity-75' : isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isSubmittedForReviewMe ? 'bg-amber-50 border-amber-200 opacity-80' : isAcceptedForMe ? 'bg-teal-50 border-teal-200 opacity-90' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
+                  <div onClick={(e) => { if (msg.isTask && !taskSidebarMode) { e.stopPropagation(); setIsTaskExpanded(prev => !prev); } }} className={`mt-2 border rounded-xl overflow-hidden shadow-sm transition-all ${!taskSidebarMode ? 'cursor-pointer hover:ring-2 hover:ring-indigo-200' : ''} ${isTransferredOutForMe ? 'bg-[#800020]/5 border-[#800020]/30 opacity-75' : isRevokedForMe ? 'bg-rose-50 border-rose-200 opacity-70' : isSubmittedForReviewMe ? 'bg-amber-50 border-amber-200 opacity-80' : isAcceptedForMe ? 'bg-teal-50 border-teal-200 opacity-90' : isTaskCompleted ? 'bg-slate-50 border-slate-200 opacity-95' : 'bg-white border-slate-200 hover:shadow-md'}`}>
                     <div className="p-3">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -416,7 +417,7 @@ const MessageBubble = React.memo(({
                       )}
 
                       {/* 👇 UPDATED: Acknowledge button visible ONLY to Assignees */}
-                      {taskSidebarMode && isAssignee && !isTaskCompleted && msg.taskData?.requireAck && !myAcked && (
+                      {isAssignee && !isTaskCompleted && msg.taskData?.requireAck && !myAcked && (
                         <div className="mb-3">
                           <button
                             onClick={handleAcknowledge}
@@ -493,7 +494,7 @@ const MessageBubble = React.memo(({
                         </div>
                     )}
 
-                    {taskSidebarMode && isCreator && (msg.taskData?.assignees || []).some(email => (assigneeStates[email] || 'assigned') === 'submitted_completed') && (
+                    {isCreator && (msg.taskData?.assignees || []).some(email => (assigneeStates[email] || 'assigned') === 'submitted_completed') && (
                       <div className="bg-blue-50 border-t border-blue-200 p-2 flex flex-col gap-2">
                         {(msg.taskData?.assignees || []).filter(email => (assigneeStates[email] || 'assigned') === 'submitted_completed').map(email => (
                           <div key={email} className="flex items-center justify-between gap-2 text-xs">
@@ -523,17 +524,12 @@ const MessageBubble = React.memo(({
 
 
                     
-                    {!taskSidebarMode && (
-                      <div className="px-3 pb-3 text-[11px] font-bold text-indigo-600 flex items-center gap-1"><i className="fa-solid fa-up-right-from-square"></i> Open in Task Sidebar to update</div>
-                    )}
-                    {taskSidebarMode && (
-                      <button onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); setIsDelegating(false); }} className={`w-full border-t border-slate-200 py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isTaskCompleted ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}>
-                        <i className={`fa-solid fa-chevron-${isTaskExpanded ? 'up' : 'down'} text-[10px]`}></i>
-                        {isTaskExpanded ? 'Hide Details' : `View Updates & Trail (${msg.taskData.trail?.length || 0})`}
-                      </button>
-                    )}
+                    <button onClick={(e) => { e.stopPropagation(); setIsTaskExpanded(!isTaskExpanded); setIsAddingUpdate(false); setIsDelegating(false); }} className={`w-full border-t border-slate-200 py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isTaskCompleted ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}>
+                      <i className={`fa-solid fa-chevron-${isTaskExpanded ? 'up' : 'down'} text-[10px]`}></i>
+                      {isTaskExpanded ? 'Hide Details' : `View Updates & Trail (${msg.taskData.trail?.length || 0})`}
+                    </button>
 
-                    {taskSidebarMode && isTaskExpanded && (
+                    {isTaskExpanded && (
                       <div className="bg-slate-50 border-t border-slate-200 p-3 animate-in slide-in-from-top-2">
                         <div className="space-y-3 mb-4 pr-2 scroll-smooth">
                           {(msg.taskData.trail || []).map((t, idx) => {
@@ -586,8 +582,11 @@ const MessageBubble = React.memo(({
                   </div>
                 )}
 
+                {!msg.isTask && !msg.isPrivateForward && mentionsMe && (
+                  <div className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 mb-1 w-fit">@ Mentioned You</div>
+                )}
                 {!msg.isTask && !msg.isPrivateForward && msg.text && (
-                  <div className={`text-[15px] leading-relaxed break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-3' : ''}`} dangerouslySetInnerHTML={{ __html: msg.text }}></div>
+                  <div className={`text-[14px] leading-snug break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={{ __html: msg.text }}></div>
                 )}
                 
                 {!msg.isTask && !msg.isPrivateForward && msg.fileUrl && (
@@ -735,8 +734,8 @@ const MessageBubble = React.memo(({
                 </div>
                 
                 {!msg.isTask && !isThreadView && replyCount > 0 && (
-                    <button onClick={(e) => { e.stopPropagation(); setActiveTaskSidebar?.(null); setActiveReplies(msg); }} className="flex items-center gap-2 px-3 py-1.5 mt-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-lg transition-colors border border-indigo-200 shadow-sm w-fit group/threadbtn">
-                        <i className="fa-solid fa-comments group-hover/threadbtn:scale-110 transition-transform"></i> View {replyCount} Replies
+                    <button onClick={(e) => { e.stopPropagation(); onToggleThread?.(); }} className="flex items-center gap-2 px-3 py-1.5 mt-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-lg transition-colors border border-indigo-200 shadow-sm w-fit group/threadbtn">
+                        <i className="fa-solid fa-comments group-hover/threadbtn:scale-110 transition-transform"></i> {threadExpanded ? 'Hide' : 'Show'} {replyCount} Replies
                     </button>
                 )}
             </div>

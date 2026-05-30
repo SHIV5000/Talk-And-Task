@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
@@ -15,11 +15,25 @@ export default function ChatView({
   unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
   customTags, setActiveReplies, setActiveTaskSidebar
 }) {
+  const [expandedThreads, setExpandedThreads] = useState({});
   
   const handleChatScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
     setIsAtBottom(Math.abs(scrollHeight - clientHeight - scrollTop) < 50);
   };
+
+
+  const repliesByParent = useMemo(() => {
+    const map = new Map();
+    messages.forEach((m) => {
+      if (!m.replyToId) return;
+      const arr = map.get(m.replyToId) || [];
+      arr.push(m);
+      map.set(m.replyToId, arr);
+    });
+    map.forEach((arr) => arr.sort((a, b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0)));
+    return map;
+  }, [messages]);
 
   useEffect(() => {
     if (pendingScrollTarget) {
@@ -85,11 +99,22 @@ export default function ChatView({
         )}
 
         <div className="relative z-[1] flex flex-col justify-end">
-          {messagesToRender.map(msg => {
-            const threadReplyCount = messages.filter(m => m.replyToId === msg.id).length;
+          {messagesToRender.map((msg, idx) => {
+            const threadReplies = repliesByParent.get(msg.id) || [];
+            const threadReplyCount = threadReplies.length;
+            const currentDay = msg.dateString || (msg.timestamp?.toDate ? msg.timestamp.toDate().toISOString().split('T')[0] : '');
+            const prev = messagesToRender[idx - 1];
+            const prevDay = prev?.dateString || (prev?.timestamp?.toDate ? prev.timestamp.toDate().toISOString().split('T')[0] : '');
             return (
+              <React.Fragment key={msg.id}>
+                {currentDay && currentDay !== prevDay && (
+                  <div className="flex items-center gap-3 my-5 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                    <div className="flex-1 border-t border-dotted border-slate-300"></div>
+                    <span>{currentDay}</span>
+                    <div className="flex-1 border-t border-dotted border-slate-300"></div>
+                  </div>
+                )}
                 <MessageBubble
-                key={msg.id}
                 msg={msg}
                 userEmail={user.email}
                 currentUserData={currentUserData}
@@ -121,8 +146,24 @@ export default function ChatView({
                 customTags={customTags || []} 
                 setActiveReplies={(msg) => { setActiveTaskSidebar?.(null); setActiveReplies?.(msg); }}
                 setActiveTaskSidebar={setActiveTaskSidebar}
-                onOpenTask={(task) => { setActiveReplies?.(null); setActiveTaskSidebar?.(task); setShowRightSidebar?.(true); }}
+                onOpenTask={() => {}}
+                threadExpanded={!!expandedThreads[msg.id]}
+                onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
                 />
+                {threadReplies.length > 0 && expandedThreads[msg.id] && (
+                  <div className={`relative ${msg.isMine ? 'ml-auto mr-12' : 'ml-12 mr-auto'} w-[48%] max-w-[48%] border-l-2 border-slate-300 pl-4 mt-1 mb-3 space-y-2`}>
+                    {threadReplies.map((reply) => {
+                      const replyUser = dbUsers?.find(u => u.email === reply.senderEmail) || {};
+                      return (
+                        <div id={`msg-${reply.id}`} key={reply.id} className={`relative before:absolute before:left-[-17px] before:top-3 before:w-4 before:border-t-2 before:border-slate-300 text-[12px] leading-snug ${reply.isMine ? 'text-right' : 'text-left'} ${highlightedMsgId === reply.id || unreadHighlightIds?.includes(reply.id) ? 'highlight-flash' : ''}`}>
+                          <div className="font-bold text-indigo-600">{replyUser.name || (reply.senderEmail || '').split('@')[0]} <span className="text-[10px] text-slate-400 font-semibold">{reply.time}</span></div>
+                          <div className="text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: reply.text || reply.fileName || '' }}></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </React.Fragment>
             );
           })}
         </div>

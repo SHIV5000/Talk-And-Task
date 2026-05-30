@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "19.0";
+const APP_VERSION = "21.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -47,6 +47,10 @@ const universalTaskFilters = [
   { key: 'tasks-completed', label: 'Completed', icon: 'fa-circle-check' },
   { key: 'messages', label: 'Messages', icon: 'fa-comment-dots' },
   { key: 'today', label: 'Today', icon: 'fa-calendar-day' },
+  { key: 'scheduled', label: 'Scheduled', icon: 'fa-clock' },
+  { key: 'files', label: 'Files', icon: 'fa-paperclip' },
+  { key: 'date-range', label: 'By Date', icon: 'fa-calendar-days' },
+  { key: 'task', label: 'Task', icon: 'fa-list-check' },
   { key: 'bookmarked', label: 'Bookmarked', icon: 'fa-bookmark' },
 ];
 
@@ -255,6 +259,7 @@ export default function ChatApp({ user, onLogout }) {
 
     const [sidebarSearch, setSidebarSearch] = useState("");
     const [chatFilter, setChatFilter] = useState("all");
+    const [chatDateFilter, setChatDateFilter] = useState("");
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessageId, setEditingMessageId] = useState(null);
@@ -571,9 +576,11 @@ export default function ChatApp({ user, onLogout }) {
             const strippedText = stripHtml(m.text).toLowerCase();
             const textMatch = strippedText.includes(q);
             const fileMatch = (m.fileName || '').toLowerCase().includes(q);
-            const trailMatch = m.isTask && (m.taskData?.trail || []).some(t => (t.comment || '').toLowerCase().includes(q));
+            const trailMatch = m.isTask && (m.taskData?.trail || []).some(t => `${t.action || ''} ${t.comment || ''} ${t.fileName || ''}`.toLowerCase().includes(q));
+            const tagMatch = Object.keys(m.reactions || {}).some(tag => tag.toLowerCase().includes(q));
+            const dueMatch = m.isTask && `${m.taskData?.deadline || ''} ${m.taskData?.priority || ''} ${m.taskData?.status || ''}`.toLowerCase().includes(q);
 
-            return textMatch || fileMatch || trailMatch;
+            return textMatch || fileMatch || trailMatch || tagMatch || dueMatch;
         }).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).slice(0, 50);
 
         return { messages: matchedMessages };
@@ -592,6 +599,10 @@ export default function ChatApp({ user, onLogout }) {
         else if (chatFilter === 'tasks-completed') filtered = filtered.filter(m => m.isTask && m.taskData?.status === "Completed");
         else if (chatFilter === 'messages') filtered = filtered.filter(m => !m.isTask);
         else if (chatFilter === 'today') filtered = filtered.filter(m => m.dateString === new Date().toISOString().split('T')[0]);
+        else if (chatFilter === 'scheduled') filtered = filtered.filter(m => m.scheduledFor || m.hasReminder);
+        else if (chatFilter === 'files') filtered = filtered.filter(m => !!m.fileUrl);
+        else if (chatFilter === 'date-range' && chatDateFilter) filtered = filtered.filter(m => m.dateString === chatDateFilter);
+        else if (chatFilter === 'task') filtered = filtered.filter(m => m.isTask);
         else if (chatFilter === 'bookmarked') filtered = filtered.filter(m => m.bookmarkedBy?.includes(user.email));
 
         if (!searchQuery.trim() && (chatFilter === 'all' || chatFilter === 'messages')) {
@@ -599,7 +610,7 @@ export default function ChatApp({ user, onLogout }) {
         }
 
         return filtered;
-    }, [messages, activeGroup, user.email, chatFilter, searchQuery]);
+    }, [messages, activeGroup, user.email, chatFilter, chatDateFilter, searchQuery]);
 
     const tasksAssignedToMe = useMemo(() => messages.filter(m => m.isTask && m.taskData?.assignees?.includes(user.email)).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
     const tasksAssignedByMe = useMemo(() => messages.filter(m => m.isTask && m.senderEmail === user.email).sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime()), [messages, user.email]);
@@ -607,7 +618,7 @@ export default function ChatApp({ user, onLogout }) {
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 4000);
+        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 3000);
     }, []);
 
     const scrollToMessageDirect = useCallback((msgId) => {
@@ -637,13 +648,6 @@ export default function ChatApp({ user, onLogout }) {
             setMobileSidebarOpen(false);
             setShowNotifications(false);
             setActiveModal(null);
-
-            if (targetMsg?.isTask) {
-                setActiveReplies(null);
-                setActiveTaskSidebar(targetMsg);
-                setShowRightSidebar(true);
-                return;
-            }
 
             setActiveTaskSidebar(null);
             const effectiveReplyToId = replyToId || targetMsg?.replyToId || null;
@@ -682,7 +686,7 @@ export default function ChatApp({ user, onLogout }) {
         if (targetGroup && activeGroup?.id !== targetGroup.id) setActiveGroup(targetGroup);
         setActiveTaskSidebar(null);
         setActiveReplies(null);
-        setShowRightSidebar(true);
+        setShowRightSidebar(false);
         setTimeout(() => setPendingScrollTarget(msgId), 80);
     }, [activeGroup, groups, messages]);
 
@@ -693,6 +697,7 @@ export default function ChatApp({ user, onLogout }) {
             setInputText(""); alert("📥 You are offline. Message saved as draft and will be sent when you reconnect."); return;
         }
         await handleSendMessage();
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 120);
     };
 
     const handleTypingEvent = useCallback(() => {
@@ -721,10 +726,11 @@ export default function ChatApp({ user, onLogout }) {
             }).catch(()=>{});
         }
 
-        if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            if (chatContainerRef.current) chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
             setIsAtBottom(true);
-        }
+        }, 120);
     };
 
     const handleSaveEdit = async (msg) => {
@@ -744,8 +750,6 @@ export default function ChatApp({ user, onLogout }) {
             let finalCaption = pf.caption || "";
             if (i === 0 && currentText && currentText !== '<br>') finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText;
             pf.caption = finalCaption; pf.text = finalCaption;
-
-            if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
 
             try { await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); }
         }
@@ -1304,7 +1308,7 @@ export default function ChatApp({ user, onLogout }) {
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0 chat-main-panel">
-                                <div className="h-[59px] bg-white flex items-center justify-between px-3 md:px-4 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
+                                <div className="bg-white flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
                                     <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
 
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
@@ -1348,7 +1352,7 @@ export default function ChatApp({ user, onLogout }) {
                                                             <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
                                                             {/* 👇 UPDATED: Universal Click Routing routes directly to threads 👇 */}
                                                             {globalSearchResults.messages.map(m => (
-                                                                <div key={m.id} onClick={() => { setIsSearchFocused(false); m.isTask ? scrollToTaskInMainChat(m.id, m.groupId) : navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
+                                                                <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
                                                                     <div className="flex justify-between items-center">
                                                                         <div className="text-[11px] font-extrabold text-indigo-600">{(dbUsers.find(u => u.email === m.senderEmail)?.name || m.senderEmail || 'Unknown').split('@')[0]}</div>
                                                                         <div className="text-[10px] text-slate-400 font-semibold">{m.dateString}</div>
@@ -1446,26 +1450,25 @@ export default function ChatApp({ user, onLogout }) {
                                         )}
                                       </div>
 
-                                      <button onClick={() => setShowRightSidebar(!showRightSidebar)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showRightSidebar ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px]`} title="Task Hub"><i className="fa-solid fa-clipboard-list"></i></button>
-
                                       {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
 
                                     </div>
                                 </div>
 
                                 <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
-                                  <span className="shrink-0 text-[11px] font-bold tracking-wide text-slate-400 px-1" title="Current app version">Ver. {APP_VERSION}</span>
-                                  <span className="shrink-0 text-[11px] font-black tracking-wide text-slate-500 px-1">{(currentUserData?.name || user.email.split('@')[0])}'s Talk & Task Bar</span>
                                   {universalTaskFilters.map((f) => (
                                     <button
                                       key={f.key}
-                                      onClick={() => setChatFilter(f.key)}
+                                      onClick={() => { setChatFilter(f.key); if (f.key === 'date-range' && !chatDateFilter) setChatDateFilter(new Date().toISOString().split('T')[0]); }}
                                       className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:shadow-sm ${chatFilter === f.key ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600'}`}
                                       title={`Show ${f.label.toLowerCase()}`}
                                     >
                                       <i className={`fa-solid ${f.icon} text-[10px]`}></i>{f.label}
                                     </button>
                                   ))}
+                                  {chatFilter === 'date-range' && (
+                                    <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="modern-date-input !w-auto !py-1.5 !text-[11px]" />
+                                  )}
                                 </div>
 
                                 <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[122px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
@@ -1504,7 +1507,6 @@ export default function ChatApp({ user, onLogout }) {
                                         let finalCaption = pf.caption || "";
                                         if (latestInput && latestInput !== '<br>') finalCaption = finalCaption ? `${latestInput}\n${finalCaption}` : latestInput;
                                         pf.caption = finalCaption; pf.text = finalCaption; setInputText("");
-                                        if (pf.allowDownload === false) pf.customName = `__SECURE__${pf.customName}`;
                                         await uploadAndSendFileDB(pf, setUploadProgress);
                                     }}
                                     setActiveModal={setActiveModal}
@@ -1514,7 +1516,7 @@ export default function ChatApp({ user, onLogout }) {
                             </div>
                         )}
 
-                        {activeTaskSidebar ? (
+                        {false && activeTaskSidebar ? (
                           <>
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task sidebar" />
                             <TaskSidebar
@@ -1524,7 +1526,7 @@ export default function ChatApp({ user, onLogout }) {
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
                           </>
-                        ) : activeReplies ? (
+                        ) : false && activeReplies ? (
                           <>
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize replies sidebar" />
                             <RepliesSidebar
@@ -1534,14 +1536,14 @@ export default function ChatApp({ user, onLogout }) {
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
                           </>
-                        ) : showRightSidebar ? (
+                        ) : true ? (
                           <>
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task hub" />
                             <RightSidebar
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]}
+                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={currentUserData} appVersion={APP_VERSION}
                             />
                           </>
                         ) : null}

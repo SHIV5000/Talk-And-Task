@@ -1,142 +1,80 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import React, { useMemo, useState } from 'react';
 
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
-const formatDDMMMYY = (value) => {
-  if (!value) return 'N/A';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return 'N/A';
-  return DATE_FMT.format(d).replace(/ /g, '-');
+const inRange = (message, start, end) => {
+  const ms = message.timestamp?.toMillis?.() || (message.timestamp?.toDate ? message.timestamp.toDate().getTime() : 0);
+  if (!ms) return false;
+  if (start && ms < new Date(start).setHours(0, 0, 0, 0)) return false;
+  if (end && ms > new Date(end).setHours(23, 59, 59, 999)) return false;
+  return true;
 };
 
-export default function RightSidebar({
-  showRightSidebar, setShowRightSidebar, tasksAssignedToMe, tasksAssignedByMe,
-  archivedTasks, groups, dbUsers, navigateToMessageFromNotification,
-  sidebarWidth,
-}) {
-  const [filter, setFilter] = useState('All');
+export default function RightSidebar({ messages = [], user, sidebarWidth, dbUsers = [], currentUserData, appVersion }) {
+  const [preset, setPreset] = useState('today');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [hiddenTaskIds, setHiddenTaskIds] = useState([]);
-  const [showDateFilters, setShowDateFilters] = useState(false);
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('rightSidebarHiddenTasks_v1') || '[]');
-      if (Array.isArray(saved)) setHiddenTaskIds(saved);
-    } catch (e) {}
-  }, []);
+  const range = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    if (preset === 'week') start.setDate(now.getDate() - 6);
+    if (preset === 'month') start.setMonth(now.getMonth() - 1);
+    if (preset === 'custom') return { start: startDate, end: endDate || startDate };
+    return { start: start.toISOString().split('T')[0], end: now.toISOString().split('T')[0] };
+  }, [preset, startDate, endDate]);
 
-  const updateHidden = (next) => {
-    setHiddenTaskIds(next);
-    try { localStorage.setItem('rightSidebarHiddenTasks_v1', JSON.stringify(next)); } catch (e) {}
-  };
+  const stats = useMemo(() => {
+    const scoped = messages.filter((m) => inRange(m, range.start, range.end));
+    const sent = scoped.filter((m) => m.senderEmail === user.email);
+    const received = scoped.filter((m) => m.senderEmail !== user.email && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
+    return [
+      { label: 'Messages Sent', value: sent.filter((m) => !m.isTask).length, icon: 'fa-paper-plane', tone: 'from-blue-600 to-indigo-600' },
+      { label: 'Messages Received', value: received.filter((m) => !m.isTask).length, icon: 'fa-inbox', tone: 'from-emerald-600 to-teal-600' },
+      { label: 'Messages Acknowledged', value: scoped.filter((m) => m.taskData?.ackBy?.[user.email] || (m.seenBy || []).includes(user.email)).length, icon: 'fa-circle-check', tone: 'from-lime-600 to-emerald-700' },
+      { label: 'Messages Replied', value: scoped.filter((m) => m.replyToId && m.senderEmail === user.email).length, icon: 'fa-reply', tone: 'from-purple-600 to-fuchsia-600' },
+      { label: 'Task Allotted', value: scoped.filter((m) => m.isTask && m.senderEmail === user.email).length, icon: 'fa-list-check', tone: 'from-orange-600 to-amber-600' },
+      { label: 'Task Completed', value: scoped.filter((m) => m.isTask && m.taskData?.status === 'Completed' && (m.senderEmail === user.email || m.taskData?.assignees?.includes(user.email))).length, icon: 'fa-flag-checkered', tone: 'from-rose-600 to-red-600' },
+    ];
+  }, [messages, range, user.email]);
 
-  const allTasks = useMemo(() => {
-    const map = new Map();
-    tasksAssignedToMe.forEach(t => map.set(t.id, t));
-    tasksAssignedByMe.forEach(t => map.set(t.id, t));
-    archivedTasks.forEach(t => map.set(t.id, t));
-    return Array.from(map.values());
-  }, [tasksAssignedToMe, tasksAssignedByMe, archivedTasks]);
+  const onlineCount = useMemo(() => dbUsers.filter(u => u.lastActive && Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000).length, [dbUsers]);
 
-
-  const filteredTasks = useMemo(() => {
-    let res = [];
-    if (filter === 'Archived') res = allTasks.filter(t => hiddenTaskIds.includes(t.id));
-    else if (filter === 'Assigned To Me') res = tasksAssignedToMe.filter(t => !hiddenTaskIds.includes(t.id));
-    else if (filter === 'Created By Me') res = tasksAssignedByMe.filter(t => !hiddenTaskIds.includes(t.id));
-    else {
-      res = allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id));
-      if (filter === 'Pending') res = res.filter(t => t.taskData.status !== 'Completed');
-      if (filter === 'Completed') res = res.filter(t => t.taskData.status === 'Completed');
-    }
-    if (startDate) res = res.filter(t => new Date(t.taskData.deadline) >= new Date(startDate));
-    if (endDate) res = res.filter(t => new Date(t.taskData.deadline) <= new Date(endDate));
-    return res.sort((a,b) => new Date(a.taskData.deadline).getTime() - new Date(b.taskData.deadline).getTime());
-  }, [filter, allTasks, tasksAssignedToMe, tasksAssignedByMe, hiddenTaskIds, startDate, endDate]);
-
-  const filterCounts = {
-    All: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id)).length,
-    Pending: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id) && t.taskData.status !== 'Completed').length,
-    Completed: allTasks.filter(t => !t.taskData.isArchived && !hiddenTaskIds.includes(t.id) && t.taskData.status === 'Completed').length,
-    'Assigned To Me': tasksAssignedToMe.filter(t => !hiddenTaskIds.includes(t.id)).length,
-    'Created By Me': tasksAssignedByMe.filter(t => !hiddenTaskIds.includes(t.id)).length,
-    Archived: hiddenTaskIds.length,
-  };
+  const filters = [
+    ['today', 'Today'],
+    ['week', 'This Week'],
+    ['month', 'This Month'],
+    ['custom', 'Date Picker'],
+  ];
 
   return (
-    <div className="w-full shrink-0 bg-slate-50 shadow-[-5px_0_25px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col h-full absolute md:relative right-0 z-40 animate-in slide-in-from-right-2" style={{ width: `${sidebarWidth || 380}px` }}>
-      <div className="h-[59px] flex items-center justify-between px-4 border-b border-slate-200 bg-white shrink-0 shadow-sm">
-        <h2 className="text-[15px] font-bold text-slate-800 flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-layer-group text-sm"></i></div>
-          Task Hub
-        </h2>
-        <button onClick={() => setShowRightSidebar(false)} className="text-slate-400 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 flex items-center justify-center transition-colors">
-          <i className="fa-solid fa-xmark text-lg"></i>
-        </button>
+    <aside className="hidden lg:flex shrink-0 h-full bg-slate-100 border-l border-slate-200 flex-col p-4 gap-4 overflow-y-auto custom-sidebar-scroll" style={{ width: `${sidebarWidth || 380}px` }}>
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 text-white rounded-3xl p-5 shadow-xl">
+        <div className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">User Analytics</div>
+        <div className="mt-2 text-xl font-black truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
+        <div className="mt-1 text-xs font-bold text-indigo-200">Ver. {appVersion}</div>
       </div>
-
-      <div className="p-4 bg-white border-b border-slate-200 shrink-0 space-y-3">
-         <div className="flex items-center justify-between gap-2 min-w-0">
-           <select value={filter} onChange={(e)=>setFilter(e.target.value)} className="flex-1 modern-date-input">
-             {['All', 'Pending', 'Completed', 'Assigned To Me', 'Created By Me', 'Archived'].map(f => (
-               <option key={f} value={f}>{f} ({filterCounts[f] || 0})</option>
-             ))}
-           </select>
-           <button onClick={() => setShowDateFilters(v => !v)} className={`w-10 h-[38px] rounded-xl border transition-colors flex items-center justify-center ${showDateFilters || startDate || endDate ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`} title="Date filters">
-             <i className="fa-solid fa-calendar-days"></i>
-           </button>
-         </div>
-
-         {showDateFilters && (
-           <div className="grid grid-cols-2 gap-2">
-               <div>
-                 <label className="text-[10px] font-semibold text-slate-500 mb-1 block">From</label>
-                 <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="modern-date-input" title="Start Date" />
-               </div>
-               <div>
-                 <label className="text-[10px] font-semibold text-slate-500 mb-1 block">To</label>
-                 <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="modern-date-input" title="End Date" />
-               </div>
-           </div>
-         )}
-         {(startDate || endDate) && <button onClick={()=>{setStartDate(''); setEndDate('');}} className="w-full text-xs font-semibold text-rose-600 hover:text-rose-700 py-1.5 rounded-lg bg-rose-50 border border-rose-100">Clear date range</button>}
+      <div className="rounded-3xl p-4 bg-white border border-emerald-100 shadow-sm flex items-center justify-between">
+        <div><div className="text-[11px] font-bold uppercase text-slate-500">Online Users</div><div className="text-3xl font-black text-emerald-700">{onlineCount}</div></div>
+        <i className="fa-solid fa-user-check text-2xl text-emerald-600"></i>
       </div>
-
-      <div className="flex-1 overflow-y-auto p-4 custom-sidebar-scroll space-y-3 bg-slate-50">
-         {filteredTasks.length === 0 ? <div className="text-sm text-slate-400 italic text-center py-8 bg-white border border-slate-100 rounded-xl shadow-sm">No tasks match criteria.</div> : filteredTasks.map(task => {
-            const group = groups.find(g => g.id === task.groupId);
-            const isDone = task.taskData.status === 'Completed';
-            const isHidden = hiddenTaskIds.includes(task.id);
-            return (
-              <div key={task.id} onClick={() => navigateToMessageFromNotification?.(task.id, task.groupId)} title="Show original task in main chat" className={`bg-white border rounded-2xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer group/task relative overflow-hidden ${isDone || isHidden ? 'border-slate-200 opacity-80 bg-slate-50/60' : 'border-slate-200 hover:border-indigo-300'}`}>
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1.5 mb-2.5">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDone ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>{isHidden ? 'Archived' : task.taskData.status}</span>
-                  <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap"><i className="fa-regular fa-calendar mr-1"></i>{formatDDMMMYY(task.taskData.deadline)}</span>
-                </div>
-                <div className={`text-[13.5px] font-semibold leading-snug line-clamp-2 mb-3 ${isDone ? 'text-slate-600 opacity-80' : 'text-slate-800'}`}>
-                  <span className="inline-flex items-start gap-1.5">
-                    {isDone && <i className="fa-solid fa-circle-check text-teal-500 mt-0.5 shrink-0"></i>}
-                    <span>{task.text}</span>
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2 pt-3 mt-1 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-md truncate max-w-[120px] shadow-sm">{group?.name || 'Direct Task'}</span>
-                  <div className="flex items-center gap-2">
-                    {!isHidden && <button onClick={(e)=>{e.stopPropagation(); updateHidden([...new Set([...hiddenTaskIds, task.id])]);}} className="text-[10px] font-bold text-rose-500 hover:text-rose-700">Archive</button>}
-                    {isHidden && <button onClick={(e)=>{e.stopPropagation(); updateHidden(hiddenTaskIds.filter(id=>id!==task.id));}} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700">Unarchive</button>}
-                    <div className="flex -space-x-1.5">
-                      {(task.taskData.assignees || []).slice(0, 3).map(email => {
-                        const assignee = dbUsers.find(u => u.email === email);
-                        return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses="border-2 border-white shadow-sm" imageLoading="eager" />;
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )})}
+      <div className="grid grid-cols-2 gap-3">
+        {filters.map(([key, label]) => (
+          <button key={key} onClick={() => setPreset(key)} className={`rounded-2xl p-3 text-left text-xs font-black border shadow-sm transition-all ${preset === key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>{label}</button>
+        ))}
       </div>
-    </div>
+      {preset === 'custom' && (
+        <div className="grid grid-cols-2 gap-2 bg-white rounded-2xl p-3 border border-slate-200 shadow-sm">
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="modern-date-input" />
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="modern-date-input" />
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-3 flex-1">
+        {stats.map((item) => (
+          <div key={item.label} className={`rounded-3xl p-4 text-white bg-gradient-to-br ${item.tone} shadow-lg min-h-[92px] flex items-center justify-between`}>
+            <div><div className="text-[11px] font-bold uppercase opacity-80">{item.label}</div><div className="text-4xl font-black mt-1">{item.value}</div></div>
+            <i className={`fa-solid ${item.icon} text-3xl opacity-70`}></i>
+          </div>
+        ))}
+      </div>
+    </aside>
   );
 }
