@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
@@ -15,6 +15,7 @@ export default function ChatView({
   unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
   customTags, setActiveReplies, setActiveTaskSidebar
 }) {
+  const [expandedThreads, setExpandedThreads] = useState({});
   
   const handleChatScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -145,48 +146,21 @@ export default function ChatView({
                 customTags={customTags || []} 
                 setActiveReplies={(msg) => { setActiveTaskSidebar?.(null); setActiveReplies?.(msg); }}
                 setActiveTaskSidebar={setActiveTaskSidebar}
-                onOpenTask={(task) => { setActiveReplies?.(null); setActiveTaskSidebar?.(task); setShowRightSidebar?.(true); }}
+                onOpenTask={() => {}}
+                threadExpanded={!!expandedThreads[msg.id]}
+                onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
                 />
-                {threadReplies.length > 0 && (
-                  <div className={`relative ${msg.isMine ? 'ml-auto mr-12' : 'ml-12 mr-auto'} w-[80%] max-w-[80%] border-l-2 border-slate-300 pl-4 mt-1 mb-3`}>
-                    {threadReplies.map((reply) => (
-                      <div key={reply.id} className="relative before:absolute before:left-[-17px] before:top-6 before:w-4 before:border-t-2 before:border-slate-300">
-                        <MessageBubble
-                          msg={reply}
-                          userEmail={user.email}
-                          currentUserData={currentUserData}
-                          activeGroup={activeGroup}
-                          isVipAdmin={isVipAdmin}
-                          hasReplies={false}
-                          replyCount={0}
-                          isHighlighted={highlightedMsgId === reply.id}
-                          isUnreadHighlight={unreadHighlightIds?.includes(reply.id)}
-                          editingMessageId={editingMessageId}
-                          editMessageText={editMessageText}
-                          setEditingMessageId={setEditingMessageId}
-                          setEditMessageText={setEditMessageText}
-                          handleSaveEdit={handleSaveEdit}
-                          scrollToMessageDirect={scrollToMessageDirect}
-                          handleReaction={handleReaction}
-                          handleToggleBookmark={handleToggleBookmark}
-                          handleTogglePin={handleTogglePin}
-                          handleDeleteMessage={handleDeleteMessage}
-                          chatInputRef={chatInputRef}
-                          toolPreferences={toolPreferences}
-                          setReplyingTo={setReplyingTo}
-                          setSelectedMessage={setSelectedMessage}
-                          setIsEditingTaskTitle={setIsEditingTaskTitle}
-                          setActiveModal={setActiveModal}
-                          dbUsers={dbUsers}
-                          jumpToPrivateSource={jumpToPrivateSource}
-                          handleAddInlineComment={handleAddInlineComment}
-                          customTags={customTags || []}
-                          setActiveReplies={setActiveReplies}
-                          setActiveTaskSidebar={setActiveTaskSidebar}
-                          isThreadView={true}
-                        />
-                      </div>
-                    ))}
+                {threadReplies.length > 0 && expandedThreads[msg.id] && (
+                  <div className={`relative ${msg.isMine ? 'ml-auto mr-12' : 'ml-12 mr-auto'} w-[48%] max-w-[48%] border-l-2 border-slate-300 pl-4 mt-1 mb-3 space-y-2`}>
+                    {threadReplies.map((reply) => {
+                      const replyUser = dbUsers?.find(u => u.email === reply.senderEmail) || {};
+                      return (
+                        <div id={`msg-${reply.id}`} key={reply.id} className={`relative before:absolute before:left-[-17px] before:top-3 before:w-4 before:border-t-2 before:border-slate-300 text-[12px] leading-snug ${reply.isMine ? 'text-right' : 'text-left'} ${highlightedMsgId === reply.id || unreadHighlightIds?.includes(reply.id) ? 'highlight-flash' : ''}`}>
+                          <div className="font-bold text-indigo-600">{replyUser.name || (reply.senderEmail || '').split('@')[0]} <span className="text-[10px] text-slate-400 font-semibold">{reply.time}</span></div>
+                          <div className="text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: reply.text || reply.fileName || '' }}></div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </React.Fragment>

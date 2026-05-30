@@ -8,7 +8,7 @@ const inRange = (message, start, end) => {
   return true;
 };
 
-export default function RightSidebar({ messages = [], user, sidebarWidth }) {
+export default function RightSidebar({ messages = [], user, sidebarWidth, dbUsers = [], currentUserData, appVersion }) {
   const [preset, setPreset] = useState('today');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -36,6 +36,8 @@ export default function RightSidebar({ messages = [], user, sidebarWidth }) {
     ];
   }, [messages, range, user.email]);
 
+  const onlineCount = useMemo(() => dbUsers.filter(u => u.lastActive && Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000).length, [dbUsers]);
+
   const filters = [
     ['today', 'Today'],
     ['week', 'This Week'],
@@ -47,7 +49,12 @@ export default function RightSidebar({ messages = [], user, sidebarWidth }) {
     <aside className="hidden lg:flex shrink-0 h-full bg-slate-100 border-l border-slate-200 flex-col p-4 gap-4 overflow-y-auto custom-sidebar-scroll" style={{ width: `${sidebarWidth || 380}px` }}>
       <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 text-white rounded-3xl p-5 shadow-xl">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">User Analytics</div>
-        <div className="mt-2 text-xl font-black truncate">{user.email}</div>
+        <div className="mt-2 text-xl font-black truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
+        <div className="mt-1 text-xs font-bold text-indigo-200">Ver. {appVersion}</div>
+      </div>
+      <div className="rounded-3xl p-4 bg-white border border-emerald-100 shadow-sm flex items-center justify-between">
+        <div><div className="text-[11px] font-bold uppercase text-slate-500">Online Users</div><div className="text-3xl font-black text-emerald-700">{onlineCount}</div></div>
+        <i className="fa-solid fa-user-check text-2xl text-emerald-600"></i>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {filters.map(([key, label]) => (
