@@ -1,0 +1,32 @@
+name: Generate Complete Code PDF
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:   # manual trigger via GitHub UI
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install fpdf2
+        run: pip install fpdf2
+
+      - name: Generate PDF
+        run: |
+          python scripts/generate_code_pdf.py . code.pdf "py,js,java,c,cpp,h,hpp,html,css,go,rs,rb,ts,tsx,json,yaml,sh" "MY PROJECT WATERMARK"
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-code-printout
+          path: code.pdf
+          retention-days: 7
