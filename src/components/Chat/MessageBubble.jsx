@@ -944,7 +944,6 @@ const MessageBubble = React.memo(({
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
