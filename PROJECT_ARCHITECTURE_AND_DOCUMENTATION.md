@@ -1,8 +1,8 @@
 # PROJECT_ARCHITECTURE_AND_DOCUMENTATION.md
 
-> **Project:** Talk & Task Enterprise  
-> **Current documented build:** v16.0  
-> **Architecture type:** React + Vite single-page application with Firebase Auth, Firestore, Storage, PWA support, and Vercel SPA hosting.  
+> **Project:** Talk & Task Enterprise
+> **Current documented build:** v25.0
+> **Architecture type:** React + Vite single-page application with Firebase Auth, Firestore, Storage, PWA support, and Vercel SPA hosting.
 > **Primary domain:** Real-time chat, group coordination, task lifecycle management, reminders, scheduled messages, admin reporting, and demo data seeding for school validation.
 
 ---
@@ -54,8 +54,7 @@ Talk-And-Task/
 │   │   │   └── TaskTrailModal.jsx
 │   │   └── Sidebar/
 │   │       ├── LeftSidebar.jsx
-│   │       ├── RightSidebar.jsx
-│   │       └── TaskBoard.jsx
+│   │       └── RightSidebar.jsx
 │   ├── hooks/
 │   │   ├── useChatEngine.js
 │   │   └── useWorkspaceData.js
@@ -63,25 +62,6 @@ Talk-And-Task/
 │       ├── helpers.js
 │       ├── imageUtils.js
 │       └── runtimeEventNotifier.js
-├── root-level legacy/component mirror files/
-│   ├── App.jsx
-│   ├── LeftSidebar.jsx
-│   ├── RightSidebar.jsx
-│   ├── TaskConvertModal.jsx
-│   ├── ReminderModal.jsx
-│   ├── ScheduleSendModal.jsx
-│   ├── TaskTrailModal.jsx
-│   ├── TaskAnalyticsModal.jsx
-│   ├── GroupFormModal.jsx
-│   ├── GroupSettingsModal.jsx
-│   ├── ProfileSettingsModal.jsx
-│   ├── AdminEditUserModal.jsx
-│   ├── ContextMenuModal.jsx
-│   ├── ErrorBoundary.jsx
-│   ├── UploadOverlay.jsx
-│   ├── firebase.js
-│   ├── imageUtils.js
-│   └── index.css
 ├── GIT_EMAIL_NOTIFICATIONS.md
 ├── PROJECT_STATE.md
 ├── firebase.json
@@ -95,7 +75,7 @@ Talk-And-Task/
 └── vite.config.js
 ```
 
-> **Note on duplicated root-level JSX files:** the active Vite entrypoint imports from `src/main.jsx`, which uses `src/App.jsx`. The root-level components appear to be legacy/mirror files retained in the repository. Treat `src/` as the canonical application implementation unless a future refactor intentionally removes or re-wires the root mirrors.
+> **Cleanup note:** unused root-level mirror components and the unreferenced `TaskBoard.jsx` were removed; `src/` is the canonical application implementation.
 
 ### 1.2 Major file map
 
@@ -114,7 +94,6 @@ Talk-And-Task/
 | `src/components/Chat/InputArea.jsx` | Main composer | Handles rich chat input, file attachment queue, emoji picker, send button, scheduled/reminder/task conversion actions, and Enter-to-send behavior. |
 | `src/components/Sidebar/LeftSidebar.jsx` | Workspace navigation sidebar | Displays profile, admin button, task hub toggle, create group/settings/logout controls, group list, DM list, compact search toggle, unread counters, and mobile overlay behavior. |
 | `src/components/Sidebar/RightSidebar.jsx` | Task Hub sidebar | Aggregates assigned/created tasks, filters by status/date/archive, renders compact task cards and assignee avatars, and jumps to task messages. |
-| `src/components/Sidebar/TaskBoard.jsx` | Alternate task board view | Provides a task-card grid/list style board for assigned tasks and group context. |
 | `src/components/Admin/AdminPanel.jsx` | Admin workspace | Provides user approval/admin controls, group management, audit log visibility, tag management, analytics/reporting tables, and admin filtering. |
 | `src/components/Modals/ModalManager.jsx` | Modal router | Centralizes conditional modal rendering and prop wiring for all modal panels. |
 | `src/components/Modals/TaskConvertModal.jsx` | Convert message to task UI | Captures assignees, deadline, priority, ack/proof options, and triggers conversion to structured `taskData`. |
@@ -262,8 +241,6 @@ Talk-And-Task/
 | `src/components/Sidebar/LeftSidebar.jsx` | `LeftSidebar(props)` | Input: user/group/DM data and navigation handlers; Output: sidebar JSX | Primary navigation for profile, groups, DMs, task hub, admin workspace, compact search, create/settings/logout actions. |
 | `src/components/Sidebar/RightSidebar.jsx` | `formatDDMMMYY(value)` | Input: date string; Output: `DD-MMM-YY HH:MM AM/PM` label | Formats Task Hub due dates. |
 | `src/components/Sidebar/RightSidebar.jsx` | `RightSidebar(props)` | Input: assigned/created tasks, groups, users, navigation handlers; Output: task hub JSX | Displays task filters/date filters/archive controls and task cards. |
-| `src/components/Sidebar/TaskBoard.jsx` | `TaskCard({ task, groups, dbUsers, user, onClick })` | Input: task and context; Output: task card JSX | Renders alternate task-card UI. |
-| `src/components/Sidebar/TaskBoard.jsx` | `TaskBoard(props)` | Input: task lists/context; Output: task board JSX | Provides task board layout. |
 | `src/components/Admin/AdminPanel.jsx` | `stripHtml(html)` | Input: HTML string; Output: text | Sanitizes message/task text for admin display/export. |
 | `src/components/Admin/AdminPanel.jsx` | `AdminPanel(props)` | Input: users, groups, logs, admin handlers, filter state; Output: admin workspace JSX | Provides user approval, group editing, audit logs, tags, analytics, and admin task/message controls. |
 | `src/components/Modals/ModalManager.jsx` | `ModalManager(props)` | Input: `activeModal` and all modal props; Output: selected modal JSX/null | Central modal switchboard. |

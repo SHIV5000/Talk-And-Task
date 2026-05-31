@@ -29,7 +29,7 @@ export default function GroupFormModal({
         </div>
         <form onSubmit={handleGroupSubmit} className="space-y-4">
           <div className="relative">
-            <label className="text-[10px] text-[#008069] font-bold uppercase tracking-widest absolute -top-2.5 left-3 bg-white px-1">Team Name</label>
+            <label className="text-[10px] text-[#008069] font-bold uppercase tracking-widest absolute -top-2.5 left-3 bg-white px-1">Group Name</label>
             <input required type="text" value={groupForm.name} onChange={(e) => setGroupForm({...groupForm, name: e.target.value})} className="w-full p-3.5 pt-4 border border-slate-300 rounded-xl text-[14px] outline-none focus:ring-2 focus:ring-[#008069]/20 focus:border-[#008069] transition-all font-semibold text-slate-800" />
           </div>
           <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2 px-1">Select Members</div>
