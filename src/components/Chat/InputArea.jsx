@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { db } from '../../firebase.js';
+import { doc, deleteDoc } from 'firebase/firestore';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { EMOJI_LIST, lockExtension } from '../../utils/helpers.js';
 
@@ -25,7 +27,12 @@ export default function InputArea({
 
   const handleInput = () => {
       if (chatInputRef.current) {
-          setInputText(chatInputRef.current.innerHTML);
+          let html = chatInputRef.current.innerHTML
+            .replace(/&lt;(\/?(?:b|strong|i|em|u))&gt;/gi, '<$1>')
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+          if (html !== chatInputRef.current.innerHTML) chatInputRef.current.innerHTML = html;
+          setInputText(html);
           handleTypingEvent?.();
       }
   };
@@ -195,6 +202,7 @@ export default function InputArea({
             onMouseUp={checkSelection}
             onKeyUp={checkSelection}
             onPaste={handlePaste}
+            onBlur={() => { if (activeGroup?.id && user?.uid) deleteDoc(doc(db, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
             className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium resize-y min-h-[46px]"

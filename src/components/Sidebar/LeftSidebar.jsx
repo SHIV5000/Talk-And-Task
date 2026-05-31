@@ -60,7 +60,7 @@ export default function LeftSidebar({
         style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
-        <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
+        <div className="shrink-0 border-b-2 border-white/20 safe-top px-3 py-3">
           <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
             <div className="space-y-2.5">
             <div className="grid grid-cols-4 items-center gap-3">
@@ -100,7 +100,7 @@ export default function LeftSidebar({
         </div>
 
         {/* Search */}
-        <div className={`border-b border-white/10 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
+        <div className={`border-b-2 border-white/20 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
           <div className="bg-white/10 rounded-lg flex items-center px-3 py-2 focus-within:bg-white/20 transition-all">
             <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
             <input
@@ -154,9 +154,9 @@ export default function LeftSidebar({
                   name={g.name}
                   sizeClass="w-[49px] h-[49px]"
                   isGroup={true}
-                  extraClasses={`mr-3 shrink-0 border-2 ${hasUnread ? 'border-emerald-700' : 'border-[#800020]'}`}
+                  extraClasses={`mr-3 shrink-0 border-4 ${hasUnread ? 'border-emerald-700' : 'border-[#800020]'}`}
                 />
-                <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
+                <div className="flex-1 min-w-0 overflow-hidden border-b-2 border-white/20 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span className="font-medium text-[14.5px] leading-tight break-words whitespace-normal pr-2">
                       {g.name}
@@ -228,7 +228,7 @@ export default function LeftSidebar({
                   />
                   <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full ${isOnline ? 'bg-emerald-700' : 'bg-[#800020]'}`} />
                 </div>
-                <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
+                <div className="flex-1 min-w-0 overflow-hidden border-b-2 border-white/20 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span
                       className={`text-[14.5px] leading-tight break-words whitespace-normal pr-2 ${
@@ -258,14 +258,14 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace v20.0 button (visible if user is admin) */}
+        {/* Admin Workspace v24.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v20.0
+              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v24.0
             </button>
           </div>
         )}

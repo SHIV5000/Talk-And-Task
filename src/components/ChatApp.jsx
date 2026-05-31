@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "23.0";
+const APP_VERSION = "24.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -51,6 +51,8 @@ const universalTaskFilters = [
   { key: 'files', label: 'Files', icon: 'fa-paperclip' },
   { key: 'date-range', label: 'By Date', icon: 'fa-calendar-days' },
   { key: 'task', label: 'Task', icon: 'fa-list-check' },
+  { key: 'delegated', label: 'Delegate', icon: 'fa-share-nodes' },
+  { key: 'transferred', label: 'Transfer', icon: 'fa-right-left' },
   { key: 'bookmarked', label: 'Bookmarked', icon: 'fa-bookmark' },
 ];
 
@@ -72,7 +74,7 @@ const AdvancedSearchPage = ({ messages, dbUsers, onBack, onOpen }) => {
     }).sort((a,b)=>(b.timestamp?.toMillis?.()||0)-(a.timestamp?.toMillis?.()||0)).slice(0,100);
   }, [messages, dbUsers, filters]);
   return (
-    <div className="flex-1 h-full bg-slate-50 overflow-y-auto p-6">
+    <div className="flex-1 h-full bg-slate-50 text-slate-800 overflow-y-auto p-6" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
       <div className="max-w-5xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between"><h2 className="font-black text-slate-800">Advanced Search</h2><button onClick={onBack} className="text-sm font-bold text-indigo-600">Back</button></div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-slate-50">
@@ -651,6 +653,8 @@ export default function ChatApp({ user, onLogout }) {
         else if (chatFilter === 'files') filtered = filtered.filter(m => !!m.fileUrl);
         else if (chatFilter === 'date-range' && chatDateFilter) filtered = filtered.filter(m => m.dateString === chatDateFilter);
         else if (chatFilter === 'task') filtered = filtered.filter(m => m.isTask);
+        else if (chatFilter === 'delegated') filtered = filtered.filter(m => m.isTask && (m.taskData?.trail || []).some(t => /delegat/i.test(t.action || '')));
+        else if (chatFilter === 'transferred') filtered = filtered.filter(m => m.isTask && (m.taskData?.trail || []).some(t => /transfer/i.test(t.action || '')));
         else if (chatFilter === 'bookmarked') filtered = filtered.filter(m => m.bookmarkedBy?.includes(user.email));
 
         const topLevel = filtered.filter(m => !m.replyToId);
@@ -746,7 +750,7 @@ export default function ChatApp({ user, onLogout }) {
             setInputText(""); alert("📥 You are offline. Message saved as draft and will be sent when you reconnect."); return;
         }
         await handleSendMessage();
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 120);
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
     };
 
     const handleTypingEvent = useCallback(() => {
@@ -776,7 +780,7 @@ export default function ChatApp({ user, onLogout }) {
         }
 
         setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             if (chatContainerRef.current) chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
             setIsAtBottom(true);
         }, 120);
@@ -1278,19 +1282,19 @@ export default function ChatApp({ user, onLogout }) {
 
             <div className="flex-1 flex overflow-hidden relative">
                 {activeReminderAlert && (
-                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white rounded-3xl shadow-2xl z-[100] border border-indigo-100 p-6 animate-in slide-in-from-top-10 duration-700">
+                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-blue-600 text-white rounded-3xl shadow-2xl z-[100] border border-blue-700 p-6 animate-in slide-in-from-top-10 duration-700">
                         <div className="flex items-center gap-4 mb-4">
                             <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-inner relative">
                                 <span className="absolute inset-0 rounded-full bg-indigo-400 opacity-20 animate-ping"></span>
                                 <i className="fa-solid fa-bell text-xl relative z-10 animate-bounce"></i>
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-800 leading-tight">Reminder</h3>
-                                <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest">Time's Up!</span>
+                                <h3 className="text-lg font-bold text-white leading-tight">Reminder</h3>
+                                <span className="text-xs font-bold text-blue-100 uppercase tracking-widest">Time's Up!</span>
                             </div>
                         </div>
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner mb-6">
-                            <p className="text-slate-700 font-medium text-sm">"{activeReminderAlert.messageText}"</p>
+                        <div className="bg-blue-700 p-4 rounded-2xl border border-blue-400 shadow-inner mb-6">
+                            <p className="text-white font-medium text-sm break-words whitespace-normal">"{activeReminderAlert.messageText}"</p>
                         </div>
                         <div className="flex gap-3">
                             <button onClick={() => { setActiveModal('reminder'); setReminderDateTime(''); setActiveReminderAlert(null); }} className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-50 shadow-sm transition-all">Snooze</button>
