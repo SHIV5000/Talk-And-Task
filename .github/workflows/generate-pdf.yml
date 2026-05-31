@@ -3,7 +3,10 @@ name: Generate Complete Code PDF
 on:
   push:
     branches: [main, master]
-  workflow_dispatch:   # manual trigger via GitHub UI
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # fixes deprecation warning
 
 jobs:
   generate:
@@ -20,11 +23,19 @@ jobs:
       - name: Install fpdf2
         run: pip install fpdf2
 
+      - name: Debug – check script location
+        run: |
+          echo "Workspace contents:"
+          ls -la
+          echo "Script exists?"
+          test -f scripts/generate_code_pdf.py && echo "YES" || echo "NO – check your path"
+
       - name: Generate PDF
         run: |
-          python scripts/generate_code_pdf.py . code.pdf "py,js,java,c,cpp,h,hpp,html,css,go,rs,rb,ts,tsx,json,yaml,sh" "MY PROJECT WATERMARK"
+          python scripts/generate_code_pdf.py . code.pdf "py,js,java,c,cpp,h,hpp,html,css,go,rs,rb,ts,tsx,json,yaml,sh" "CONFIDENTIAL"
 
       - name: Upload PDF artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: full-code-printout
