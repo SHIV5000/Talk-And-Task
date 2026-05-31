@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Code → PDF with line numbers, watermark, TOC.
-Now fully fixed – no recursion, no blank pages, no deprecated warnings.
+Code → PDF: line numbers, watermark, table of contents.
+Stable – no header hooks, no recursion, no blank pages.
 """
 import os, sys
 from fpdf import FPDF
@@ -17,15 +17,13 @@ class CodePDF(FPDF):
         self.watermark_text = watermark_text
         self.file_start_pages = []
 
-    def header(self):
-        if self.page_no() == 1:
-            return
-        # Draw a large, centred watermark using text() – leaves cursor untouched
+    def _draw_watermark(self):
+        """Draw a light watermark behind the content – call just after add_page()."""
         self.set_font("Courier", "B", 60)
         self.set_text_color(220, 220, 220)
-        # Rough centre of page
+        # Place centred; text() does not affect cursor
         self.text(x=self.w / 2 - 80, y=self.h / 2, txt=self.watermark_text)
-        # Restore normal font & colour for the page content
+        # Reset for normal content
         self.set_font("Courier", "", 8)
         self.set_text_color(0, 0, 0)
 
@@ -48,6 +46,7 @@ class CodePDF(FPDF):
         start_page = self.page_no()
         self.file_start_pages.append((rel_path, start_page))
         self.add_page()
+        self._draw_watermark()                 # <-- watermark right after new page
         self.set_font("Courier", "B", 10)
         self.multi_cell(0, 6, rel_path)
         self.ln(2)
@@ -59,6 +58,7 @@ class CodePDF(FPDF):
 
     def add_toc_page(self):
         self.add_page()
+        self._draw_watermark()
         self.set_font("Courier", "B", 14)
         self.cell(0, 10, "Table of Contents", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(5)
