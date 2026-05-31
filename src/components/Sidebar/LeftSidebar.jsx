@@ -63,8 +63,8 @@ export default function LeftSidebar({
         <div className="shrink-0 border-b border-white/10 safe-top px-3 py-3">
           <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
             <div className="space-y-2.5">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 shrink-0">
+            <div className="grid grid-cols-4 items-center gap-3">
+              <div className="flex items-center justify-center shrink-0">
                 <MemoizedAvatar
                   uid={user.uid}
                   url={currentUserData?.profilePicUrl}
@@ -73,29 +73,15 @@ export default function LeftSidebar({
                   extraClasses="cursor-pointer hover:opacity-90 transition-opacity"
                   imageLoading="eager"
                 />
+              </div>
                 <button
                   onClick={() => setShowSearch(prev => !prev)}
                   className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
-                  title="Search teams & people"
+                  title="Search groups & people"
                 >
                   <i className="fa-solid fa-search"></i>
                 </button>
                 
-              </div>
-              <div className="ml-auto flex items-center justify-end gap-1 shrink-0">
-                {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
-                  <button
-                    onClick={() => {
-                      setGroupForm({ name: '', members: [], profilePicUrl: null });
-                      setEditingGroup(null);
-                      setActiveModal('group_form_modal');
-                    }}
-                    className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
-                    title="New Group (Group Name, Members)"
-                  >
-                    <i className="fa-solid fa-plus"></i>
-                  </button>
-                )}
                 <button
                   onClick={() => setActiveModal('edit_profile')}
                   className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
@@ -108,7 +94,6 @@ export default function LeftSidebar({
                 >
                   <i className="fa-solid fa-power-off"></i>
                 </button>
-              </div>
             </div>
             </div>
           </div>
@@ -120,7 +105,7 @@ export default function LeftSidebar({
             <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
             <input
               type="text"
-              placeholder="Search teams & people..."
+              placeholder="Search groups & people..."
               value={sidebarSearch}
               onChange={e => setSidebarSearch(e.target.value)}
               className="bg-transparent outline-none flex-1 text-sm placeholder-white/50"
@@ -136,7 +121,7 @@ export default function LeftSidebar({
           </div>
         </div>
 
-        {/* Scrollable team/DM list */}
+        {/* Scrollable group/DM list */}
         <div
           id="leftSidebarScroll"
           className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-sidebar-scroll"
@@ -169,7 +154,7 @@ export default function LeftSidebar({
                   name={g.name}
                   sizeClass="w-[49px] h-[49px]"
                   isGroup={true}
-                  extraClasses="mr-3 shrink-0"
+                  extraClasses={`mr-3 shrink-0 border-2 ${hasUnread ? 'border-emerald-700' : 'border-[#800020]'}`}
                 />
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
@@ -241,9 +226,7 @@ export default function LeftSidebar({
                     name={u.name}
                     sizeClass="w-[49px] h-[49px]"
                   />
-                  {isOnline && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-success border-2 border-[#312E81] rounded-full online-rail shadow-sm" />
-                  )}
+                  <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full ${isOnline ? 'bg-emerald-700' : 'bg-[#800020]'}`} />
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden border-b border-white/10 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
@@ -275,14 +258,14 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace v19.0 button (visible if user is admin) */}
+        {/* Admin Workspace v20.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v19.0
+              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v20.0
             </button>
           </div>
         )}

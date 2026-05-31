@@ -1,58 +1,31 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db, storage } from '../firebase.js';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../utils/imageUtils.js';
 
-const MAX_FILE_SIZE_MB = 10;
+const DEFAULT_MAX_FILE_SIZE_MB = 5;
 
-export default function useChatEngine({ user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast }) {
+export default function useChatEngine({ user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB }) {
     const [messages, setMessages] = useState([]);
     const [typingStatus, setTypingStatus] = useState([]);
     const [offlineDrafts, setOfflineDrafts] = useState([]);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const prevMessagesCountRef = useRef(0);
 
-    // ================== AUDIO ENGINE (Web Audio – no external files) ==================
-    const playAlertSound = useCallback(() => {
+    const playAlertSound = useCallback((type = 'incoming') => {
         try {
-            // Ensure global AudioContext exists
-            if (!window.audioCtx) {
-                window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            // Resume if suspended (browser autoplay policy)
-            if (window.audioCtx.state === 'suspended') {
-                window.audioCtx.resume();
-            }
-
-            const oscillator = window.audioCtx.createOscillator();
-            const gainNode = window.audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(window.audioCtx.destination);
-
-            const frequencies = {
-                classic: 880,   // A5
-                soft: 660,      // E5
-                subtle: 523.25  // C5
-            };
-            const freq = frequencies[toolPreferences.soundProfile] || frequencies.classic;
-
-            oscillator.frequency.setValueAtTime(freq, window.audioCtx.currentTime);
-            oscillator.type = 'sine';
-
-            gainNode.gain.setValueAtTime(0.3, window.audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, window.audioCtx.currentTime + 0.2);
-
-            oscillator.start(window.audioCtx.currentTime);
-            oscillator.stop(window.audioCtx.currentTime + 0.2);
-        } catch (e) {
-            // Web Audio not supported – silently ignore
-        }
-    }, [toolPreferences.soundProfile]);
+            const incoming = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FINCOMING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=a3ac611f-1dc1-4973-83fe-c122b02396d2';
+            const task = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FBANNER.mp3?alt=media&token=b3463c11-1f70-4450-8efc-049e04f33a0a';
+            const audio = new Audio(type === 'task' ? task : incoming);
+            audio.volume = 1;
+            audio.play().catch(() => {});
+        } catch (e) {}
+    }, []);
 
     // ================== MESSAGE LISTENER ==================
     useEffect(() => {
-        const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
+        const q = query(collection(db, "messages"), orderBy("timestamp", "asc"), limit(300));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             let loadedMessages = snapshot.docs.map(docSnapshot => {
                 const data = docSnapshot.data();
@@ -65,7 +38,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
             if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
                 const newMsg = loadedMessages[loadedMessages.length - 1];
                 if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
-                    playAlertSound();
+                    playAlertSound(loadedMessages[loadedMessages.length - 1]?.isTask ? 'task' : 'incoming');
                     addToast(`New message from ${(newMsg.sender || "").split('@')[0]}`, 'message');
                     if (document.hidden && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
                         navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `New Message from ${(newMsg.sender || "").split('@')[0]}`, body: newMsg.text || 'Sent an attachment' });
@@ -160,12 +133,10 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         const mentions = [];
         dbUsers.forEach(u => { if (messageText.toLowerCase().includes(`@${(u.name || "").toLowerCase()}`)) mentions.push(u.email); });
         groups.forEach(g => {
-            const teamTag = `@${(g.name || "").replace(/\s+/g, '').toLowerCase()}`;
-            if (messageText.toLowerCase().includes(teamTag) && !g.isArchived) { (g.members || []).forEach(m => mentions.push(m)); }
+            const groupTag = `@${(g.name || "").replace(/\s+/g, '').toLowerCase()}`;
+            if (messageText.toLowerCase().includes(groupTag) && !g.isArchived) { (g.members || []).forEach(m => mentions.push(m)); }
         });
         const uniqueMentions = [...new Set(mentions)];
-        const isPrivate = uniqueMentions.length > 0 && !activeGroup.isDM;
-        const allowedUsers = isPrivate ? [...new Set([user.email, ...uniqueMentions])] : [];
 
         let replyData = null;
         if (replyingTo) replyData = { replyToId: replyingTo.id, originalText: replyingTo.text || replyingTo.fileName || 'Attachment', originalSender: (replyingTo.sender||"").split('@')[0] };
@@ -173,8 +144,8 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         const hasTextMessage = !!(messageText || '').replace(/<br\s*\/?>/gi, '').trim();
         let groupMsgRef = null;
         if (hasTextMessage) {
-            groupMsgRef = await addDoc(collection(db, "messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, isPrivateMention: isPrivate, allowedUsers: allowedUsers, seenBy: [user.email], groupId: activeGroup.id, reactions: {}, ...(replyData || {}) });
-            logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, isPrivate ? `Private: ${uniqueMentions.join(', ')}` : "Public");
+            groupMsgRef = await addDoc(collection(db, "messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, isPrivateMention: false, allowedUsers: [], mentionEmails: uniqueMentions, seenBy: [user.email], groupId: activeGroup.id, reactions: {}, ...(replyData || {}) });
+            logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, uniqueMentions.length ? `Mentions: ${uniqueMentions.join(', ')}` : "Public");
         }
 
 
@@ -186,15 +157,11 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
                 }, replyingTo);
             }
         }
-        if (isPrivate && uniqueMentions.length > 0) {
+        if (uniqueMentions.length > 0 && groupMsgRef) {
             uniqueMentions.forEach(async (mentionEmail) => {
-                if (mentionEmail === user.email) return; 
+                if (mentionEmail === user.email) return;
                 const recipient = dbUsers.find(u => u.email === mentionEmail);
-                if (recipient) {
-                    const dmId = [user.uid, recipient.uid].sort().join('_');
-                    await addDoc(collection(db, "messages"), { text: `[Forwarded Private Mention] ${messageText}`, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), groupId: dmId, isPrivateForward: true, originalMsgId: groupMsgRef.id, originalGroupId: activeGroup.id, forwardedFromGroupName: activeGroup.name, seenBy: [user.email], reactions: {} });
-                    await addDoc(collection(db, "notifications"), { userId: recipient.uid, type: "mention", text: `New private mention in ${activeGroup.name} 🔒`, messageId: groupMsgRef?.id || null, groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false });
-                }
+                if (recipient) await addDoc(collection(db, "notifications"), { userId: recipient.uid, type: "mention", text: `Mentioned you in ${activeGroup.name}`, messageId: groupMsgRef.id, groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
             });
         }
     };
@@ -217,7 +184,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
     const { file, customName, caption } = pf;
     const safeCaption = caption || ""; // Prevents .trim() crashes
 
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) throw new Error("File too large.");
+    if (file.size > maxFileSizeMb * 1024 * 1024) throw new Error(`File too large. Max ${maxFileSizeMb} MB.`);
 
     let processedFile = file;
     try { 
