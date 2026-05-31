@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Ultimate Code → PDF: line numbers, watermark, table of contents.
-Fixed – no recursion, fully self-contained.
+Code → PDF with line numbers, watermark, TOC.
+Now fully fixed – no recursion, no blank pages, no deprecated warnings.
 """
 import os, sys
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 
 DEFAULT_EXTS = "py,js,java,c,cpp,h,hpp,html,css,go,rs,rb,ts,tsx,json,yaml,sh"
 DEFAULT_WATERMARK = "CONFIDENTIAL"
@@ -19,24 +20,25 @@ class CodePDF(FPDF):
     def header(self):
         if self.page_no() == 1:
             return
-        # Temporarily disable auto page break to avoid infinite recursion
-        self.auto_page_break = False
+        # Draw a large, centred watermark using text() – leaves cursor untouched
         self.set_font("Courier", "B", 60)
         self.set_text_color(220, 220, 220)
-        self.set_xy(0, 0)
-        self.cell(0, self.h, self.watermark_text, align="C")
-        self.auto_page_break = True
+        # Rough centre of page
+        self.text(x=self.w / 2 - 80, y=self.h / 2, txt=self.watermark_text)
+        # Restore normal font & colour for the page content
+        self.set_font("Courier", "", 8)
+        self.set_text_color(0, 0, 0)
 
     def add_title_page(self, repo_name="Source Code"):
         self.add_page()
         self.set_font("Courier", "B", 24)
         self.ln(60)
-        self.cell(0, 15, repo_name + " - Code Printout", align="C")
+        self.cell(0, 15, repo_name + " - Code Printout", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
         self.ln(20)
         self.set_font("Courier", "", 12)
-        self.cell(0, 10, f"Generated: {self._now()}", align="C")
+        self.cell(0, 10, f"Generated: {self._now()}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
         self.ln(10)
-        self.cell(0, 10, "Watermark: " + self.watermark_text, align="C")
+        self.cell(0, 10, "Watermark: " + self.watermark_text, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
 
     def _now(self):
         from datetime import datetime
@@ -58,11 +60,11 @@ class CodePDF(FPDF):
     def add_toc_page(self):
         self.add_page()
         self.set_font("Courier", "B", 14)
-        self.cell(0, 10, "Table of Contents", ln=True)
+        self.cell(0, 10, "Table of Contents", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(5)
         self.set_font("Courier", "", 9)
         for rel_path, page in self.file_start_pages:
-            self.cell(0, 5, f"p.{page:3d}   {rel_path}", ln=True)
+            self.cell(0, 5, f"p.{page:3d}   {rel_path}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
 def collect_files(root_dir, extensions):
     for dirpath, dirnames, filenames in os.walk(root_dir):
