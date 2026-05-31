@@ -258,14 +258,14 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace v24.0 button (visible if user is admin) */}
+        {/* Admin Workspace v25.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v24.0
+              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v25.0
             </button>
           </div>
         )}

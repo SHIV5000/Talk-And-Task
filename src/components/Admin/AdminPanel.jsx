@@ -443,7 +443,7 @@ export default function AdminPanel({
           <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur shadow-inner">
             <i className="fa-solid fa-shield-halved text-xl text-white"></i>
           </div>
-          <h1 className="font-bold text-lg text-white tracking-wide">Admin Workspace v24.0</h1>
+          <h1 className="font-bold text-lg text-white tracking-wide">Admin Workspace v25.0</h1>
         </div>
         <div className="flex items-center gap-2">
           {['users', 'logs'].includes(activeTab) && (
