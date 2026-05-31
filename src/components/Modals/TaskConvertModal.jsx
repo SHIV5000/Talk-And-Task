@@ -100,7 +100,6 @@ export default function TaskConvertModal({
                   onChange={(e) => setAckTimeOption(e.target.value)}
                   className="w-full p-2 border border-slate-200 rounded-lg text-sm font-bold"
                 >
-                  <option value="immediate">Immediate</option>
                   <option value="30min">30 minutes</option>
                   <option value="1hr">1 hour</option>
                   <option value="2hr">2 hours</option>

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 
 const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", isGroup = false, extraClasses = "", imageLoading = "eager" }) => {
   const cachedUrl = useMemo(() => {
@@ -10,6 +10,14 @@ const MemoizedAvatar = React.memo(({ uid, url, name, sizeClass = "w-10 h-10", is
     } catch(e) {}
     return url;
   }, [uid, url]);
+
+  useEffect(() => {
+    if (!cachedUrl) return;
+    const img = new Image();
+    img.decoding = 'async';
+    img.fetchPriority = 'high';
+    img.src = cachedUrl;
+  }, [cachedUrl]);
 
   // 👇 FIX: The image tag now checks isGroup. If true, it uses 'rounded-2xl' (Squircle). Otherwise 'rounded-full' (Circle).
   if (cachedUrl) {
