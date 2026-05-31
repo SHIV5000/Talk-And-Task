@@ -1,4 +1,4 @@
-name: Generate Complete Code PDF
+name: Generate Code PDF (Simple)
 
 on:
   push:
@@ -25,11 +25,11 @@ jobs:
 
       - name: Generate PDF
         run: |
-          python scripts/generate_code_pdf.py . code.pdf "py,js,java,c,cpp,h,hpp,html,css,go,rs,rb,ts,tsx,json,yaml,sh" "CONFIDENTIAL"
+          python scripts/generate_code_pdf.py . code.pdf "py,js,java,c,cpp,h,hpp,html,css,go,rs,rb,ts,tsx,json,yaml,sh"
 
       - name: Upload PDF artifact
         uses: actions/upload-artifact@v4
         with:
-          name: full-code-printout
+          name: code-printout
           path: code.pdf
           retention-days: 7
