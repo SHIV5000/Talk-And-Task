@@ -1,0 +1,61 @@
+name: Generate Combined Code Text File
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:   # manual trigger
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  generate-text:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create combined code file
+        run: |
+          echo "Source Code Printout – $(date)" > combined_code.txt
+          echo "" >> combined_code.txt
+
+          # Adjust extensions as you like
+          find . -type f \( \
+            -name "*.py" -o \
+            -name "*.js" -o \
+            -name "*.ts" -o \
+            -name "*.tsx" -o \
+            -name "*.jsx" -o \
+            -name "*.java" -o \
+            -name "*.c" -o \
+            -name "*.cpp" -o \
+            -name "*.h" -o \
+            -name "*.hpp" -o \
+            -name "*.html" -o \
+            -name "*.css" -o \
+            -name "*.go" -o \
+            -name "*.rs" -o \
+            -name "*.rb" -o \
+            -name "*.json" -o \
+            -name "*.yaml" -o \
+            -name "*.yml" -o \
+            -name "*.sh" -o \
+            -name "*.xml" -o \
+            -name "*.sql" -o \
+            -name "*.md" \
+          \) ! -path "*/.git/*" | sort | while IFS= read -r file; do
+            echo "========================" >> combined_code.txt
+            echo "FILE: $file" >> combined_code.txt
+            echo "========================" >> combined_code.txt
+            cat "$file" >> combined_code.txt
+            echo "" >> combined_code.txt
+            echo "" >> combined_code.txt
+          done
+
+      - name: Upload text artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-code-text
+          path: combined_code.txt
+          retention-days: 7
