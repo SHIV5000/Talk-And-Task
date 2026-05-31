@@ -23,12 +23,40 @@ export default function ChatView({
   customTags, setActiveReplies, setActiveTaskSidebar
 }) {
   const [expandedThreads, setExpandedThreads] = useState({});
-  
+
+  // Inject pinned banner glow CSS
+  useEffect(() => {
+    const styleId = 'pinned-banner-glow-style';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        .pinned-banner-glow::after {
+          content: '';
+          position: absolute;
+          top: -2px; bottom: -2px;
+          width: 10px;
+          background: linear-gradient(to bottom, transparent 0%, rgba(99,102,241,0.22) 30%, rgba(99,102,241,0.06) 50%, rgba(99,102,241,0.22) 70%, transparent 100%);
+          filter: blur(3px);
+          animation: sweepGlow 4s ease-in-out infinite alternate;
+          pointer-events: none;
+          border-radius: 2px;
+        }
+        @keyframes sweepGlow {
+          0% { left: calc(100% + 6px); opacity: 0.3; }
+          30% { opacity: 0.85; }
+          70% { opacity: 0.85; }
+          100% { left: -16px; opacity: 0.3; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+
   const handleChatScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
     setIsAtBottom(Math.abs(scrollHeight - clientHeight - scrollTop) < 50);
   };
-
 
   const repliesByParent = useMemo(() => {
     const map = new Map();
@@ -51,17 +79,17 @@ export default function ChatView({
           clearInterval(scrollPoller);
           setTimeout(() => {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
+
             el.classList.add('ring-4', 'ring-indigo-400', 'bg-indigo-50', 'transition-all', 'duration-500');
             setTimeout(() => {
-                el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50');
+              el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50');
             }, 4000);
-            
+
             setPendingScrollTarget(null);
-          }, 150); 
+          }, 150);
         } else {
           attempts++;
-          if (attempts > 30) { 
+          if (attempts > 30) {
             clearInterval(scrollPoller);
             setPendingScrollTarget(null);
           }
@@ -75,7 +103,7 @@ export default function ChatView({
   return (
     <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] bg-slate-50 relative">
       <div className="flex flex-col min-h-full justify-end py-4 pb-10">
-        
+
         {toolPreferences?.showWatermark !== false && (
           <div className="doodle-watermark">
             {Array.from({ length: 15 }).map((_, rowIdx) => (
@@ -97,7 +125,10 @@ export default function ChatView({
         </div>
 
         {pinnedMessages.length > 0 && (
-          <div className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100" onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}>
+          <div
+            className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100 pinned-banner-glow relative overflow-hidden"
+            onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}
+          >
             <div className="flex justify-between items-center text-xs text-slate-500 font-medium mb-1">
               <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
             </div>
@@ -122,45 +153,42 @@ export default function ChatView({
                   </div>
                 )}
                 <MessageBubble
-                msg={msg}
-                userEmail={user.email}
-                currentUserData={currentUserData}
-                activeGroup={activeGroup}
-                isVipAdmin={isVipAdmin}
-                hasReplies={threadReplyCount > 0}
-                replyCount={threadReplyCount}
-                isHighlighted={highlightedMsgId === msg.id}
-                isUnreadHighlight={unreadHighlightIds?.includes(msg.id)}
-                editingMessageId={editingMessageId}
-                editMessageText={editMessageText}
-                setEditingMessageId={setEditingMessageId}
-                setEditMessageText={setEditMessageText}
-                handleSaveEdit={handleSaveEdit}
-                scrollToMessageDirect={scrollToMessageDirect}
-                handleReaction={handleReaction}
-                handleToggleBookmark={handleToggleBookmark}
-                handleTogglePin={handleTogglePin}
-                handleDeleteMessage={handleDeleteMessage}
-                chatInputRef={chatInputRef}
-                toolPreferences={toolPreferences}
-                setReplyingTo={setReplyingTo}
-                setSelectedMessage={setSelectedMessage}
-                setIsEditingTaskTitle={setIsEditingTaskTitle}
-                setActiveModal={setActiveModal}
-                dbUsers={dbUsers}
-                jumpToPrivateSource={jumpToPrivateSource} 
-                handleAddInlineComment={handleAddInlineComment} 
-                customTags={customTags || []} 
-                setActiveReplies={(msg) => { setActiveTaskSidebar?.(null); setActiveReplies?.(msg); }}
-                setActiveTaskSidebar={setActiveTaskSidebar}
-                onOpenTask={() => {}}
-                onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
-  threadReplies={threadReplies}
-  threadExpanded={!!expandedThreads[msg.id]}
-  onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
-                  
+                  msg={msg}
+                  userEmail={user.email}
+                  currentUserData={currentUserData}
+                  activeGroup={activeGroup}
+                  isVipAdmin={isVipAdmin}
+                  hasReplies={threadReplyCount > 0}
+                  replyCount={threadReplyCount}
+                  isHighlighted={highlightedMsgId === msg.id}
+                  isUnreadHighlight={unreadHighlightIds?.includes(msg.id)}
+                  editingMessageId={editingMessageId}
+                  editMessageText={editMessageText}
+                  setEditingMessageId={setEditingMessageId}
+                  setEditMessageText={setEditMessageText}
+                  handleSaveEdit={handleSaveEdit}
+                  scrollToMessageDirect={scrollToMessageDirect}
+                  handleReaction={handleReaction}
+                  handleToggleBookmark={handleToggleBookmark}
+                  handleTogglePin={handleTogglePin}
+                  handleDeleteMessage={handleDeleteMessage}
+                  chatInputRef={chatInputRef}
+                  toolPreferences={toolPreferences}
+                  setReplyingTo={setReplyingTo}
+                  setSelectedMessage={setSelectedMessage}
+                  setIsEditingTaskTitle={setIsEditingTaskTitle}
+                  setActiveModal={setActiveModal}
+                  dbUsers={dbUsers}
+                  jumpToPrivateSource={jumpToPrivateSource}
+                  handleAddInlineComment={handleAddInlineComment}
+                  customTags={customTags || []}
+                  setActiveReplies={(msg) => { setActiveTaskSidebar?.(null); setActiveReplies?.(msg); }}
+                  setActiveTaskSidebar={setActiveTaskSidebar}
+                  onOpenTask={() => {}}
+                  threadReplies={threadReplies}
+                  threadExpanded={!!expandedThreads[msg.id]}
+                  onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
                 />
-                
               </React.Fragment>
             );
           })}
@@ -180,7 +208,7 @@ export default function ChatView({
             </div>
           </div>
         )}
-        
+
         <div ref={messagesEndRef} className="h-6 shrink-0"></div>
       </div>
     </div>
