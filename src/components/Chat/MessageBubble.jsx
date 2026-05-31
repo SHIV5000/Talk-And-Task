@@ -46,9 +46,8 @@ const MessageBubble = React.memo(({
   const [replyFormatOpen, setReplyFormatOpen] = useState(false);
   const inlineReplyRef = useRef(null);
 
-  // ── NEW: per‑assignee review state for modern review panel ──
+  // NEW: per‑assignee review state for modern review panel
   const [reviewStates, setReviewStates] = useState({});
-  // shape: { [assigneeEmail]: { mode: 'markDone'|'reviewAgain'|'transfer', comment: '', transferTo: [], transferComment: '' } }
 
   const menuRef = useRef(null);
   const tagPickerRef = useRef(null);
@@ -347,7 +346,7 @@ const MessageBubble = React.memo(({
     setInlineReplyText(inlineReplyRef.current?.innerHTML || '');
   };
 
-  // ── Handlers for modern review panel ──
+  // ── Modern review panel helpers ──
   const openReviewAction = (assigneeEmail, mode) => {
     setReviewStates(prev => ({
       ...prev,
@@ -917,7 +916,7 @@ const MessageBubble = React.memo(({
             </div>
         </div>
 
-        {/* ── Thread replies inside the bubble ── */}
+        {/* Thread replies inside the bubble */}
         {!msg.isTask && threadExpanded && threadReplies.length > 0 && (
           <div className="mt-3 pt-2 border-t border-slate-200">
             <div className="space-y-2">
