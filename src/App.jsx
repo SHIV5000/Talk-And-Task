@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { serverTimestamp, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import {
   auth, onAuthStateChanged, signOut,
   GoogleAuthProvider, signInWithPopup, setPersistence, inMemoryPersistence,
@@ -17,7 +17,7 @@ const deploymentInfo = {
   source: typeof __BUILD_SOURCE_REPO__ !== 'undefined' ? __BUILD_SOURCE_REPO__ : 'unknown',
 };
 
-const APP_VERSION = "19.0";
+const APP_VERSION = "24.0";
 
 function FallbackScreen({ error }) {
   return (
@@ -45,7 +45,6 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [crash, setCrash] = useState(null);
   const [chatAppReady, setChatAppReady] = useState(false);
-  const localSessionId = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Date.now()}`;
 
   useEffect(() => {
     notifyRuntimeEvent('app-run', {
@@ -95,21 +94,6 @@ export default function App() {
       const result = await signInWithPopup(auth, provider);
       const loggedInUser = result.user;
 
-      const sessionsRef = collection(db, "user_sessions");
-      const activeSessionsSnap = await getDocs(query(sessionsRef, where("uid", "==", loggedInUser.uid), where("status", "==", "active")));
-      const activeSessions = activeSessionsSnap.docs.filter(d => d.id !== localSessionId);
-      if (activeSessions.length > 0) {
-        const kill = window.confirm(`You already have ${activeSessions.length} active session(s). Click OK to kill old session(s) and continue, or Cancel to abort this login.`);
-        if (!kill) {
-          await updateDoc(doc(db, "user_sessions", localSessionId), { status: "ended", endedAt: serverTimestamp() }).catch(() => {});
-    await signOut(auth);
-          return;
-        }
-        for (const s of activeSessions) {
-          await updateDoc(doc(db, "user_sessions", s.id), { status: "killed", endedAt: serverTimestamp() }).catch(() => {});
-        }
-      }
-
       const usersSnap = await getDocs(query(collection(db, "users"), where("uid", "==", loggedInUser.uid)));
       const isMaster = (loggedInUser.email || '').toLowerCase() === 'shivsuri1@gmail.com';
 
@@ -135,7 +119,6 @@ export default function App() {
 
       await updateDoc(doc(db, "users", loggedInUser.uid), { lastLogin: serverTimestamp() }).catch(() => {});
 
-      await setDoc(doc(db, "user_sessions", localSessionId), { uid: loggedInUser.uid, email: loggedInUser.email, status: "active", startedAt: serverTimestamp(), lastSeenAt: serverTimestamp(), appVersion: APP_VERSION }, { merge: true }).catch(() => {});
 
       await notifyRuntimeEvent('user-login', {
         status: 'LOGIN_OK',
@@ -160,7 +143,6 @@ export default function App() {
         await updateDoc(doc(db, "users", user.uid), { lastLogout: serverTimestamp() }).catch(() => {});
       }
     } catch (e) {}
-    await updateDoc(doc(db, "user_sessions", localSessionId), { status: "ended", endedAt: serverTimestamp() }).catch(() => {});
     await signOut(auth);
   };
 

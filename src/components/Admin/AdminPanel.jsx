@@ -52,9 +52,12 @@ export default function AdminPanel({
   customTags,
   globalAnnouncement,
   currentUserData,
+  maxFileSizeMb,
+  setMaxFileSizeMb,
 }) {
   // ===== TABS =====
   const [activeTab, setActiveTab] = useState('overview');
+  const [limitDraft, setLimitDraft] = useState(maxFileSizeMb || 5);
 
   // ----- Overview time range -----
   const [overviewTimeRange, setOverviewTimeRange] = useState('week');
@@ -399,7 +402,7 @@ export default function AdminPanel({
     doc.setFontSize(10);
     doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
     let y = 40;
-    if (activeTab === 'people') {
+    if (activeTab === 'users') {
       const data = filteredUsers.filter((u) => selectedUsers.has(u.uid));
       doc.text('Selected Users', 14, y);
       y += 6;
@@ -440,10 +443,10 @@ export default function AdminPanel({
           <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur shadow-inner">
             <i className="fa-solid fa-shield-halved text-xl text-white"></i>
           </div>
-          <h1 className="font-bold text-lg text-white tracking-wide">Admin Workspace</h1>
+          <h1 className="font-bold text-lg text-white tracking-wide">Admin Workspace v24.0</h1>
         </div>
         <div className="flex items-center gap-2">
-          {['people', 'logs'].includes(activeTab) && (
+          {['users', 'logs'].includes(activeTab) && (
             <button
               onClick={printSelectedPDF}
               className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30"
@@ -465,7 +468,7 @@ export default function AdminPanel({
 
       {/* Tabs */}
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll shrink-0 shadow-sm z-10 relative">
-        {['overview', 'people', 'tasks', 'logs', 'broadcast', 'tags', 'organization'].map((tab) => (
+        {['overview', 'users', 'groups', 'tasks', 'logs', 'broadcast', 'tags', 'limits', 'organization'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -476,11 +479,13 @@ export default function AdminPanel({
             }`}
           >
             {tab === 'overview' && <i className="fa-solid fa-gauge-high mr-2"></i>}
-            {tab === 'people' && <i className="fa-solid fa-users mr-2"></i>}
+            {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}
+            {tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}
             {tab === 'tasks' && <i className="fa-solid fa-list-check mr-2"></i>}
             {tab === 'logs' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}
             {tab === 'broadcast' && <i className="fa-solid fa-bullhorn mr-2"></i>}
             {tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}
+            {tab === 'limits' && <i className="fa-solid fa-file-arrow-up mr-2"></i>}
             {tab === 'organization' && <i className="fa-solid fa-building-columns mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
@@ -489,6 +494,19 @@ export default function AdminPanel({
 
       {/* Main content */}
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
+
+        {activeTab === 'limits' && (
+          <div className="p-6 overflow-y-auto custom-sidebar-scroll h-full">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm max-w-md">
+              <h2 className="font-bold text-slate-800 text-lg mb-2"><i className="fa-solid fa-file-arrow-up text-indigo-600 mr-2"></i>Upload Limits</h2>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Max file upload size (MB)</label>
+              <input type="number" min="1" max="50" value={limitDraft} onChange={(e) => setLimitDraft(Math.max(1, Number(e.target.value || 5)))} className="mt-2 w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500" />
+              <p className="text-xs text-slate-500 mt-3">Default is 5 MB. Changes apply after Save.</p>
+              {Number(limitDraft) !== Number(maxFileSizeMb || 5) && <button onClick={() => { setMaxFileSizeMb?.(limitDraft); localStorage.setItem('maxFileSizeMb', String(limitDraft)); }} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Save Limit</button>}
+            </div>
+          </div>
+        )}
+
         {/* ========= OVERVIEW TAB ========= */}
         {activeTab === 'overview' && (
           <div className="flex flex-col gap-6 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
@@ -533,7 +551,7 @@ export default function AdminPanel({
                   <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-check-circle"></i></div>
                 </div>
               </div>
-              <div onClick={() => setActiveTab('people')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-teal-300 transition-all cursor-pointer group">
+              <div onClick={() => setActiveTab('users')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-teal-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-teal-500 transition-colors">Active Users</p>
@@ -551,7 +569,7 @@ export default function AdminPanel({
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Approvals</p>
                   <p className="text-2xl font-extrabold text-rose-600 mt-1">{overviewMetrics.pendingApprovals}</p>
                 </div>
-                <button onClick={() => setActiveTab('people')} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-colors">Manage Users</button>
+                <button onClick={() => setActiveTab('users')} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-colors">Manage Users</button>
               </div>
               <div onClick={() => { setActiveTab('tasks'); setTaskStatusFilter('In Progress'); }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
                 <div>
@@ -592,11 +610,11 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ========= PEOPLE TAB ========= */}
-        {activeTab === 'people' && (
+        {/* ========= USERS / GROUPS TABS ========= */}
+        {(activeTab === 'users' || activeTab === 'groups') && (
           <div className="flex flex-col gap-6 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             {/* Users Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col max-h-[60%]">
+            {activeTab === 'users' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
                 <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
                 <button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button>
@@ -653,18 +671,18 @@ export default function AdminPanel({
                   </tbody>
                 </table>
               </div>
-            </div>
+            </div>}
 
-            {/* Teams Section - TABLE view */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1 min-h-0">
+            {/* Groups Section - TABLE view */}
+            {activeTab === 'groups' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Teams</h2>
+                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Groups</h2>
                 <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>New Group</button>
               </div>
               {(editingGroup || groupForm?.name || groupForm?.members?.length > 0) && (
                 <div className="p-5 border-b border-slate-200 bg-slate-50">
                   <form onSubmit={(e) => { e.preventDefault(); handleGroupSubmit(e); }} className="space-y-4 max-w-3xl">
-                    <div><label className="text-xs font-bold text-slate-500 block mb-1">Team Name</label><input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} className="w-full bg-white border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-indigo-500" required /></div>
+                    <div><label className="text-xs font-bold text-slate-500 block mb-1">Group Name</label><input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} className="w-full bg-white border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-indigo-500" required /></div>
                     <div><label className="text-xs font-bold text-slate-500 block mb-1">Avatar</label><input type="file" onChange={handleGroupPicUpload} className="text-sm" /> {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-indigo-600 ml-2">{Math.round(groupPicUploadProgress)}%</span>}</div>
                     <div>
                       <div className="flex justify-between items-center mb-2"><label className="text-xs font-bold text-slate-500">Members</label><div className="flex gap-2"><button type="button" onClick={() => setGroupForm({ ...groupForm, members: dbUsers.map((u) => u.email) })} className="text-xs text-indigo-600 font-bold hover:underline">Select All</button><button type="button" onClick={() => setGroupForm({ ...groupForm, members: [] })} className="text-xs text-rose-500 font-bold hover:underline">Clear</button></div></div>
@@ -680,17 +698,17 @@ export default function AdminPanel({
                     </div>
                     <div className="flex justify-end gap-3">
                       <button type="button" onClick={() => { setEditingGroup(null); setGroupForm({ name: '', members: [], profilePicUrl: null }); }} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50">Cancel</button>
-                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Save Team</button>
+                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Save Group</button>
                     </div>
                   </form>
                 </div>
               )}
-              {/* Teams Table */}
+              {/* Groups Table */}
               <div className="overflow-y-auto custom-sidebar-scroll flex-1">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0">
                     <tr>
-                      <th className="px-4 py-3">Team Name</th>
+                      <th className="px-4 py-3">Group Name</th>
                       <th className="px-4 py-3">Members</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
@@ -710,14 +728,14 @@ export default function AdminPanel({
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); }} className="text-indigo-600 hover:text-indigo-800 mr-2" title="Edit"><i className="fa-solid fa-pencil"></i></button>
-                          <button onClick={async () => { if (!window.confirm('Delete this team?')) return; await deleteDoc(doc(db, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
+                          <button onClick={async () => { if (!window.confirm('Delete this group?')) return; await deleteDoc(doc(db, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
+            </div>}
           </div>
         )}
 
@@ -734,7 +752,7 @@ export default function AdminPanel({
                   <option value="Completed">Completed</option>
                 </select>
                 <select value={taskGroupFilter} onChange={(e) => setTaskGroupFilter(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold">
-                  <option value="">All Teams</option>
+                  <option value="">All Groups</option>
                   {groups.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
                 </select>
                 <input type="text" value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks..." className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold w-48" />
@@ -751,7 +769,7 @@ export default function AdminPanel({
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Assignees</th>
                       <th className="px-4 py-3">Due Date</th>
-                      <th className="px-4 py-3">Team</th>
+                      <th className="px-4 py-3">Group</th>
                       <th className="px-4 py-3">Actions</th>
                     </tr>
                   </thead>
@@ -793,12 +811,7 @@ export default function AdminPanel({
                             </td>
                             <td className="px-4 py-3 text-xs font-medium">{new Date(task.taskData?.deadline).toLocaleDateString()}</td>
                             <td className="px-4 py-3 text-xs font-medium">{groupName}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex gap-1">
-                                <button onClick={(e) => { e.stopPropagation(); startEditTask(task); }} className="text-indigo-600 hover:underline text-xs font-bold px-2 py-1 rounded hover:bg-indigo-50" title="Edit"><i className="fa-solid fa-pen-to-square"></i></button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} className="text-rose-500 hover:underline text-xs font-bold px-2 py-1 rounded hover:bg-rose-50" title="Delete"><i className="fa-solid fa-trash-can"></i></button>
-                              </div>
-                            </td>
+                            <td className="px-4 py-3 text-right text-slate-300">—</td>
                           </tr>
                           {/* Edit form row */}
                           {editingTaskId === task.id && (
