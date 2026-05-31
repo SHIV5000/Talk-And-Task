@@ -52,6 +52,8 @@ export default function AdminPanel({
   customTags,
   globalAnnouncement,
   currentUserData,
+  maxFileSizeMb,
+  setMaxFileSizeMb,
 }) {
   // ===== TABS =====
   const [activeTab, setActiveTab] = useState('overview');
@@ -465,7 +467,7 @@ export default function AdminPanel({
 
       {/* Tabs */}
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll shrink-0 shadow-sm z-10 relative">
-        {['overview', 'people', 'tasks', 'logs', 'broadcast', 'tags', 'organization'].map((tab) => (
+        {['overview', 'people', 'tasks', 'logs', 'broadcast', 'tags', 'limits', 'organization'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -481,6 +483,7 @@ export default function AdminPanel({
             {tab === 'logs' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}
             {tab === 'broadcast' && <i className="fa-solid fa-bullhorn mr-2"></i>}
             {tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}
+            {tab === 'limits' && <i className="fa-solid fa-file-arrow-up mr-2"></i>}
             {tab === 'organization' && <i className="fa-solid fa-building-columns mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
@@ -489,6 +492,18 @@ export default function AdminPanel({
 
       {/* Main content */}
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
+
+        {activeTab === 'limits' && (
+          <div className="p-6 overflow-y-auto custom-sidebar-scroll h-full">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm max-w-md">
+              <h2 className="font-bold text-slate-800 text-lg mb-2"><i className="fa-solid fa-file-arrow-up text-indigo-600 mr-2"></i>Upload Limits</h2>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Max file upload size (MB)</label>
+              <input type="number" min="1" max="50" value={maxFileSizeMb || 5} onChange={(e) => { const next = Math.max(1, Number(e.target.value || 5)); setMaxFileSizeMb?.(next); localStorage.setItem('maxFileSizeMb', String(next)); }} className="mt-2 w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500" />
+              <p className="text-xs text-slate-500 mt-3">Default is 5 MB. Changes apply immediately for this workspace session.</p>
+            </div>
+          </div>
+        )}
+
         {/* ========= OVERVIEW TAB ========= */}
         {activeTab === 'overview' && (
           <div className="flex flex-col gap-6 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">

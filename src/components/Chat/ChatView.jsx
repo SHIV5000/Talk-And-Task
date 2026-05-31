@@ -2,6 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
+const DAY_FMT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+const formatDayLabel = (value) => {
+  if (!value) return '';
+  const date = value.includes('-') ? new Date(`${value}T00:00:00`) : new Date(value);
+  return DAY_FMT.format(date).replace(/ /g, '-');
+};
+
 export default function ChatView({
   messagesToRender, messages, activeGroup, user, currentUserData, isVipAdmin,
   pinnedMessages, typingStatus, replyingTo, setReplyingTo, toolPreferences,
@@ -110,7 +117,7 @@ export default function ChatView({
                 {currentDay && currentDay !== prevDay && (
                   <div className="flex items-center gap-3 my-5 text-[11px] font-bold uppercase tracking-widest text-slate-400">
                     <div className="flex-1 border-t border-dotted border-slate-300"></div>
-                    <span>{currentDay}</span>
+                    <span>{formatDayLabel(currentDay)}</span>
                     <div className="flex-1 border-t border-dotted border-slate-300"></div>
                   </div>
                 )}

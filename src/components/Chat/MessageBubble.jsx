@@ -95,10 +95,7 @@ const MessageBubble = React.memo(({
   const allAccepted = activeAssignees.length > 0 && activeAssignees.every(e => assigneeStates[e] === 'accepted_completed');
 
 
-  const hasProofAttached = useMemo(() => {
-    if (!msg.taskData?.requireProof) return true;
-    return (msg.taskData.trail || []).some(t => t.fileUrl);
-  }, [msg.taskData]);
+  const hasCompletionEvidence = useMemo(() => (msg.taskData?.trail || []).some(t => t.fileUrl || t.comment || /delegat|update/i.test(t.action || '')), [msg.taskData]);
 
   const hasReactions = Object.keys(msg.reactions || {}).length > 0;
 
@@ -126,7 +123,7 @@ const MessageBubble = React.memo(({
     };
   }, [menuOpen, tagPickerOpen]);
 
-  const playTaskSound = () => { try { const a = new Audio("/notify.mp3"); a.volume = 0.5; a.play().catch(()=>{}); } catch(_) {} };
+  const playTaskSound = () => { try { const a = new Audio('https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FBANNER.mp3?alt=media&token=b3463c11-1f70-4450-8efc-049e04f33a0a'); a.volume = 0.8; a.play().catch(()=>{}); } catch(_) {} };
 
   const logTaskAudit = async (action, previousState = "", newState = "") => {
     try { await addDoc(collection(db, "Audit_Logs"), { taskId: msg.id, groupId: msg.groupId, actor_email: userEmail, action, previous_state: previousState, new_state: newState, timestamp: serverTimestamp() }); } catch(_) {}
@@ -368,7 +365,6 @@ const MessageBubble = React.memo(({
                 
                 {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setReplyingTo(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply</button>}
                 
-                {msg.isTask && !taskSidebarMode && <button onClick={() => { setMenuOpen(false); setIsTaskExpanded(prev => !prev); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"><i className="fa-solid fa-list-check w-5"></i> Toggle Task Details</button>}
                 {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
                 <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
                 <button onClick={() => { setMenuOpen(false); handleToggleBookmark(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600"><i className={`fa-solid fa-bookmark w-5 ${isBookmarked ? 'text-indigo-600' : ''}`}></i> {isBookmarked ? 'Unbookmark' : 'Bookmark'}</button>
@@ -395,6 +391,9 @@ const MessageBubble = React.memo(({
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${statusBadgeClass}`}>{statusBadgeText}</span>
                           {msg.taskData.escalated && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">🚨 Escalated</span>
+                          )}
+                          {msg.taskData?.trail?.some(t => /delegat/i.test(t.action || '')) && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 uppercase">Delegated</span>
                           )}
                         </div>
                         <div className={`text-[11px] font-bold flex items-center gap-3 flex-wrap shrink-0 ${isTaskCompleted ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -478,14 +477,14 @@ const MessageBubble = React.memo(({
                               </div>
                            ) : (
                               <>
-                                 <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Delegate</button>
-                                 <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Attach</button>
                                  <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Update</button>
+                                 <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Attach</button>
+                                 <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Delegate</button>
                                  <button 
                                    onClick={handleInlineComplete} 
-                                   disabled={!hasProofAttached}
-                                   className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 hover:-translate-y-0.5 hover:shadow-md transition-all ${!hasProofAttached ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                   title={!hasProofAttached ? 'You must attach a file to complete this task' : ''}
+                                   disabled={!hasCompletionEvidence}
+                                   className={`px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 hover:-translate-y-0.5 hover:shadow-md transition-all ${!hasCompletionEvidence ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                   title={!hasCompletionEvidence ? 'Add an update, attachment, or delegation before completing' : ''}
                                  >
                                    {isAcceptedForMe ? "Completed ✅" : "Completed"}
                                  </button>
@@ -505,15 +504,9 @@ const MessageBubble = React.memo(({
                                 <button onClick={(e)=>{e.stopPropagation(); handleCreatorAcceptCompletion(email);}} className="px-3 py-1.5 rounded-full bg-emerald-600 text-white font-bold hover:bg-emerald-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Mark Done</button>
                                 <button disabled={(reviewComment||'').trim().length<6} onClick={(e)=>{e.stopPropagation(); handleCreatorReviewAgain(email);}} className="px-3 py-1.5 rounded-full bg-amber-500 disabled:opacity-50 text-white font-bold hover:bg-amber-600 hover:-translate-y-0.5 hover:shadow-md transition-all">Review Again</button>
                               </div>
-                              <input value={transferSearch} onChange={(e)=>setTransferSearch(e.target.value)} placeholder="Search users to transfer..." className="text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 outline-none" />
-                              <div className="max-h-32 overflow-y-auto border rounded bg-white p-1 space-y-1">
-                                {sortedGroupUsers.filter(u => u.email !== email && (u.name || u.email || '').toLowerCase().includes(transferSearch.toLowerCase())).map(u => (
-                                  <label key={u.uid} className="flex items-center gap-2 text-[11px] text-slate-700 hover:bg-slate-50 rounded px-1 py-0.5">
-                                    <input type="checkbox" checked={transferSelection.includes(u.email)} onChange={(e)=>setTransferSelection(prev => e.target.checked ? [...new Set([...prev, u.email])] : prev.filter(x=>x!==u.email))} />
-                                    <span>{u.name || u.email}</span>
-                                  </label>
-                                ))}
-                              </div>
+                              <select multiple value={transferSelection} onChange={(e)=>setTransferSelection(Array.from(e.target.selectedOptions).map(o=>o.value))} className="text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 outline-none bg-white min-h-[72px]">
+                                {sortedGroupUsers.filter(u => u.email !== email).map(u => <option key={u.uid} value={u.email}>{u.name || u.email}</option>)}
+                              </select>
                               <input value={transferComment} onChange={(e)=>setTransferComment(e.target.value)} placeholder="Transfer comment (min 6 chars) — Enter to transfer" className="text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 outline-none" onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); if((transferComment||'').trim().length>=6 && transferSelection.length>0) handleTransferTask(email); } }} />
                               <button disabled={(transferComment||'').trim().length<6 || transferSelection.length===0} onClick={(e)=>{e.stopPropagation(); handleTransferTask(email);}} className="px-3 py-1.5 rounded-full bg-rose-600 disabled:opacity-50 text-white font-bold hover:bg-rose-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Transfer Task</button>
                             </div>
@@ -536,12 +529,12 @@ const MessageBubble = React.memo(({
                             const tAuthor = dbUsers.find(u => u.email === t.by)?.name || 'System';
                             const isAuthor = t.by === userEmail || isSuperAdmin;
                             return (
-                            <div key={idx} className="flex gap-3 text-sm group/trailitem">
+                            <div key={idx} className="flex gap-3 text-sm group/trailitem relative before:absolute before:left-3 before:top-7 before:bottom-[-12px] before:border-l before:border-slate-300">
                               <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 mt-1">
                                 <i className={`text-[10px] ${t.action.includes('Created') ? 'fa-solid fa-bolt text-amber-500' : t.action.includes('Completed') ? 'fa-solid fa-check text-teal-500' : t.action.includes('Delegated') ? 'fa-solid fa-share-nodes text-indigo-500' : t.fileUrl ? 'fa-solid fa-paperclip text-blue-500' : 'fa-solid fa-comment-dots text-indigo-500'}`}></i>
                               </div>
                               <div className="flex-1 min-w-0">
-                                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm relative group/editbox">
+                                  <div className="bg-transparent p-1.5 rounded-lg relative group/editbox">
                                     <div className="flex items-center justify-between mb-1">
                                       <span className="font-bold text-[11px] text-indigo-600">{tAuthor}</span>
                                       <span className="text-[10px] font-bold text-slate-400">{t.time?.split(',')[0]}</span>

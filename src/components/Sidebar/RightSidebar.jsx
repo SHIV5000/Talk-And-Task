@@ -46,19 +46,19 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
   ];
 
   return (
-    <aside className="hidden lg:flex shrink-0 h-full bg-slate-100 border-l border-slate-200 flex-col p-4 gap-4 overflow-y-auto custom-sidebar-scroll" style={{ width: `${sidebarWidth || 380}px` }}>
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 text-white rounded-3xl p-5 shadow-xl">
+    <aside className="hidden lg:flex shrink-0 h-full bg-slate-100 border-l border-slate-200 flex-col p-3 gap-2 overflow-hidden" style={{ width: `${sidebarWidth || 380}px` }}>
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 text-white rounded-2xl p-3 shadow-xl">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">User Analytics</div>
-        <div className="mt-2 text-xl font-black truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
+        <div className="mt-2 text-sm font-black truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
         <div className="mt-1 text-xs font-bold text-indigo-200">Ver. {appVersion}</div>
       </div>
-      <div className="rounded-3xl p-4 bg-white border border-emerald-100 shadow-sm flex items-center justify-between">
-        <div><div className="text-[11px] font-bold uppercase text-slate-500">Online Users</div><div className="text-3xl font-black text-emerald-700">{onlineCount}</div></div>
+      <div className="rounded-2xl p-3 bg-white border border-emerald-100 shadow-sm flex items-center justify-between">
+        <div><div className="text-[11px] font-bold uppercase text-slate-500">Online Users</div><div className="text-xl font-black text-emerald-700">{onlineCount}</div></div>
         <i className="fa-solid fa-user-check text-2xl text-emerald-600"></i>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {filters.map(([key, label]) => (
-          <button key={key} onClick={() => setPreset(key)} className={`rounded-2xl p-3 text-left text-xs font-black border shadow-sm transition-all ${preset === key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>{label}</button>
+          <button key={key} onClick={() => setPreset(key)} className={`rounded-xl p-2 text-left text-xs font-black border shadow-sm transition-all ${preset === key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>{label}</button>
         ))}
       </div>
       {preset === 'custom' && (
@@ -67,10 +67,10 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="modern-date-input" />
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 flex-1">
+      <div className="grid grid-cols-1 gap-2 flex-1">
         {stats.map((item) => (
-          <div key={item.label} className={`rounded-3xl p-4 text-white bg-gradient-to-br ${item.tone} shadow-lg min-h-[92px] flex items-center justify-between`}>
-            <div><div className="text-[11px] font-bold uppercase opacity-80">{item.label}</div><div className="text-4xl font-black mt-1">{item.value}</div></div>
+          <div key={item.label} className={`rounded-2xl p-3 text-white bg-gradient-to-br ${item.tone} shadow-lg min-h-0 flex items-center justify-between`}>
+            <div><div className="text-[11px] font-bold uppercase opacity-80">{item.label}</div><div className="text-2xl font-black mt-1">{item.value}</div></div>
             <i className={`fa-solid ${item.icon} text-3xl opacity-70`}></i>
           </div>
         ))}

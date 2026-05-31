@@ -8,7 +8,7 @@ export default function InputArea({
   handleFileUpload, emojiPickerOpen, setEmojiPickerOpen, emojiPickerRef,
   pendingFiles, setPendingFiles, showFileRename, setShowFileRename,
   uploadFileDirectly, setActiveModal, setPendingScheduledText,
-  offlineDrafts, user, dbUsers, groups, currentUserData, MAX_FILE_SIZE_MB,
+  offlineDrafts, user, dbUsers, groups, currentUserData, MAX_FILE_SIZE_MB, uploadProgress = 0,
   handleSendPendingFiles,
   composerVariant = 'chat',
   containerClassName = '',
@@ -132,6 +132,13 @@ export default function InputArea({
           ) : (
             <div className="px-4 py-2 text-xs text-slate-400 italic">No groups found</div>
           )}
+        </div>
+      )}
+
+      {isUploading && uploadProgress > 0 && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2">
+          <div className="h-2 bg-white rounded-full overflow-hidden"><div className="h-full bg-indigo-600 rounded-full" style={{ width: `${Math.round(uploadProgress)}%` }} /></div>
+          <div className="text-[10px] font-bold text-indigo-600 mt-1">Uploading {Math.round(uploadProgress)}%</div>
         </div>
       )}
 
