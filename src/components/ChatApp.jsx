@@ -25,7 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
-const APP_VERSION = "22.0";
+const APP_VERSION = "23.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -55,6 +55,42 @@ const universalTaskFilters = [
 ];
 
 // 👇 UPDATED: Slack Sidebar Input uses matching WYSIWYG Editor 👇
+
+const AdvancedSearchPage = ({ messages, dbUsers, onBack, onOpen }) => {
+  const [filters, setFilters] = useState({ from: '', to: '', text: '', date: '' });
+  const results = useMemo(() => {
+    const text = filters.text.trim().toLowerCase();
+    return messages.filter((m) => {
+      const senderName = (dbUsers.find(u => u.email === m.senderEmail)?.name || m.senderEmail || '').toLowerCase();
+      const assignees = (m.taskData?.assignees || []).join(' ').toLowerCase();
+      const haystack = `${stripHtml(m.text)} ${m.fileName || ''} ${Object.keys(m.reactions || {}).join(' ')} ${m.taskData?.deadline || ''} ${(m.taskData?.trail || []).map(t => `${t.action || ''} ${t.comment || ''} ${t.fileName || ''}`).join(' ')}`.toLowerCase();
+      if (filters.from && !senderName.includes(filters.from.toLowerCase()) && !(m.senderEmail || '').toLowerCase().includes(filters.from.toLowerCase())) return false;
+      if (filters.to && !assignees.includes(filters.to.toLowerCase()) && !(m.groupName || '').toLowerCase().includes(filters.to.toLowerCase())) return false;
+      if (filters.date && m.dateString !== filters.date && !(m.taskData?.deadline || '').startsWith(filters.date)) return false;
+      if (text && !haystack.includes(text)) return false;
+      return filters.from || filters.to || filters.date || text;
+    }).sort((a,b)=>(b.timestamp?.toMillis?.()||0)-(a.timestamp?.toMillis?.()||0)).slice(0,100);
+  }, [messages, dbUsers, filters]);
+  return (
+    <div className="flex-1 h-full bg-slate-50 overflow-y-auto p-6">
+      <div className="max-w-5xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between"><h2 className="font-black text-slate-800">Advanced Search</h2><button onClick={onBack} className="text-sm font-bold text-indigo-600">Back</button></div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-slate-50">
+          {['from','to','text'].map(k => <input key={k} value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})} placeholder={k === 'text' ? 'String / tag / due / update' : k.toUpperCase()} className="modern-date-input" />)}
+          <input type="date" value={filters.date} onChange={e=>setFilters({...filters,date:e.target.value})} className="modern-date-input" />
+        </div>
+        <div className="divide-y divide-slate-100">
+          {results.map(r => <button key={r.id} onClick={() => onOpen(r.id, r.groupId, r.replyToId)} className="w-full text-left p-4 hover:bg-indigo-50 transition-colors">
+            <div className="text-xs font-black text-indigo-600">{dbUsers.find(u=>u.email===r.senderEmail)?.name || r.senderEmail} • {r.dateString}</div>
+            <div className="text-sm text-slate-700 line-clamp-2">{stripHtml(r.text) || r.fileName || 'Task/Update'}</div>
+          </button>)}
+          {results.length === 0 && <div className="p-8 text-center text-sm text-slate-400 font-bold">Enter search filters to show results.</div>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage, sidebarWidth }) => {
     const threadMessages = messages.filter(m => m.replyToId === activeReplies.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
     const [text, setText] = useState('');
@@ -1296,6 +1332,8 @@ export default function ChatApp({ user, onLogout }) {
                   maxFileSizeMb={MAX_FILE_SIZE_MB}
                   setMaxFileSizeMb={setMaxFileSizeMb}
                 />
+                ) : viewMode === "advanced" ? (
+                    <AdvancedSearchPage messages={messages} dbUsers={dbUsers} onBack={() => setViewMode('chat')} onOpen={(id, groupId, replyToId) => { setViewMode('chat'); navigateToMessageFromNotification(id, groupId, replyToId); }} />
                 ) : (
                     <div className="flex h-full w-full relative">
                         <LeftSidebar sidebarWidth={leftWidth}
@@ -1395,6 +1433,7 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
 
                                     <div className="flex items-center gap-1 shrink-0 relative">
+                                      <button onClick={() => setViewMode('advanced')} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-black" title="Advanced Search">Advanced Search</button>
 
                                       <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
                                         <i className="fa-solid fa-calendar-alt"></i>

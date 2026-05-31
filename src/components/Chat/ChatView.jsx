@@ -158,13 +158,17 @@ export default function ChatView({
                 onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
                 />
                 {threadReplies.length > 0 && expandedThreads[msg.id] && (
-                  <div className={`relative ${msg.isMine ? 'ml-auto mr-12' : 'ml-12 mr-auto'} w-[48%] max-w-[48%] border-l-2 border-slate-300 pl-4 mt-1 mb-3 space-y-2`}>
+                  <div className={`relative ${msg.isMine ? 'ml-auto mr-12' : 'ml-12 mr-auto'} w-[56%] max-w-[56%] mt-2 mb-3 space-y-2`}>
                     {threadReplies.map((reply) => {
                       const replyUser = dbUsers?.find(u => u.email === reply.senderEmail) || {};
                       return (
-                        <div id={`msg-${reply.id}`} key={reply.id} className={`relative before:absolute before:left-[-17px] before:top-3 before:w-4 before:border-t-2 before:border-slate-300 text-[12px] leading-snug ${reply.isMine ? 'text-right' : 'text-left'} ${highlightedMsgId === reply.id || unreadHighlightIds?.includes(reply.id) ? 'highlight-flash' : ''}`}>
-                          <div className="font-bold text-indigo-600">{replyUser.name || (reply.senderEmail || '').split('@')[0]} <span className="text-[10px] text-slate-400 font-semibold">{reply.time}</span></div>
-                          <div className="text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: reply.text || reply.fileName || '' }}></div>
+                        <div id={`msg-${reply.id}`} key={reply.id} className={`flex gap-3 text-sm relative ${reply.isMine ? 'justify-end text-right' : 'justify-start text-left'} ${highlightedMsgId === reply.id || unreadHighlightIds?.includes(reply.id) ? 'highlight-flash' : ''}`}>
+                          {!reply.isMine && <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-indigo-500 shrink-0 mt-1"><i className="fa-solid fa-reply text-[10px]"></i></div>}
+                          <div className="max-w-[60%] bg-transparent p-1.5 rounded-lg">
+                            <div className="font-bold text-[11px] text-indigo-600">{replyUser.name || (reply.senderEmail || '').split('@')[0]} <span className="text-[10px] text-slate-400 font-semibold">{reply.time}</span></div>
+                            <div className="text-[13px] text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: reply.text || reply.fileName || '' }}></div>
+                          </div>
+                          {reply.isMine && <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-indigo-500 shrink-0 mt-1"><i className="fa-solid fa-reply text-[10px]"></i></div>}
                         </div>
                       );
                     })}

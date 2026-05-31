@@ -44,10 +44,13 @@ const MessageBubble = React.memo(({
   const [transferSelection, setTransferSelection] = useState([]);
   const [transferComment, setTransferComment] = useState("");
   const [transferSearch, setTransferSearch] = useState("");
+  const [msgReplyUploadProgress, setMsgReplyUploadProgress] = useState(0);
   
   const menuRef = useRef(null);
   const tagPickerRef = useRef(null);
   const inlineFileInputRef = useRef(null);
+  const inlineUpdateRef = useRef(null);
+  const msgReplyFileInputRef = useRef(null);
 
   const isBookmarked = msg.bookmarkedBy?.includes(userEmail);
   const canModify = msg.isMine && !msg.isTask && !hasReplies && !(Object.keys(msg.reactions || {}).length > 0);
@@ -333,12 +336,57 @@ const MessageBubble = React.memo(({
     return action.replace(/\.$/, '');
   };
 
+
+  const applyInlineUpdateFormat = (tag) => {
+    const el = inlineUpdateRef.current;
+    if (!el) return;
+    const start = el.selectionStart || 0;
+    const end = el.selectionEnd || 0;
+    const selected = inlineUpdateText.slice(start, end) || '';
+    const wrapped = tag === 'emoji' ? `${selected} 🙂` : `<${tag}>${selected}</${tag}>`;
+    setInlineUpdateText(`${inlineUpdateText.slice(0, start)}${wrapped}${inlineUpdateText.slice(end)}`);
+    setTimeout(() => el.focus(), 0);
+  };
+
+  const handleReplyAttachmentUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || msg.isTask) return;
+    setMsgReplyUploadProgress(1);
+    try {
+      let processedFile = file;
+      let fileName = file.name;
+      if (file.type.startsWith('image/')) {
+        const blob = await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+            canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(resolve, 'image/webp', 0.78);
+          };
+          img.src = URL.createObjectURL(file);
+        });
+        fileName = file.name.replace(/\.[^/.]+$/, '.webp');
+        processedFile = new File([blob], fileName, { type: 'image/webp' });
+      }
+      const uploadTask = uploadBytesResumable(ref(storage, `chat_uploads/${Date.now()}_${fileName}`), processedFile);
+      uploadTask.on('state_changed', snap => setMsgReplyUploadProgress((snap.bytesTransferred / (snap.totalBytes || 1)) * 100), () => setMsgReplyUploadProgress(0), async () => {
+        const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
+        await addDoc(collection(db, 'messages'), { text: '', senderUid: currentUserData?.uid || msg.senderUid, senderEmail: userEmail, groupId: msg.groupId, fileUrl, fileName, fileType: processedFile.type, timestamp: serverTimestamp(), isTask: false, seenBy: [userEmail], reactions: {}, replyToId: msg.id, originalText: msg.text || msg.fileName || 'Attachment', originalSender: senderName });
+        setMsgReplyUploadProgress(0);
+      });
+    } catch (_) { setMsgReplyUploadProgress(0); }
+    finally { if (msgReplyFileInputRef.current) msgReplyFileInputRef.current.value = ''; }
+  };
+
   return (
     <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted || mentionsMe ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-[120]' : 'relative z-[1]'}`}>
       
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
+      <div className={`self-stretch flex items-center ${msg.isMine ? 'order-first mr-2' : 'order-last ml-2'}`}><span className={`text-[9px] font-black tracking-widest ${msg.isTask ? 'text-amber-600' : 'text-slate-400'}`} style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>{msg.isTask ? 'TASK' : 'MESSAGE'}</span></div>
       
-      <div className={`${bubbleWidthClass} ${taskShellClass} min-w-0 bg-white ${msg.isTask ? 'rounded-2xl' : msg.isMine ? 'rounded-[22px] rounded-tr-md before:absolute before:-right-2 before:top-4 before:border-y-8 before:border-l-8 before:border-y-transparent before:border-l-white' : 'rounded-[22px] rounded-tl-md before:absolute before:-left-2 before:top-4 before:border-y-8 before:border-r-8 before:border-y-transparent before:border-r-white'} shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
+      <div className={`${bubbleWidthClass} ${taskShellClass} min-w-0 bg-white ${msg.isTask ? 'rounded-2xl' : msg.isMine ? 'rounded-[32px] rounded-tr-md before:absolute before:-right-3 before:top-5 before:border-y-[10px] before:border-l-[12px] before:border-y-transparent before:border-l-white' : 'rounded-[32px] rounded-tl-md before:absolute before:-left-3 before:top-5 before:border-y-[10px] before:border-r-[12px] before:border-y-transparent before:border-r-white'} shadow-sm border border-slate-100 ${getBorderColor()} border-l-4 px-4 py-3 relative break-words flex flex-col`}>
         
         {!isThreadView && msg.isMine && (
             <div className="absolute -top-2.5 -right-2.5 bg-white border border-slate-200 rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-md z-10" title="Sent">
@@ -426,7 +474,7 @@ const MessageBubble = React.memo(({
                           </button>
                           {msg.taskData.ackDeadline && (
                             <div className="text-[10px] text-yellow-600 mt-1 text-center">
-                              Acknowledge by {new Date(msg.taskData.ackDeadline).toLocaleString()}
+                              Acknowledge by {formatTaskDateTime(msg.taskData.ackDeadline)}
                             </div>
                           )}
                         </div>
@@ -470,10 +518,13 @@ const MessageBubble = React.memo(({
                                  </div>
                               </div>
                            ) : isAddingUpdate ? (
-                              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded p-1 shadow-sm w-full">
-                                 <input type="text" value={inlineUpdateText} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type a quick update — Enter to post, Shift+Enter for a new line" className="flex-1 text-[12px] p-1 outline-none font-medium text-slate-700" autoFocus onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
-                                 <button onClick={submitInlineUpdate} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-full font-bold hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Post</button>
-                                 <button onClick={()=>setIsAddingUpdate(false)} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold transition-colors">Cancel</button>
+                              <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-sm w-full space-y-2">
+                                 <div className="flex gap-1 text-[10px] font-black text-slate-500">
+                                   <button onClick={()=>applyInlineUpdateFormat('b')} className="px-2 py-1 rounded bg-slate-100">B</button><button onClick={()=>applyInlineUpdateFormat('i')} className="px-2 py-1 rounded bg-slate-100 italic">I</button><button onClick={()=>applyInlineUpdateFormat('u')} className="px-2 py-1 rounded bg-slate-100 underline">U</button><button onClick={()=>applyInlineUpdateFormat('emoji')} className="px-2 py-1 rounded bg-slate-100">🙂</button>
+                                 </div>
+                                 <textarea ref={inlineUpdateRef} rows={2} value={inlineUpdateText} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type update — Enter posts, Shift+Enter adds new line" className="w-full text-[12px] p-1 outline-none font-medium text-slate-700 resize-none" autoFocus onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
+                                 <div className="flex justify-end gap-2"><button onClick={submitInlineUpdate} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-full font-bold hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Post</button>
+                                 <button onClick={()=>setIsAddingUpdate(false)} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold transition-colors">Cancel</button></div>
                               </div>
                            ) : (
                               <>
@@ -726,10 +777,14 @@ const MessageBubble = React.memo(({
                    )}
                 </div>
                 
-                {!msg.isTask && !isThreadView && replyCount > 0 && (
-                    <button onClick={(e) => { e.stopPropagation(); onToggleThread?.(); }} className="flex items-center gap-2 px-3 py-1.5 mt-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-lg transition-colors border border-indigo-200 shadow-sm w-fit group/threadbtn">
-                        <i className="fa-solid fa-comments group-hover/threadbtn:scale-110 transition-transform"></i> {threadExpanded ? 'Hide' : 'Show'} {replyCount} Replies
-                    </button>
+                {!msg.isTask && !isThreadView && (
+                    <div className="flex items-center gap-2 mt-1 flex-wrap justify-end">
+                      <input type="file" ref={msgReplyFileInputRef} className="hidden" onChange={handleReplyAttachmentUpload} />
+                      <button onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); }} className="px-3 py-1.5 bg-slate-50 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 font-extrabold text-[11px] rounded-full border border-slate-200">Reply</button>
+                      <button onClick={(e) => { e.stopPropagation(); msgReplyFileInputRef.current?.click(); }} className="px-3 py-1.5 bg-slate-50 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 font-extrabold text-[11px] rounded-full border border-slate-200">Attach</button>
+                      {replyCount > 0 && <button onClick={(e) => { e.stopPropagation(); onToggleThread?.(); }} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-lg transition-colors border border-indigo-200 shadow-sm w-fit group/threadbtn"><i className="fa-solid fa-comments group-hover/threadbtn:scale-110 transition-transform"></i> {threadExpanded ? 'Hide' : 'Show'} {replyCount} Replies</button>}
+                      {msgReplyUploadProgress > 0 && <span className="text-[10px] font-bold text-indigo-500">Uploading {Math.round(msgReplyUploadProgress)}%</span>}
+                    </div>
                 )}
             </div>
         </div>
