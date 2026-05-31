@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Code → PDF with line numbers, watermark, and table of contents.
-No header hooks – watermark is drawn as a full‑page cell, then cursor is reset.
+Code → PDF: line numbers, watermark, table of contents.
+Robust watermark – fits inside printable margins, no layout corruption.
 """
 import os, sys
 from fpdf import FPDF
@@ -16,6 +16,25 @@ class CodePDF(FPDF):
         super().__init__()
         self.watermark_text = watermark_text
         self.file_start_pages = []
+
+    def _draw_watermark(self):
+        """Watermark that fits inside the printable area – no overflow."""
+        # Save cursor position
+        x_save, y_save = self.get_x(), self.get_y()
+        # Width & height of the printable area
+        w_print = self.w - self.l_margin - self.r_margin
+        h_print = self.h - self.t_margin - self.b_margin
+
+        # Draw big, light‑grey watermark centred in the printable area
+        self.set_font("Courier", "B", 60)
+        self.set_text_color(220, 220, 220)
+        self.set_xy(self.l_margin, self.t_margin)
+        self.cell(w_print, h_print, self.watermark_text, align="C")
+
+        # Restore cursor to exactly where it was (top‑left margin)
+        self.set_font("Courier", "", 8)        # reset font size
+        self.set_text_color(0, 0, 0)           # reset colour
+        self.set_xy(x_save, y_save)
 
     def add_title_page(self, repo_name="Source Code"):
         self.add_page()
@@ -36,26 +55,10 @@ class CodePDF(FPDF):
         start_page = self.page_no()
         self.file_start_pages.append((rel_path, start_page))
         self.add_page()
-
-        # Draw watermark as a full‑page cell, then restore cursor
-        # Save current position (top‑left margin)
-        x0, y0 = self.l_margin, self.t_margin
-        self.set_font("Courier", "B", 60)
-        self.set_text_color(220, 220, 220)
-        # Full page cell (covers whole page)
-        self.set_xy(0, 0)
-        self.cell(self.w, self.h, self.watermark_text, align="C")
-        # Restore cursor to top‑left margin
-        self.set_font("Courier", "", 8)
-        self.set_text_color(0, 0, 0)
-        self.set_xy(x0, y0)
-
-        # File header
+        self._draw_watermark()                # watermark right after new page
         self.set_font("Courier", "B", 10)
         self.multi_cell(0, 6, rel_path)
         self.ln(2)
-
-        # Code with line numbers
         self.set_font("Courier", "", 7)
         for i, line in enumerate(content.split("\n"), 1):
             ln_text = f"{i:4d} {line}"
@@ -64,6 +67,7 @@ class CodePDF(FPDF):
 
     def add_toc_page(self):
         self.add_page()
+        self._draw_watermark()
         self.set_font("Courier", "B", 14)
         self.cell(0, 10, "Table of Contents", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(5)
@@ -78,9 +82,8 @@ def collect_files(root_dir, extensions):
             if any(fname.endswith(f".{ext}") for ext in extensions):
                 full = os.path.join(dirpath, fname)
                 rel = os.path.relpath(full, root_dir)
-                # Skip the script itself to avoid self‑reading
                 if rel == "scripts/generate_code_pdf.py":
-                    continue
+                    continue        # don't include the script itself
                 yield rel, full
 
 def main():
