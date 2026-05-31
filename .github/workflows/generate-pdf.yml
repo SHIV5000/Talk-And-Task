@@ -3,10 +3,10 @@ name: Generate Complete Code PDF
 on:
   push:
     branches: [main, master]
-  workflow_dispatch:   # manual trigger
+  workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # silences Node 20 warning
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   generate:
