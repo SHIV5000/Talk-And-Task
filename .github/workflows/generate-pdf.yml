@@ -1,4 +1,4 @@
-name: Generate Code PDF (Simple)
+name: Generate Code PDF (enscript)
 
 on:
   push:
@@ -9,23 +9,51 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  generate:
+  generate-pdf:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Install enscript and ghostscript
+        run: sudo apt-get update && sudo apt-get install -y enscript ghostscript
 
-      - name: Install fpdf2
-        run: pip install fpdf2
-
-      - name: Generate PDF
+      - name: Generate PDF from source files
         run: |
-          python scripts/generate_code_pdf.py . code.pdf "py,js,java,c,cpp,h,hpp,html,css,go,rs,rb,ts,tsx,json,yaml,sh"
+          # List all source files. Adjust extensions as you like.
+          find . -type f \( \
+            -name "*.py" -o \
+            -name "*.js" -o \
+            -name "*.ts" -o \
+            -name "*.tsx" -o \
+            -name "*.jsx" -o \
+            -name "*.java" -o \
+            -name "*.c" -o \
+            -name "*.cpp" -o \
+            -name "*.h" -o \
+            -name "*.hpp" -o \
+            -name "*.html" -o \
+            -name "*.css" -o \
+            -name "*.go" -o \
+            -name "*.rs" -o \
+            -name "*.rb" -o \
+            -name "*.json" -o \
+            -name "*.yaml" -o \
+            -name "*.yml" -o \
+            -name "*.sh" -o \
+            -name "*.xml" -o \
+            -name "*.sql" -o \
+            -name "*.md" \
+          \) -print0 | sort -z | xargs -0 enscript \
+            --line-numbers \
+            --font=Courier7 \
+            --header='$n' \
+            --landscape \
+            --columns=2 \
+            -o code.ps
+
+          # Convert PostScript to PDF
+          ps2pdf code.ps code.pdf
 
       - name: Upload PDF artifact
         uses: actions/upload-artifact@v4
