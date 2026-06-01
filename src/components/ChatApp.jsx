@@ -75,16 +75,16 @@ const AdvancedSearchPage = ({ messages, dbUsers, onBack, onOpen }) => {
   }, [messages, dbUsers, filters]);
   return (
     <div className="flex-1 h-full bg-slate-50 text-slate-800 overflow-y-auto p-6" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
-      <div className="max-w-5xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between"><h2 className="font-black text-slate-800">Advanced Search</h2><button onClick={onBack} className="text-sm font-bold text-indigo-600">Back</button></div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-slate-50">
-          {['from','to','text'].map(k => <input key={k} value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})} placeholder={k === 'text' ? 'String / tag / due / update' : k.toUpperCase()} className="modern-date-input" />)}
-          <input type="date" value={filters.date} onChange={e=>setFilters({...filters,date:e.target.value})} className="modern-date-input" />
+      <div className="max-w-5xl mx-auto bg-white rounded-md border border-slate-200 overflow-hidden">
+        <div className="p-3 border-b border-slate-100 flex items-center justify-between"><h2 className="font-mono font-bold text-slate-800">Advanced Search</h2><button onClick={onBack} className="text-xs font-mono font-bold text-indigo-600 hover:underline">Back</button></div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 bg-slate-50">
+          {['from','to','text'].map(k => <input key={k} value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})} placeholder={k === 'text' ? 'String / tag / due / update' : k.toUpperCase()} className="border border-slate-200 rounded-md px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-400" />)}
+          <input type="date" value={filters.date} onChange={e=>setFilters({...filters,date:e.target.value})} className="border border-slate-200 rounded-md px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-400" />
         </div>
         <div className="divide-y divide-slate-100">
-          {results.map(r => <button key={r.id} onClick={() => onOpen(r.id, r.groupId, r.replyToId)} className="w-full text-left p-4 hover:bg-indigo-50 transition-colors">
-            <div className="text-xs font-black text-indigo-600">{dbUsers.find(u=>u.email===r.senderEmail)?.name || r.senderEmail} • {r.dateString}</div>
-            <div className="text-sm text-slate-700 line-clamp-2">{stripHtml(r.text) || r.fileName || 'Task/Update'}</div>
+          {results.map(r => <button key={r.id} onClick={() => onOpen(r.id, r.groupId, r.replyToId)} className="w-full text-left flex gap-3 hover:bg-slate-50 py-1.5 px-2 transition-colors border-l-2 border-indigo-400">
+            <div className="text-[10px] font-mono font-bold text-indigo-600">{dbUsers.find(u=>u.email===r.senderEmail)?.name || r.senderEmail} • {r.dateString}</div>
+            <div className="text-[14px] font-medium text-slate-800 line-clamp-2">{stripHtml(r.text) || r.fileName || 'Task/Update'}</div>
           </button>)}
           {results.length === 0 && <div className="p-8 text-center text-sm text-slate-400 font-bold">Enter search filters to show results.</div>}
         </div>
@@ -165,7 +165,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
     return (
         <div className="w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
             <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }`}</style>
-            <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
+            <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between  z-10 shrink-0 h-[59px]">
                 <div>
                     <h3 className="font-bold text-slate-800 leading-tight">Replies</h3>
                     <span className="text-[11px] text-slate-500 font-medium">Replies Panel</span>
@@ -243,7 +243,7 @@ const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserDat
     const taskGroup = groups.find(g => g.id === liveTask.groupId) || activeGroup;
     return (
         <div className="w-full bg-slate-50 border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right z-50 absolute right-0 md:relative" style={{ width: `${sidebarWidth || 384}px` }}>
-            <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10 shrink-0 h-[59px]">
+            <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between  z-10 shrink-0 h-[59px]">
                 <div className="min-w-0">
                     <h3 className="font-bold text-slate-800 leading-tight flex items-center gap-2"><i className="fa-regular fa-square-check text-indigo-600"></i> Task Sidebar</h3>
                     <span className="text-[11px] text-slate-500 font-medium truncate block">Updates, uploads and review actions happen here</span>
@@ -1230,7 +1230,7 @@ export default function ChatApp({ user, onLogout }) {
                     <i className="fa-solid fa-user-clock text-5xl text-indigo-600 mb-4 animate-pulse"></i>
                     <h1 className="text-2xl font-bold mb-2">Pending Approval</h1>
                     <p className="text-sm text-slate-500 mb-6">Your Google Account requires Admin verification to join the portal.</p>
-                    <button onClick={onLogout} className="bg-slate-100 text-slate-700 py-2 px-6 rounded-full font-bold shadow-sm hover:bg-slate-200 transition-colors">Sign Out</button>
+                    <button onClick={onLogout} className="bg-slate-100 text-slate-700 py-2 px-6 rounded-full font-bold  hover:bg-slate-200 transition-colors">Sign Out</button>
                 </div>
             </div>
         );
@@ -1274,7 +1274,7 @@ export default function ChatApp({ user, onLogout }) {
                         </div>
                     </div>
                     {/* 👇 "Got It" Acknowledgement Button 👇 */}
-                    <button onClick={handleAckBroadcast} className="ml-4 px-4 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors whitespace-nowrap shadow-sm border border-white/20">
+                    <button onClick={handleAckBroadcast} className="ml-4 px-4 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors whitespace-nowrap  border border-white/20">
                         Got It
                     </button>
                 </div>
@@ -1284,7 +1284,7 @@ export default function ChatApp({ user, onLogout }) {
                 {activeReminderAlert && (
                     <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-blue-600 text-white rounded-3xl shadow-2xl z-[100] border border-blue-700 p-6 animate-in slide-in-from-top-10 duration-700">
                         <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-inner relative">
+                            <div className="w-12 h-12 bg-slate-100 text-indigo-600 rounded-full flex items-center justify-center shadow-inner relative">
                                 <span className="absolute inset-0 rounded-full bg-indigo-400 opacity-20 animate-ping"></span>
                                 <i className="fa-solid fa-bell text-xl relative z-10 animate-bounce"></i>
                             </div>
@@ -1297,7 +1297,7 @@ export default function ChatApp({ user, onLogout }) {
                             <p className="text-white font-medium text-sm break-words whitespace-normal">"{activeReminderAlert.messageText}"</p>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={() => { setActiveModal('reminder'); setReminderDateTime(''); setActiveReminderAlert(null); }} className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-50 shadow-sm transition-all">Snooze</button>
+                            <button onClick={() => { setActiveModal('reminder'); setReminderDateTime(''); setActiveReminderAlert(null); }} className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-50  transition-all">Snooze</button>
                             <button onClick={() => setActiveReminderAlert(null)} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 shadow-[0_4px_15px_rgba(79,70,229,0.4)] hover:-translate-y-0.5 transition-all">OK</button>
                         </div>
                     </div>
@@ -1350,27 +1350,27 @@ export default function ChatApp({ user, onLogout }) {
 
                         {!activeGroup ? (
                             <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
-                                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
+                                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center  mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
                                     <i className="fa-solid fa-comments text-4xl"></i>
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Talk & Task</h2>
                                 <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
                                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
-                                    <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-all">
+                                    <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold  hover:bg-indigo-700 transition-all">
                                         <i className="fa-solid fa-layer-group mr-2"></i> New Group (Group Name, Members)
                                     </button>
                                 )}
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0 chat-main-panel">
-                                <div className="bg-white flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
-                                    <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
+                                <div className="bg-white flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-1.5 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
+                                    <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
 
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
-                                        {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
+                                        {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-8 h-8 rounded-md bg-slate-50 border border-slate-200 flex items-center justify-center text-indigo-600"><i className="fa-solid fa-users"></i></div>}
                                         <div className="flex flex-col min-w-0 flex-1">
-                                            <span className={`text-[16px] font-bold leading-tight truncate text-slate-800`}>{activeGroup.name}</span>
-                                            <span className="text-[13px] text-indigo-500 truncate max-w-[150px] lg:max-w-[400px]">
+                                            <span className={`text-sm font-bold leading-tight truncate text-slate-800`}>{activeGroup.name}</span>
+                                            <span className="text-[10px] font-mono text-slate-500 truncate max-w-[150px] lg:max-w-[400px]">
                                                 {activeGroup.isDM ? 'End-to-Server Encrypted' :
                                                     (dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).length > 0)
                                                     ? dbUsers.filter(u => activeGroup.members?.includes(u.email) && u.lastActive && (Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000) && u.uid !== user.uid).map(u=>u.name.split(' ')[0]).join(', ') + ' (Online)'
@@ -1381,12 +1381,12 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
 
                                     <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
-                                        <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
+                                        <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 border border-slate-200 focus-within:border-indigo-500 transition-all w-full">
                                             <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
                                             <input
                                                type="text"
                                                placeholder="Search messages and tasks..."
-                                               className="bg-transparent outline-none flex-1 text-[13px] text-slate-800 placeholder-slate-400 font-medium"
+                                               className="bg-transparent outline-none flex-1 text-[13px] text-slate-800 placeholder-slate-400 font-mono"
                                                value={searchQuery}
                                                onChange={(e) => setSearchQuery(e.target.value)}
                                                onFocus={() => setIsSearchFocused(true)}
@@ -1395,8 +1395,8 @@ export default function ChatApp({ user, onLogout }) {
                                         </div>
 
                                         {isSearchFocused && globalSearchResults && (
-                                            <div className="absolute top-[110%] left-0 w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                                <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
+                                            <div className="absolute top-[110%] left-0 w-[550px] bg-white rounded-md border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                                <div className="p-3 bg-slate-50 border-b border-slate-200 text-[10px] font-mono font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
                                                     <span>Messages & Tasks Search</span>
                                                     <span>{globalSearchResults.messages.length} Found</span>
                                                 </div>
@@ -1407,16 +1407,16 @@ export default function ChatApp({ user, onLogout }) {
                                                             <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i className="fa-solid fa-comments mr-1"></i> Messages & Tasks</div>
                                                             {/* 👇 UPDATED: Universal Click Routing routes directly to threads 👇 */}
                                                             {globalSearchResults.messages.map(m => (
-                                                                <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 p-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 mb-1.5">
+                                                                <div key={m.id} onClick={() => { setIsSearchFocused(false); navigateToMessageFromNotification(m.id, m.groupId, m.replyToId); }} className="flex flex-col gap-1 py-1.5 px-2 hover:bg-slate-50 rounded cursor-pointer transition-colors border-l-2 border-indigo-400 mb-1">
                                                                     <div className="flex justify-between items-center">
-                                                                        <div className="text-[11px] font-extrabold text-indigo-600">{(dbUsers.find(u => u.email === m.senderEmail)?.name || m.senderEmail || 'Unknown').split('@')[0]}</div>
-                                                                        <div className="text-[10px] text-slate-400 font-semibold">{m.dateString}</div>
+                                                                        <div className="text-[10px] font-mono font-bold text-indigo-600">{(dbUsers.find(u => u.email === m.senderEmail)?.name || m.senderEmail || 'Unknown').split('@')[0]}</div>
+                                                                        <div className="text-[10px] text-slate-400 font-mono">{m.dateString}</div>
                                                                     </div>
-                                                                    <div className="text-[13px] text-slate-700 line-clamp-2 leading-snug font-medium">
+                                                                    <div className="text-[14px] text-slate-800 line-clamp-2 leading-snug font-medium">
                                                                         {stripHtml(m.text) || m.fileName || 'Attached File'}
                                                                     </div>
                                                                     {m.isTask && (
-                                                                        <div className="text-[9px] mt-1.5 font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded w-fit border border-amber-200 uppercase tracking-wider">
+                                                                        <div className="text-[10px] mt-1 font-mono text-amber-800 bg-amber-100 px-1 rounded w-fit uppercase tracking-wider">
                                                                             <i className="fa-solid fa-square-check mr-1"></i> Task Card
                                                                         </div>
                                                                     )}
@@ -1437,20 +1437,20 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
 
                                     <div className="flex items-center gap-1 shrink-0 relative">
-                                      <button onClick={() => setViewMode('advanced')} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-black" title="Advanced Search">Advanced Search</button>
+                                      <button onClick={() => setViewMode('advanced')} className="px-3 h-8 rounded-full flex items-center justify-center transition-colors border border-slate-200 bg-slate-50 text-indigo-600 hover:bg-slate-100 text-[11px] font-mono font-bold" title="Advanced Search">Advanced Search</button>
 
-                                      <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
+                                      <button onClick={() => setActiveModal('active_schedules')} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-slate-100`} title="Scheduled & Reminders">
                                         <i className="fa-solid fa-calendar-alt"></i>
                                       </button>
 
                                       <div className="relative">
-                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px] relative`}>
+                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-slate-100 text-indigo-600' : 'text-indigo-500 hover:bg-slate-100'} text-[19px] relative`}>
                                           <i className="fa-solid fa-bell"></i>
                                           {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
                                         </button>
 
                                         {showNotifications && (
-                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
+                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-md z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
                                             <div className="p-3 bg-white flex justify-between items-center border-b border-slate-200">
                                               <span className="text-[13px] font-black text-slate-800 uppercase tracking-wide">Alerts</span>
                                               <button onClick={() => genericNotifications.map(n => updateDoc(doc(db, "notifications", n.id), { isRead: true }))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
@@ -1484,19 +1484,19 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                 </div>
 
-                                <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
+                                <div className="bg-white border-b border-slate-200 px-3 md:px-4 py-1.5 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20">
                                   {universalTaskFilters.map((f) => (
                                     <button
                                       key={f.key}
                                       onClick={() => { setChatFilter(f.key); if (f.key === 'date-range' && !chatDateFilter) setChatDateFilter(new Date().toISOString().split('T')[0]); }}
-                                      className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:shadow-sm ${chatFilter === f.key ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600'}`}
+                                      className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-mono transition-all ${chatFilter === f.key ? 'border-indigo-200 bg-indigo-50 text-indigo-700 ' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600'}`}
                                       title={`Show ${f.label.toLowerCase()}`}
                                     >
                                       <i className={`fa-solid ${f.icon} text-[10px]`}></i>{f.label}
                                     </button>
                                   ))}
                                   {chatFilter === 'date-range' && (
-                                    <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="modern-date-input !w-auto !py-1.5 !text-[11px]" />
+                                    <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="border border-slate-200 rounded-md px-3 py-1.5 text-[11px] font-mono outline-none focus:border-indigo-400 !w-auto" />
                                   )}
                                 </div>
 

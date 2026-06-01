@@ -73,27 +73,27 @@ export default function InputArea({
   };
 
   return (
-    <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-3 safe-bottom'} shrink-0 z-40 flex flex-col gap-2 w-full relative ${containerClassName}`}>
+    <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-2 safe-bottom'} shrink-0 z-40 flex flex-col gap-2 w-full relative ${containerClassName}`}>
       <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }.mention-chip{display:inline-block;background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:0 6px;font-weight:800;}`}</style>
 
       {replyingTo && (
-        <div className="bg-gray-50 px-4 py-2 flex items-center justify-between rounded-lg border border-gray-100 animate-in slide-in-from-bottom-1">
+        <div className="bg-slate-50 px-3 py-1.5 flex items-center justify-between rounded-md border-l-2 border-indigo-400 animate-in slide-in-from-bottom-1">
           <div className="flex flex-col overflow-hidden">
-            <div className="text-sm font-semibold text-primary">{(replyingTo.sender||"").split('@')[0]}</div>
-            <div className="text-xs text-text-secondary truncate">"{replyingTo.text || replyingTo.fileName}"</div>
+            <div className="text-xs font-mono font-bold text-indigo-600">{(replyingTo.sender||"").split('@')[0]}</div>
+            <div className="text-xs font-mono text-slate-500 truncate">"{replyingTo.text || replyingTo.fileName}"</div>
           </div>
           <button onClick={()=>setReplyingTo(null)} className="text-primary hover:text-primary-hover"><i className="fa-solid fa-xmark"></i></button>
         </div>
       )}
 
       {/* Permanent compact rich-text toolbar */}
-      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/90 px-2 py-1 shadow-sm input-toolbar">
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg font-bold text-sm transition-colors" title="Bold">B</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg italic font-serif text-sm transition-colors" title="Italic">I</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg underline text-sm transition-colors" title="Underline">U</button>
+      <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 input-toolbar">
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded text-xs font-mono font-bold transition-colors" title="Bold">B</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded text-xs font-mono italic transition-colors" title="Italic">I</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded text-xs font-mono underline transition-colors" title="Underline">U</button>
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Superscript">x²</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Subscript">x₂</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded text-xs font-mono transition-colors" title="Superscript">x²</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded text-xs font-mono transition-colors" title="Subscript">x₂</button>
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#800000' }} title="Maroon"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#006400' }} title="Dark Green"></button>
@@ -153,7 +153,7 @@ export default function InputArea({
         <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-bottom-2 z-20 space-y-3">
           {pendingFiles.map((pf) => (
             <div key={pf.id} className="flex items-start gap-3 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-              <div className="mt-1 w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600"><i className="fa-solid fa-file-lines text-xl"></i></div>
+              <div className="mt-1 w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600"><i className="fa-solid fa-file-lines text-sm"></i></div>
               <div className="flex-1 space-y-2.5">
                 <div className="flex items-center gap-2">
                   <input type="text" value={pf.customName.replace(/\.[^/.]+$/, '').replace('__SECURE__', '')} onChange={(e) => { const newName = lockExtension(pf.file.name, e.target.value); setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, customName: newName } : f)); }} className="flex-1 text-sm font-bold text-slate-800 outline-none border-b border-transparent focus:border-indigo-500 bg-transparent py-0.5" placeholder="File name" />
@@ -177,16 +177,16 @@ export default function InputArea({
 
       <div className="flex items-end gap-2">
         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
-        <button className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors shrink-0" onClick={() => fileInputRef.current.click()} disabled={isUploading}>
-          <i className="fa-solid fa-plus text-xl"></i>
+        <button className="w-8 h-8 flex items-center justify-center text-indigo-500 hover:bg-slate-100 rounded-full transition-colors shrink-0" onClick={() => fileInputRef.current.click()} disabled={isUploading}>
+          <i className="fa-solid fa-plus text-sm"></i>
         </button>
 
         <div className="relative shrink-0" ref={emojiPickerRef}>
-          <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
-            <i className="fa-regular fa-face-smile text-xl"></i>
+          <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-8 h-8 flex items-center justify-center text-indigo-500 hover:bg-slate-100 rounded-full transition-colors">
+            <i className="fa-regular fa-face-smile text-sm"></i>
           </button>
           {emojiPickerOpen && (
-            <div className="emoji-picker-popup shadow-2xl border border-slate-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
+            <div className="emoji-picker-popup border border-slate-200 rounded-md animate-in fade-in slide-in-from-bottom-2">
               {EMOJI_LIST.map(emoji => (
                 <button key={emoji} onClick={() => insertEmoji(emoji)} className="hover:bg-slate-100 p-1.5 rounded-lg transition-colors">{emoji}</button>
               ))}
@@ -194,7 +194,7 @@ export default function InputArea({
           )}
         </div>
 
-        <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
+        <div className="flex-1 bg-slate-50 rounded-md flex items-end overflow-hidden transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
           <div
             contentEditable
             ref={chatInputRef}
@@ -205,8 +205,8 @@ export default function InputArea({
             onBlur={() => { if (activeGroup?.id && user?.uid) deleteDoc(doc(db, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium resize-y min-h-[46px]"
-            style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)' }}
+            className="custom-wysiwyg bg-transparent flex-1 outline-none text-sm text-slate-800 py-2 px-3 w-full overflow-y-auto font-medium font-mono resize-none min-h-[38px] whitespace-pre-wrap break-words break-all"
+            style={{ minHeight: '38px', maxHeight: 'clamp(96px, 20vh, 220px)' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -217,14 +217,14 @@ export default function InputArea({
         </div>
 
         {showScheduleButton && (
-          <button onClick={() => { if (!inputText.trim() || inputText === '<br>') return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
-            <i className="fa-regular fa-clock text-xl"></i>
+          <button onClick={() => { if (!inputText.trim() || inputText === '<br>') return alert("Type a message first, then schedule it."); setPendingScheduledText(inputText.trim()); setActiveModal('schedule_send'); }} className="shrink-0 w-8 h-8 flex justify-center items-center text-indigo-500 hover:bg-slate-100 rounded-full transition-colors">
+            <i className="fa-regular fa-clock text-sm"></i>
           </button>
         )}
 
         {showOfflineDrafts && offlineDrafts.length > 0 && (
-          <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-[42px] h-[42px] flex justify-center items-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
-            <i className="fa-solid fa-inbox text-xl"></i>
+          <button onClick={() => setActiveModal('offline_drafts')} className="shrink-0 relative w-8 h-8 flex justify-center items-center text-indigo-500 hover:bg-slate-100 rounded-full transition-colors">
+            <i className="fa-solid fa-inbox text-sm"></i>
             <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{offlineDrafts.length}</span>
           </button>
         )}
@@ -232,9 +232,9 @@ export default function InputArea({
         <button
           onClick={handleSendOfflineAware}
           disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+          className={`shrink-0 w-8 h-8 flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
-          <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
+          <i className="fa-solid fa-paper-plane text-[13px] ml-[-2px]"></i>
         </button>
       </div>
     </div>

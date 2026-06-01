@@ -46,32 +46,32 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
   ];
 
   return (
-    <aside className="hidden lg:flex shrink-0 h-full bg-slate-100 border-l border-slate-200 flex-col p-3 gap-2 overflow-hidden" style={{ width: `${sidebarWidth || 380}px` }}>
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 text-white rounded-2xl p-3 shadow-xl">
-        <div className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">User Analytics</div>
-        <div className="mt-2 text-sm font-black truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
-        <div className="mt-1 text-xs font-bold text-indigo-200">Ver. {appVersion}</div>
+    <aside className="hidden lg:flex shrink-0 h-full bg-white border-l border-slate-200 flex-col p-3 gap-2 overflow-hidden" style={{ width: `${sidebarWidth || 380}px` }}>
+      <div className="bg-white text-slate-800 border-l-2 border-indigo-400 pl-3 py-2">
+        <div className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-slate-400">User Analytics</div>
+        <div className="mt-1 text-sm font-bold truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
+        <div className="mt-1 text-[10px] font-mono text-slate-400">Ver. {appVersion}</div>
       </div>
-      <div className="rounded-2xl p-3 bg-white border border-emerald-100 shadow-sm flex items-center justify-between">
-        <div><div className="text-[11px] font-bold uppercase text-slate-500">Online Users</div><div className="text-xl font-black text-emerald-700">{onlineCount}</div></div>
+      <div className="flex gap-3 hover:bg-slate-50 py-1.5 px-2 -mx-2 rounded transition-colors group border-l-2 border-green-400 pl-3 items-center justify-between">
+        <div><div className="text-[10px] font-mono uppercase text-slate-500">Online Users</div><div className="text-lg font-mono font-bold text-emerald-700">{onlineCount}</div></div>
         <i className="fa-solid fa-user-check text-2xl text-emerald-600"></i>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {filters.map(([key, label]) => (
-          <button key={key} onClick={() => setPreset(key)} className={`rounded-xl p-2 text-left text-xs font-black border shadow-sm transition-all ${preset === key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>{label}</button>
+          <button key={key} onClick={() => setPreset(key)} className={`rounded-full border px-3 py-1.5 text-[11px] font-mono transition-all ${preset === key ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600'}`}>{label}</button>
         ))}
       </div>
       {preset === 'custom' && (
-        <div className="grid grid-cols-2 gap-2 bg-white rounded-2xl p-3 border border-slate-200 shadow-sm">
+        <div className="grid grid-cols-2 gap-2 bg-white rounded-md p-3 border border-slate-200">
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="modern-date-input" />
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="modern-date-input" />
         </div>
       )}
-      <div className="grid grid-cols-1 gap-2 flex-1">
+      <div className="grid grid-cols-1 gap-1.5 flex-1">
         {stats.map((item) => (
-          <div key={item.label} className={`rounded-2xl p-3 text-white bg-gradient-to-br ${item.tone} shadow-lg min-h-0 flex items-center justify-between`}>
-            <div><div className="text-[11px] font-bold uppercase opacity-80">{item.label}</div><div className="text-2xl font-black mt-1">{item.value}</div></div>
-            <i className={`fa-solid ${item.icon} text-3xl opacity-70`}></i>
+          <div key={item.label} className="flex gap-3 hover:bg-slate-50 py-1.5 px-2 -mx-2 rounded transition-colors border-l-2 border-indigo-400 pl-3 min-h-0 items-center justify-between">
+            <div><div className="text-[10px] font-mono uppercase text-slate-500">{item.label}</div><div className="text-xl font-mono font-bold mt-1 text-slate-800">{item.value}</div></div>
+            <i className={`fa-solid ${item.icon} text-xl text-slate-300`}></i>
           </div>
         ))}
       </div>

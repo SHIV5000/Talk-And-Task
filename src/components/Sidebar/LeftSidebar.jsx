@@ -56,12 +56,12 @@ export default function LeftSidebar({
           mobileSidebarOpen
             ? 'mobile-sidebar-panel open flex'
             : 'hidden md:flex'
-        } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
+        } w-[30%] min-w-[300px] max-w-[400px] bg-slate-950 text-white border-r border-slate-800 flex-col shrink-0 shadow-none h-full`}
         style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
-        <div className="shrink-0 border-b-2 border-white/20 safe-top px-3 py-3">
-          <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/10 shadow-inner">
+        <div className="shrink-0 border-b border-slate-800 safe-top px-3 py-2">
+          <div className="bg-transparent px-2 py-2 border-l-2 border-indigo-400">
             <div className="space-y-2.5">
             <div className="grid grid-cols-4 items-center gap-3">
               <div className="flex items-center justify-center shrink-0">
@@ -76,7 +76,7 @@ export default function LeftSidebar({
               </div>
                 <button
                   onClick={() => setShowSearch(prev => !prev)}
-                  className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                  className="text-white/80 hover:text-white hover:bg-white/10 w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all"
                   title="Search groups & people"
                 >
                   <i className="fa-solid fa-search"></i>
@@ -84,13 +84,13 @@ export default function LeftSidebar({
                 
                 <button
                   onClick={() => setActiveModal('edit_profile')}
-                  className="text-white/95 bg-white/10 hover:bg-white/20 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                  className="text-white/80 hover:text-white hover:bg-white/10 w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all"
                 >
                   <i className="fa-solid fa-gear"></i>
                 </button>
                 <button
                   onClick={onLogout}
-                  className="text-white/95 bg-white/10 hover:bg-rose-500/30 w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                  className="text-white/80 hover:text-white hover:bg-rose-500/20 w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all"
                 >
                   <i className="fa-solid fa-power-off"></i>
                 </button>
@@ -100,15 +100,15 @@ export default function LeftSidebar({
         </div>
 
         {/* Search */}
-        <div className={`border-b-2 border-white/20 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
-          <div className="bg-white/10 rounded-lg flex items-center px-3 py-2 focus-within:bg-white/20 transition-all">
+        <div className={`border-b border-slate-800 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
+          <div className="bg-slate-900 border border-slate-700 rounded-md flex items-center px-3 py-1 focus-within:border-indigo-400 transition-all">
             <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
             <input
               type="text"
               placeholder="Search groups & people..."
               value={sidebarSearch}
               onChange={e => setSidebarSearch(e.target.value)}
-              className="bg-transparent outline-none flex-1 text-sm placeholder-white/50"
+              className="bg-transparent outline-none flex-1 text-xs font-mono placeholder-white/40"
             />
             {sidebarSearch && (
               <button
@@ -144,30 +144,28 @@ export default function LeftSidebar({
                   setActiveGroup(g);
                   setMobileSidebarOpen(false);
                 }}
-                className={`flex items-center min-h-[72px] py-2 cursor-pointer transition-colors relative ${
-                  activeGroup?.id === g.id ? 'bg-white/10' : 'hover:bg-white/5'
-                } pl-3 pr-4`}
+                className={`flex items-center gap-2 py-1.5 px-2 cursor-pointer transition-colors relative border-l-2 ${activeGroup?.id === g.id ? 'bg-white/10 border-indigo-400' : 'border-transparent hover:bg-white/5 hover:border-slate-500'}`}
               >
                 <MemoizedAvatar
                   uid={g.id}
                   url={g.profilePicUrl}
                   name={g.name}
-                  sizeClass="w-[49px] h-[49px]"
+                  sizeClass="w-8 h-8"
                   isGroup={true}
-                  extraClasses={`mr-3 shrink-0 border-4 ${hasUnread ? 'border-emerald-700' : 'border-[#800020]'}`}
+                  extraClasses={`shrink-0 border ${hasUnread ? 'border-emerald-400' : 'border-slate-700'}`}
                 />
-                <div className="flex-1 min-w-0 overflow-hidden border-b-2 border-white/20 flex flex-col justify-center pr-2">
+                <div className="flex-1 min-w-0 overflow-hidden flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
-                    <span className="font-medium text-[14.5px] leading-tight break-words whitespace-normal pr-2">
+                    <span className="font-medium text-sm leading-tight break-words whitespace-normal pr-2">
                       {g.name}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs opacity-70 truncate">
+                    <span className="text-[10px] font-mono opacity-70 truncate">
                       {`${g.members?.length || 0} Members`}
                     </span>
                     {hasUnread && (
-                      <div className="w-[18px] h-[18px] bg-success rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm">
+                      <div className="bg-emerald-500/20 border border-emerald-400 text-emerald-100 text-[10px] font-mono px-1 rounded shrink-0">
                         1
                       </div>
                     )}
@@ -213,25 +211,21 @@ export default function LeftSidebar({
                   });
                   setMobileSidebarOpen(false);
                 }}
-                className={`flex items-center min-h-[72px] py-2 cursor-pointer transition-colors relative ${
-                  activeGroup?.id === dmIdStr
-                    ? 'bg-white/10'
-                    : 'hover:bg-white/5'
-                } pl-3 pr-4`}
+                className={`flex items-center gap-2 py-1.5 px-2 cursor-pointer transition-colors relative border-l-2 ${activeGroup?.id === dmIdStr ? 'bg-white/10 border-indigo-400' : 'border-transparent hover:bg-white/5 hover:border-slate-500'}`}
               >
-                <div className="relative mr-3 shrink-0">
+                <div className="relative shrink-0">
                   <MemoizedAvatar
                     uid={u.uid}
                     url={u.profilePicUrl}
                     name={u.name}
-                    sizeClass="w-[49px] h-[49px]"
+                    sizeClass="w-8 h-8"
                   />
                   <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full ${isOnline ? 'bg-emerald-700' : 'bg-[#800020]'}`} />
                 </div>
-                <div className="flex-1 min-w-0 overflow-hidden border-b-2 border-white/20 flex flex-col justify-center pr-2">
+                <div className="flex-1 min-w-0 overflow-hidden flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
                     <span
-                      className={`text-[14.5px] leading-tight break-words whitespace-normal pr-2 ${
+                      className={`text-sm leading-tight break-words whitespace-normal pr-2 ${
                         unreadInfo.total > 0 ? 'font-semibold' : 'font-medium'
                       }`}
                     >
@@ -240,14 +234,14 @@ export default function LeftSidebar({
                   </div>
                   <div className="flex justify-between items-center">
                     <span
-                      className={`text-xs truncate pr-4 ${
+                      className={`text-[10px] font-mono truncate pr-4 ${
                         unreadInfo.total > 0 ? 'font-semibold' : 'opacity-70'
                       }`}
                     >
                       {statusText}
                     </span>
                     {unreadInfo.total > 0 && (
-                      <div className="w-[20px] h-[20px] bg-success rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm">
+                      <div className="bg-emerald-500/20 border border-emerald-400 text-emerald-100 text-[10px] font-mono px-1 rounded shrink-0">
                         {unreadInfo.total}
                       </div>
                     )}
@@ -260,10 +254,10 @@ export default function LeftSidebar({
 
         {/* Admin Workspace v25.0 button (visible if user is admin) */}
         {(currentUserData?.isAdmin || isVipAdmin) && (
-          <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
+          <div className="p-3 bg-transparent border-t border-slate-800 shrink-0">
             <button
               onClick={() => setViewMode('admin')}
-              className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+              className="w-full border border-slate-700 hover:border-indigo-400 hover:bg-white/5 text-white py-1.5 rounded-md text-xs font-mono transition-colors flex items-center justify-center gap-2"
             >
               <i className="fa-solid fa-shield-halved"></i> Admin Workspace v25.0
             </button>

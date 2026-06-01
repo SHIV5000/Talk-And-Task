@@ -101,8 +101,8 @@ export default function ChatView({
   }, [pendingScrollTarget, setPendingScrollTarget]);
 
   return (
-    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] bg-slate-50 relative">
-      <div className="flex flex-col min-h-full justify-end py-4 pb-10">
+    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[6%] bg-white relative">
+      <div className="flex flex-col min-h-full justify-end py-3 pb-8">
 
         {toolPreferences?.showWatermark !== false && (
           <div className="doodle-watermark">
@@ -118,21 +118,21 @@ export default function ChatView({
           </div>
         )}
 
-        <div className="text-center mb-6 mt-4 relative z-[1]">
-          <span className="text-[12.5px] text-slate-500 bg-slate-200/50 px-4 py-1.5 rounded-lg shadow-sm font-medium border border-slate-200">
+        <div className="text-center mb-4 mt-3 relative z-[1]">
+          <span className="text-[10px] font-mono text-slate-500 bg-slate-50 px-3 py-1 rounded-md font-medium border border-slate-200">
             <i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.
           </span>
         </div>
 
         {pinnedMessages.length > 0 && (
           <div
-            className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100 pinned-banner-glow relative overflow-hidden"
+            className="sticky top-2 z-10 bg-white rounded-md p-2 mb-4 cursor-pointer hover:bg-slate-50 transition-colors border-l-2 border-indigo-400 pinned-banner-glow relative overflow-hidden"
             onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}
           >
-            <div className="flex justify-between items-center text-xs text-slate-500 font-medium mb-1">
+            <div className="flex justify-between items-center text-[10px] font-mono text-slate-500 mb-1">
               <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
             </div>
-            <div className="text-sm text-slate-800 line-clamp-1 truncate font-medium">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
+            <div className="text-[14px] text-slate-800 line-clamp-1 truncate font-medium">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
           </div>
         )}
 
@@ -146,7 +146,7 @@ export default function ChatView({
             return (
               <React.Fragment key={msg.id}>
                 {currentDay && currentDay !== prevDay && (
-                  <div className="flex items-center gap-3 my-5 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                  <div className="flex items-center gap-3 my-3 text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400">
                     <div className="flex-1 border-t border-dotted border-slate-300"></div>
                     <span>{formatDayLabel(currentDay)}</span>
                     <div className="flex-1 border-t border-dotted border-slate-300"></div>
@@ -196,7 +196,7 @@ export default function ChatView({
 
         {typingStatus.length > 0 && (
           <div className="flex items-start mt-2 relative z-[1]">
-            <div className="bg-white px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 border border-indigo-500/10">
+            <div className="bg-white px-3 py-1.5 rounded-md flex items-center gap-3 border-l-2 border-indigo-400">
               <div className="flex -space-x-2">
                 {typingStatus.map(t => {
                   const uidPart = t.id.split('_')[1] || t.id;
@@ -204,7 +204,7 @@ export default function ChatView({
                   return <MemoizedAvatar key={t.id} uid={uidPart} url={typist.profilePicUrl} name={t.name} sizeClass="w-7 h-7 typing-avatar-pulse border-2 border-white relative z-10" />
                 })}
               </div>
-              <span className="typing-gradient-text text-sm">... typing</span>
+              <span className="typing-gradient-text text-xs font-mono">... typing</span>
             </div>
           </div>
         )}
