@@ -66,7 +66,7 @@ export default function ChatView({
       arr.push(m);
       map.set(m.replyToId, arr);
     });
-    map.forEach((arr) => arr.sort((a, b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0)));
+    ap.forEach((arr) => arr.sort((a, b) => (a.timestamp?.toMillis?.() || Date.now()) - (b.timestamp?.toMillis?.() || Date.now())));
     return map;
   }, [messages]);
 
