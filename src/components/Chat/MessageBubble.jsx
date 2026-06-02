@@ -194,7 +194,7 @@ const MessageBubble = React.memo(({
         await updateDoc(doc(db, "messages", msg.id), { "taskData.trail": updatedTrail });
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} updated the task.`, "routine", "text");
       logTaskAudit("task_update");
-      setReviewComment("");
+      
         setInlineUpdateText(""); setIsAddingUpdate(false);
     } catch(e) {}
   };
