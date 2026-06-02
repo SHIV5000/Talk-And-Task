@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db, storage } from '../firebase.js';
-import { collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, limitToLast, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../utils/imageUtils.js';
 
@@ -25,7 +25,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
 
     // ================== MESSAGE LISTENER ==================
     useEffect(() => {
-        const q = query(collection(db, "messages"), orderBy("timestamp", "asc"), limit(300));
+        const q = query(collection(db, "messages"), orderBy("timestamp", "asc"), limitToLast(300));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             let loadedMessages = snapshot.docs.map(docSnapshot => {
                 const data = docSnapshot.data();
