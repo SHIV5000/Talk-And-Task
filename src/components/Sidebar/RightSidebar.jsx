@@ -27,12 +27,12 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
     const sent = scoped.filter((m) => m.senderEmail === user.email);
     const received = scoped.filter((m) => m.senderEmail !== user.email && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
     return [
-      { label: 'Messages Sent', value: sent.filter((m) => !m.isTask).length, icon: 'fa-paper-plane', tone: 'from-blue-600 to-indigo-600' },
-      { label: 'Messages Received', value: received.filter((m) => !m.isTask).length, icon: 'fa-inbox', tone: 'from-emerald-600 to-teal-600' },
-      { label: 'Messages Acknowledged', value: scoped.filter((m) => m.taskData?.ackBy?.[user.email] || (m.seenBy || []).includes(user.email)).length, icon: 'fa-circle-check', tone: 'from-lime-600 to-emerald-700' },
-      { label: 'Messages Replied', value: scoped.filter((m) => m.replyToId && m.senderEmail === user.email).length, icon: 'fa-reply', tone: 'from-purple-600 to-fuchsia-600' },
-      { label: 'Task Allotted', value: scoped.filter((m) => m.isTask && m.senderEmail === user.email).length, icon: 'fa-list-check', tone: 'from-orange-600 to-amber-600' },
-      { label: 'Task Completed', value: scoped.filter((m) => m.isTask && m.taskData?.status === 'Completed' && (m.senderEmail === user.email || m.taskData?.assignees?.includes(user.email))).length, icon: 'fa-flag-checkered', tone: 'from-rose-600 to-red-600' },
+      { label: 'Messages Sent', value: sent.filter((m) => !m.isTask).length, icon: 'fa-paper-plane', tone: 'bg-blue-50 text-blue-700 border-blue-100' },
+      { label: 'Messages Received', value: received.filter((m) => !m.isTask).length, icon: 'fa-inbox', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+      { label: 'Messages Acknowledged', value: scoped.filter((m) => m.taskData?.ackBy?.[user.email] || (m.seenBy || []).includes(user.email)).length, icon: 'fa-circle-check', tone: 'bg-lime-50 text-lime-700 border-lime-100' },
+      { label: 'Messages Replied', value: scoped.filter((m) => m.replyToId && m.senderEmail === user.email).length, icon: 'fa-reply', tone: 'bg-purple-50 text-purple-700 border-purple-100' },
+      { label: 'Task Allotted', value: scoped.filter((m) => m.isTask && m.senderEmail === user.email).length, icon: 'fa-list-check', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+      { label: 'Task Completed', value: scoped.filter((m) => m.isTask && m.taskData?.status === 'Completed' && (m.senderEmail === user.email || m.taskData?.assignees?.includes(user.email))).length, icon: 'fa-flag-checkered', tone: 'bg-rose-50 text-rose-700 border-rose-100' },
     ];
   }, [messages, range, user.email]);
 
@@ -47,13 +47,13 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
 
   return (
     <aside className="hidden lg:flex shrink-0 h-full bg-slate-100 border-l border-slate-200 flex-col p-3 gap-2 overflow-hidden" style={{ width: `${sidebarWidth || 380}px` }}>
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 text-white rounded-2xl p-3 shadow-xl">
-        <div className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">User Analytics</div>
+      <div className="bg-white text-slate-800 rounded-2xl p-3 shadow-sm border border-slate-200">
+        <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">User Analytics</div>
         <div className="mt-2 text-sm font-black truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
-        <div className="mt-1 text-xs font-bold text-indigo-200">Ver. {appVersion}</div>
+        <div className="mt-1 text-xs font-bold text-slate-400">Ver. {appVersion}</div>
       </div>
       <div className="rounded-2xl p-3 bg-white border border-emerald-100 shadow-sm flex items-center justify-between">
-        <div><div className="text-[11px] font-bold uppercase text-slate-500">Online Users</div><div className="text-xl font-black text-emerald-700">{onlineCount}</div></div>
+        <div><div className="text-[10px] font-bold uppercase text-slate-500">Online Users</div><div className="text-lg font-black text-emerald-700">{onlineCount}</div></div>
         <i className="fa-solid fa-user-check text-2xl text-emerald-600"></i>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -69,9 +69,9 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
       )}
       <div className="grid grid-cols-1 gap-2 flex-1">
         {stats.map((item) => (
-          <div key={item.label} className={`rounded-2xl p-3 text-white bg-gradient-to-br ${item.tone} shadow-lg min-h-0 flex items-center justify-between`}>
-            <div><div className="text-[11px] font-bold uppercase opacity-80">{item.label}</div><div className="text-2xl font-black mt-1">{item.value}</div></div>
-            <i className={`fa-solid ${item.icon} text-3xl opacity-70`}></i>
+          <div key={item.label} className={`rounded-2xl p-3 border ${item.tone} shadow-sm min-h-0 flex items-center justify-between`}>
+            <div><div className="text-[11px] font-bold uppercase opacity-80">{item.label}</div><div className="text-xl font-black mt-1">{item.value}</div></div>
+            <i className={`fa-solid ${item.icon} text-2xl opacity-60`}></i>
           </div>
         ))}
       </div>

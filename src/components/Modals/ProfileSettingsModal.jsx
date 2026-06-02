@@ -60,6 +60,9 @@ export default function ProfileSettingsModal({
                 </div>
                 <input type="file" ref={profilePicInputRef} className="hidden" accept="image/*" />
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">Tap to change avatar</div>
+                {profileUploadProgress > 0 && (
+                  <div className="w-full max-w-xs"><div className="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200"><div className="h-full bg-indigo-600 transition-all" style={{ width: `${Math.round(profileUploadProgress)}%` }} /></div><div className="mt-1 text-center text-[10px] font-black text-indigo-600">Uploading {Math.round(profileUploadProgress)}%</div></div>
+                )}
               </div>
 
               <div>

@@ -220,3 +220,8 @@ html { scroll-behavior: smooth; }
   .doodle-watermark { display: none; }
   .msg-row-spacing { margin-bottom: 1rem; }
 }
+.themed-surface, .chat-main-panel, .bg-white, .bg-slate-50, .bg-slate-100 { transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+body, button, input, textarea, select { font-family: var(--app-font-family), system-ui, sans-serif; }
+html[data-theme="dark"] .bg-white { background-color: #111827 !important; color: #e5e7eb; }
+html[data-theme="dark"] .text-slate-800, html[data-theme="dark"] .text-slate-700 { color: #e5e7eb !important; }
+html[data-theme="dark"] .border-slate-200, html[data-theme="dark"] .border-slate-100 { border-color: #334155 !important; }

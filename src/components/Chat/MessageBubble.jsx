@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { formatMessageText } from '../../utils/helpers.js';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import useUserDisplayName from '../../hooks/useUserDisplayName.js';
 import { db, storage } from '../../firebase.js';
 import { doc, updateDoc, collection, addDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -44,6 +45,7 @@ const MessageBubble = React.memo(({
   const [inlineReplyOpen, setInlineReplyOpen] = useState(false);
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [replyFormatOpen, setReplyFormatOpen] = useState(false);
+  const [showAssigneeChips, setShowAssigneeChips] = useState(false);
   const inlineReplyRef = useRef(null);
 
   // NEW: per‑assignee review state for modern review panel
@@ -63,7 +65,8 @@ const MessageBubble = React.memo(({
   const mentionsMe = (msg.mentionEmails || []).includes(userEmail);
 
   const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
-  const senderName = senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
+  const liveSenderName = useUserDisplayName(senderUser.uid || msg.senderUid, senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0]);
+  const senderName = liveSenderName || senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
   const senderAvatar = senderUser.profilePicUrl || null;
   const getUserName = (email) => dbUsers?.find(u => u.email === email)?.name || (email || '').split('@')[0] || 'Unknown';
   const sortedGroupUsers = [...(dbUsers || [])]
@@ -520,7 +523,7 @@ const MessageBubble = React.memo(({
                       )}
                       
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center -space-x-2 relative group/assignees">
+                        <div className="flex items-center -space-x-2 relative group/assignees cursor-pointer" onClick={(e) => { e.stopPropagation(); setShowAssigneeChips(v => !v); }} title="Show assignees">
                           {(msg.taskData.assignees || []).slice(0, 3).map(email => {
                             const assignee = dbUsers?.find(u => u.email === email);
                             return <MemoizedAvatar key={email} uid={assignee?.uid || email} url={assignee?.profilePicUrl} name={assignee?.name || email.split('@')[0]} sizeClass="w-6 h-6" extraClasses={`border-2 ${isTaskCompleted ? 'border-slate-50 opacity-70' : 'border-white'} relative z-10`} />;
@@ -532,6 +535,9 @@ const MessageBubble = React.memo(({
                           )}
                         </div>
                       </div>
+                      {showAssigneeChips && (
+                        <div className="mt-3 flex flex-wrap gap-2 transition-all duration-200">{(msg.taskData.assignees || []).map((email) => <span key={email} className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[11px] font-bold text-indigo-700">{getUserName(email)}</span>)}</div>
+                      )}
                     </div>
 
                     {canUseWorkerControls && (
@@ -907,8 +913,8 @@ const MessageBubble = React.memo(({
                     {inlineReplyOpen && (
                       <div className="w-full mt-2 rounded-xl border border-slate-200 bg-white p-2 text-left">
                         {replyFormatOpen && <div className="flex gap-1 mb-1"><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('bold');}} className="px-2 py-1 text-[10px] font-black bg-slate-100 rounded">B</button><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('italic');}} className="px-2 py-1 text-[10px] italic bg-slate-100 rounded">I</button><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('underline');}} className="px-2 py-1 text-[10px] underline bg-slate-100 rounded">U</button><button onMouseDown={(e)=>{e.preventDefault(); document.execCommand('insertText', false, '🙂');}} className="px-2 py-1 text-[10px] bg-slate-100 rounded">🙂</button></div>}
-                        <div ref={inlineReplyRef} contentEditable onMouseUp={()=>setReplyFormatOpen(!!window.getSelection()?.toString())} onKeyUp={()=>setReplyFormatOpen(!!window.getSelection()?.toString())} onInput={()=>setInlineReplyText(inlineReplyRef.current?.innerHTML || '')} onKeyDown={(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendInlineReply(); } }} className="min-h-[38px] outline-none text-[13px] text-slate-700" data-placeholder="Reply inline..." suppressContentEditableWarning />
-                        <div className="flex justify-end gap-2 mt-1"><button onClick={()=>setInlineReplyOpen(false)} className="text-[11px] font-bold text-slate-400">Cancel</button><button onClick={sendInlineReply} className="text-[11px] font-bold text-indigo-600">Send</button></div>
+                        <div ref={inlineReplyRef} contentEditable onMouseUp={()=>setReplyFormatOpen(!!window.getSelection()?.toString())} onKeyUp={()=>setReplyFormatOpen(!!window.getSelection()?.toString())} onInput={()=>setInlineReplyText(inlineReplyRef.current?.innerHTML || '')} onKeyDown={(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendInlineReply(); } }} className="min-h-[38px] max-h-40 overflow-y-auto resize-y outline-none text-[13px] text-slate-700 whitespace-pre-wrap break-words leading-relaxed" data-placeholder="Reply inline..." suppressContentEditableWarning />
+                        <div className="flex justify-end gap-2 mt-1"><button onClick={()=>setInlineReplyOpen(false)} className="text-[11px] font-bold text-slate-400">Cancel</button><button onClick={sendInlineReply} className="min-w-[58px] h-8 px-3 rounded-lg text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700">Send</button></div>
                       </div>
                     )}
                     </div>

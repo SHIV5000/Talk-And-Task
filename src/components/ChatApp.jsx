@@ -20,11 +20,13 @@ import useChatEngine from '../hooks/useChatEngine.js';
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
 import { compressImage } from '../utils/imageUtils.js';
 import { auth, db, storage, signOut } from '../firebase.js';
-import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
+const formatNotificationTime = (value) => { const date = value?.toDate ? value.toDate() : value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return ''; const diff = Date.now() - date.getTime(); if (diff < 60000) return 'Just now'; if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`; return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+const getSnoozeDate = (mode) => { const date = new Date(); if (mode === '15m') date.setMinutes(date.getMinutes() + 15); else if (mode === '1h') date.setHours(date.getHours() + 1); else { date.setHours(17, 0, 0, 0); if (date <= new Date()) date.setDate(date.getDate() + 1); } return date; };
 const APP_VERSION = "25.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
@@ -298,6 +300,7 @@ export default function ChatApp({ user, onLogout }) {
 
     const [sidebarSearch, setSidebarSearch] = useState("");
     const [chatFilter, setChatFilter] = useState("all");
+    const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [chatDateFilter, setChatDateFilter] = useState("");
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
@@ -582,7 +585,8 @@ export default function ChatApp({ user, onLogout }) {
                 const snap = await getDocs(q);
                 for (const document of snap.docs) {
                     const data = document.data();
-                    if (new Date(data.scheduledFor) <= now) {
+                    const scheduledMs = data.scheduledAt?.toMillis?.() || new Date(data.scheduledFor).getTime();
+                    if (scheduledMs <= now.getTime()) {
                         const payload = {
                             text: data.text,
                             groupId: data.groupId,
@@ -597,7 +601,7 @@ export default function ChatApp({ user, onLogout }) {
                             seenBy: [user.email]
                         };
                         await addDoc(collection(db, "messages"), payload);
-                        await updateDoc(doc(db, "scheduled_messages", document.id), { status: "sent" });
+                        await updateDoc(doc(db, "scheduled_messages", document.id), { status: "sent", sentAt: serverTimestamp(), retryCount: data.retryCount || 0 });
                         playMelody('messageSent');
                     }
                 }
@@ -855,10 +859,11 @@ export default function ChatApp({ user, onLogout }) {
         if (!text || text === '<br>' || !scheduleDateTime || !activeGroup) return alert("Enter message text and a future date/time.");
         if (new Date(scheduleDateTime) <= new Date()) return alert("Scheduled time must be in the future.");
         try {
-            await scheduleMessageDB(text, scheduleDateTime, isTask, taskData);
+            const scheduledLabel = new Date(scheduleDateTime).toLocaleString();
             setInputText(""); setPendingScheduledText(""); setScheduleDateTime(""); setActiveModal(null);
             if(chatInputRef.current) chatInputRef.current.innerHTML = '';
-            addToast(`✅ Scheduled for ${new Date(scheduleDateTime).toLocaleString()}`, 'success');
+            addToast(`✅ Scheduled for ${scheduledLabel}`, 'success');
+            await scheduleMessageDB(text, scheduleDateTime, isTask, taskData);
         } catch(e) { alert("Failed to schedule."); }
     };
 
@@ -1177,16 +1182,19 @@ export default function ChatApp({ user, onLogout }) {
                 setProfileUploadProgress(10);
                 const uniqueFileName = `${user.uid}_${Date.now()}_avatar.webp`;
                 const compressedBlob = await compressImage(file, 512, 512, 0.62);
-                const avatarFile = new File([compressedBlob], uniqueFileName, { type: 'image/webp' });
+                const avatarBlob = compressedBlob instanceof Blob ? compressedBlob : new Blob([compressedBlob], { type: 'image/webp' });
+                const avatarFile = new File([avatarBlob], uniqueFileName, { type: 'image/webp' });
                 const uploadTask = uploadBytesResumable(ref(storage, `avatars/${uniqueFileName}`), avatarFile);
                 await new Promise((resolve, reject) => {
                     uploadTask.on('state_changed', (snapshot) => setProfileUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100), reject, async () => {
                         updateData.profilePicUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                        setProfileUploadProgress(100);
                         resolve();
                     });
                 });
             }
             await updateDoc(doc(db, "users", user.uid), updateData);
+            setProfileForm(prev => ({ ...prev, name: updateData.name, themeFont: updateData.themeFont, accentColor: updateData.accentColor, displayMode: updateData.displayMode, fontScale: updateData.fontScale }));
             setActiveModal(null); setProfileUploadProgress(0);
         } catch (error) { alert("Profile update failed."); setProfileUploadProgress(0); }
     };
@@ -1450,6 +1458,7 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
 
                                     <div className="flex items-center gap-1 shrink-0 relative">
+                                      <div className="relative"><button onClick={() => setShowFilterMenu(v => !v)} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-[11px] font-black" title="Filter"><i className="fa-solid fa-filter mr-2"></i>Filter <i className="fa-solid fa-chevron-down ml-2 text-[9px]"></i></button>{showFilterMenu && (<div className="absolute top-full right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[140] p-2">{universalTaskFilters.map((f) => (<button key={f.key} onClick={() => { setChatFilter(f.key); setShowFilterMenu(false); if (f.key === 'date-range' && !chatDateFilter) setChatDateFilter(new Date().toISOString().split('T')[0]); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold ${chatFilter === f.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><i className={`fa-solid ${f.icon} w-4 mr-2`}></i>{f.label}</button>))}{chatFilter === 'date-range' && <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="modern-date-input mt-2" />}</div>)}</div>
                                       <button onClick={() => setViewMode('advanced')} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-black" title="Advanced Search"><i className="fa-solid fa-magnifying-glass-chart md:mr-2"></i><span className="hidden md:inline">Advanced Search</span></button>
 
                                       <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
@@ -1466,7 +1475,7 @@ export default function ChatApp({ user, onLogout }) {
                                           <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
                                             <div className="p-3 bg-white flex justify-between items-center border-b border-slate-200">
                                               <span className="text-[13px] font-black text-slate-800 uppercase tracking-wide">Alerts</span>
-                                              <button onClick={() => genericNotifications.map(n => updateDoc(doc(db, "notifications", n.id), { isRead: true }))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
+                                              <button onClick={() => genericNotifications.map(n => deleteDoc(doc(db, "notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
                                             </div>
                                             <div className="max-h-[70vh] overflow-y-auto bg-white divide-y divide-slate-100">
                                               {totalNotifications === 0 ? <div className="p-5 text-center text-[13px] font-medium text-slate-400">No new activity</div> : (
@@ -1474,7 +1483,7 @@ export default function ChatApp({ user, onLogout }) {
                                                   {[...activeActionableTasks].sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(task => (
                                                     <div key={task.id} onClick={() => { setShowNotifications(false); navigateToMessageFromNotification(task.id, task.groupId); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700">
                                                       <div className="font-black text-rose-600">Pending Task</div>
-                                                      <div className="line-clamp-2">{stripHtml(task.text)}</div>
+                                                      <div className="line-clamp-2">{stripHtml(task.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(task.timestamp)}</div>
                                                       <button onClick={(e)=>{ e.stopPropagation(); updateDoc(doc(db, 'messages', task.id), { 'taskData.dismissedBy': [...(task.taskData?.dismissedBy || []), user.uid] }); }} className="mt-1 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                     </div>
                                                   ))}
@@ -1482,7 +1491,7 @@ export default function ChatApp({ user, onLogout }) {
                                                     <div key={n.id} onClick={() => { setShowNotifications(false); if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700 relative pr-12">
                                                       <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "notifications", n.id)); }} className="absolute top-2 right-3 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                       <div className="font-black text-indigo-600">{n.type === 'reply' ? 'Reply' : n.type === 'message' ? 'Message' : n.type === 'mention' ? 'Mention' : n.type === 'reminder' ? 'Reminder' : n.type === 'task' ? 'Task' : 'Alert'}</div>
-                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div>
+                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; updateDoc(doc(db, 'notifications', n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
                                                     </div>
                                                   ))}
                                                 </>
@@ -1497,7 +1506,7 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                 </div>
 
-                                <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
+                                <div className="hidden">
                                   {universalTaskFilters.map((f) => (
                                     <button
                                       key={f.key}

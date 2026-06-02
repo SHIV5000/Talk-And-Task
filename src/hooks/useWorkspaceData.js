@@ -37,7 +37,8 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
 
         const qAlerts = query(collection(db, "notifications"), where("userId", "==", user.uid), where("isRead", "==", false));
         const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
-            const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
+            const now = Date.now();
+            const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => !n.snoozeUntil || (n.snoozeUntil?.toMillis?.() || new Date(n.snoozeUntil).getTime() || 0) <= now).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
             setGenericNotifications(sorted);
         });
 
