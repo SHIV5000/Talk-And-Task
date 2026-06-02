@@ -20,11 +20,13 @@ import useChatEngine from '../hooks/useChatEngine.js';
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
 import { compressImage } from '../utils/imageUtils.js';
 import { auth, db, storage, signOut } from '../firebase.js';
-import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Global String Formatter (Prevents raw HTML showing in menus)
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
+const formatNotificationTime = (value) => { const date = value?.toDate ? value.toDate() : value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return ''; const diff = Date.now() - date.getTime(); if (diff < 60000) return 'Just now'; if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`; return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+const getSnoozeDate = (mode) => { const date = new Date(); if (mode === '15m') date.setMinutes(date.getMinutes() + 15); else if (mode === '1h') date.setHours(date.getHours() + 1); else { date.setHours(17, 0, 0, 0); if (date <= new Date()) date.setDate(date.getDate() + 1); } return date; };
 const APP_VERSION = "25.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
@@ -298,12 +300,14 @@ export default function ChatApp({ user, onLogout }) {
 
     const [sidebarSearch, setSidebarSearch] = useState("");
     const [chatFilter, setChatFilter] = useState("all");
+    const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [chatDateFilter, setChatDateFilter] = useState("");
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editMessageText, setEditMessageText] = useState("");
     const [activeGroup, setActiveGroup] = useState(null);
+    const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
 
     const [taskAssignees, setTaskAssignees] = useState([]);
     const [taskDeadline, setTaskDeadline] = useState("");
@@ -502,13 +506,21 @@ export default function ChatApp({ user, onLogout }) {
     }, []);
 
     useEffect(() => {
-        if (isWorkspaceLoading || !groups.length || activeGroup) return;
+        const media = window.matchMedia('(max-width: 767px)');
+        const syncViewport = () => setIsMobileViewport(media.matches);
+        syncViewport();
+        media.addEventListener('change', syncViewport);
+        return () => media.removeEventListener('change', syncViewport);
+    }, []);
+
+    useEffect(() => {
+        if (isWorkspaceLoading || isMobileViewport || !groups.length || activeGroup) return;
         const savedGroupId = currentUserData?.lastActiveGroupId;
         if (savedGroupId) {
             const g = groups.find(gr => gr.id === savedGroupId && gr.members?.includes(user.email));
             if (g) setActiveGroup(g);
         }
-    }, [isWorkspaceLoading, groups, currentUserData?.lastActiveGroupId, user.email, activeGroup]);
+    }, [isWorkspaceLoading, isMobileViewport, groups, currentUserData?.lastActiveGroupId, user.email, activeGroup]);
 
     useEffect(() => {
         if (!activeGroup?.id || !user.uid) return;
@@ -573,7 +585,8 @@ export default function ChatApp({ user, onLogout }) {
                 const snap = await getDocs(q);
                 for (const document of snap.docs) {
                     const data = document.data();
-                    if (new Date(data.scheduledFor) <= now) {
+                    const scheduledMs = data.scheduledAt?.toMillis?.() || new Date(data.scheduledFor).getTime();
+                    if (scheduledMs <= now.getTime()) {
                         const payload = {
                             text: data.text,
                             groupId: data.groupId,
@@ -588,7 +601,7 @@ export default function ChatApp({ user, onLogout }) {
                             seenBy: [user.email]
                         };
                         await addDoc(collection(db, "messages"), payload);
-                        await updateDoc(doc(db, "scheduled_messages", document.id), { status: "sent" });
+                        await updateDoc(doc(db, "scheduled_messages", document.id), { status: "sent", sentAt: serverTimestamp(), retryCount: data.retryCount || 0 });
                         playMelody('messageSent');
                     }
                 }
@@ -674,7 +687,7 @@ export default function ChatApp({ user, onLogout }) {
     const triggerHighlight = useCallback((msgId) => {
         setHighlightedMsgId(msgId);
         if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 3000);
+        highlightTimerRef.current = setTimeout(() => { setHighlightedMsgId(null); }, 2000);
     }, []);
 
     const scrollToMessageDirect = useCallback((msgId) => {
@@ -717,7 +730,7 @@ export default function ChatApp({ user, onLogout }) {
                         if (el) {
                             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             el.classList.add('ring-4', 'ring-indigo-400', 'bg-indigo-50', 'transition-all', 'duration-500');
-                            setTimeout(() => el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50'), 4000);
+                            setTimeout(() => el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50'), 2000);
                         } else if (attempts < 30) {
                             attempts += 1;
                             setTimeout(scrollReplyIntoView, 150);
@@ -846,10 +859,11 @@ export default function ChatApp({ user, onLogout }) {
         if (!text || text === '<br>' || !scheduleDateTime || !activeGroup) return alert("Enter message text and a future date/time.");
         if (new Date(scheduleDateTime) <= new Date()) return alert("Scheduled time must be in the future.");
         try {
-            await scheduleMessageDB(text, scheduleDateTime, isTask, taskData);
+            const scheduledLabel = new Date(scheduleDateTime).toLocaleString();
             setInputText(""); setPendingScheduledText(""); setScheduleDateTime(""); setActiveModal(null);
             if(chatInputRef.current) chatInputRef.current.innerHTML = '';
-            addToast(`✅ Scheduled for ${new Date(scheduleDateTime).toLocaleString()}`, 'success');
+            addToast(`✅ Scheduled for ${scheduledLabel}`, 'success');
+            await scheduleMessageDB(text, scheduleDateTime, isTask, taskData);
         } catch(e) { alert("Failed to schedule."); }
     };
 
@@ -1168,16 +1182,19 @@ export default function ChatApp({ user, onLogout }) {
                 setProfileUploadProgress(10);
                 const uniqueFileName = `${user.uid}_${Date.now()}_avatar.webp`;
                 const compressedBlob = await compressImage(file, 512, 512, 0.62);
-                const avatarFile = new File([compressedBlob], uniqueFileName, { type: 'image/webp' });
+                const avatarBlob = compressedBlob instanceof Blob ? compressedBlob : new Blob([compressedBlob], { type: 'image/webp' });
+                const avatarFile = new File([avatarBlob], uniqueFileName, { type: 'image/webp' });
                 const uploadTask = uploadBytesResumable(ref(storage, `avatars/${uniqueFileName}`), avatarFile);
                 await new Promise((resolve, reject) => {
                     uploadTask.on('state_changed', (snapshot) => setProfileUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100), reject, async () => {
                         updateData.profilePicUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                        setProfileUploadProgress(100);
                         resolve();
                     });
                 });
             }
             await updateDoc(doc(db, "users", user.uid), updateData);
+            setProfileForm(prev => ({ ...prev, name: updateData.name, themeFont: updateData.themeFont, accentColor: updateData.accentColor, displayMode: updateData.displayMode, fontScale: updateData.fontScale }));
             setActiveModal(null); setProfileUploadProgress(0);
         } catch (error) { alert("Profile update failed."); setProfileUploadProgress(0); }
     };
@@ -1348,11 +1365,12 @@ export default function ChatApp({ user, onLogout }) {
                             setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} getUnreadInfoForUser={getUnreadInfoForUser}
                             getUnreadInfoForGroup={getUnreadInfoForGroup} messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
                             sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={isVipAdmin} setViewMode={setViewMode}
+                            isMobileHome={!activeGroup}
                         />
                         <div className="hidden md:block app-resizer" onMouseDown={startResize('left')} title="Resize sidebar" />
 
                         {!activeGroup ? (
-                            <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
+                            <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
                                 <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
                                     <i className="fa-solid fa-comments text-4xl"></i>
                                 </div>
@@ -1367,7 +1385,7 @@ export default function ChatApp({ user, onLogout }) {
                         ) : (
                             <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0 chat-main-panel">
                                 <div className="bg-white flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
-                                    <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0"><i className="fa-solid fa-bars text-xl"></i></button>
+                                    <button onClick={() => setActiveGroup(null)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0" title="All groups and DMs"><i className="fa-solid fa-arrow-left text-xl"></i></button>
 
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
                                         {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
@@ -1383,7 +1401,7 @@ export default function ChatApp({ user, onLogout }) {
                                         </div>
                                     </div>
 
-                                    <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchWrapperRef}>
+                                    <div className="order-last flex basis-full md:order-none md:basis-auto md:flex-1 max-w-none md:max-w-md md:mx-4 relative" ref={searchWrapperRef}>
                                         <div className="bg-slate-50 rounded-full flex items-center px-4 py-1.5 shadow-inner border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all w-full">
                                             <i className="fa-solid fa-search text-[14px] text-indigo-400 mr-2"></i>
                                             <input
@@ -1398,7 +1416,7 @@ export default function ChatApp({ user, onLogout }) {
                                         </div>
 
                                         {isSearchFocused && globalSearchResults && (
-                                            <div className="absolute top-[110%] left-0 w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                            <div className="absolute top-[110%] left-0 right-0 md:right-auto w-full md:w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
                                                 <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
                                                     <span>Messages & Tasks Search</span>
                                                     <span>{globalSearchResults.messages.length} Found</span>
@@ -1440,7 +1458,8 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
 
                                     <div className="flex items-center gap-1 shrink-0 relative">
-                                      <button onClick={() => setViewMode('advanced')} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-black" title="Advanced Search">Advanced Search</button>
+                                      <div className="relative"><button onClick={() => setShowFilterMenu(v => !v)} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-[11px] font-black" title="Filter"><i className="fa-solid fa-filter mr-2"></i>Filter <i className="fa-solid fa-chevron-down ml-2 text-[9px]"></i></button>{showFilterMenu && (<div className="absolute top-full right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[140] p-2">{universalTaskFilters.map((f) => (<button key={f.key} onClick={() => { setChatFilter(f.key); setShowFilterMenu(false); if (f.key === 'date-range' && !chatDateFilter) setChatDateFilter(new Date().toISOString().split('T')[0]); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold ${chatFilter === f.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><i className={`fa-solid ${f.icon} w-4 mr-2`}></i>{f.label}</button>))}{chatFilter === 'date-range' && <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="modern-date-input mt-2" />}</div>)}</div>
+                                      <button onClick={() => setViewMode('advanced')} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-black" title="Advanced Search"><i className="fa-solid fa-magnifying-glass-chart md:mr-2"></i><span className="hidden md:inline">Advanced Search</span></button>
 
                                       <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
                                         <i className="fa-solid fa-calendar-alt"></i>
@@ -1456,23 +1475,23 @@ export default function ChatApp({ user, onLogout }) {
                                           <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
                                             <div className="p-3 bg-white flex justify-between items-center border-b border-slate-200">
                                               <span className="text-[13px] font-black text-slate-800 uppercase tracking-wide">Alerts</span>
-                                              <button onClick={() => genericNotifications.map(n => updateDoc(doc(db, "notifications", n.id), { isRead: true }))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
+                                              <button onClick={() => genericNotifications.map(n => deleteDoc(doc(db, "notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
                                             </div>
                                             <div className="max-h-[70vh] overflow-y-auto bg-white divide-y divide-slate-100">
                                               {totalNotifications === 0 ? <div className="p-5 text-center text-[13px] font-medium text-slate-400">No new activity</div> : (
                                                 <>
                                                   {[...activeActionableTasks].sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(task => (
-                                                    <div key={task.id} onClick={() => navigateToMessageFromNotification(task.id, task.groupId)} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700">
+                                                    <div key={task.id} onClick={() => { setShowNotifications(false); navigateToMessageFromNotification(task.id, task.groupId); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700">
                                                       <div className="font-black text-rose-600">Pending Task</div>
-                                                      <div className="line-clamp-2">{stripHtml(task.text)}</div>
+                                                      <div className="line-clamp-2">{stripHtml(task.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(task.timestamp)}</div>
                                                       <button onClick={(e)=>{ e.stopPropagation(); updateDoc(doc(db, 'messages', task.id), { 'taskData.dismissedBy': [...(task.taskData?.dismissedBy || []), user.uid] }); }} className="mt-1 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                     </div>
                                                   ))}
                                                   {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => (
-                                                    <div key={n.id} onClick={() => { if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700 relative pr-12">
+                                                    <div key={n.id} onClick={() => { setShowNotifications(false); if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700 relative pr-12">
                                                       <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "notifications", n.id)); }} className="absolute top-2 right-3 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                       <div className="font-black text-indigo-600">{n.type === 'reply' ? 'Reply' : n.type === 'message' ? 'Message' : n.type === 'mention' ? 'Mention' : n.type === 'reminder' ? 'Reminder' : n.type === 'task' ? 'Task' : 'Alert'}</div>
-                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div>
+                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; updateDoc(doc(db, 'notifications', n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
                                                     </div>
                                                   ))}
                                                 </>
@@ -1487,7 +1506,7 @@ export default function ChatApp({ user, onLogout }) {
                                     </div>
                                 </div>
 
-                                <div className="bg-white/95 border-b border-slate-200 px-3 md:px-4 py-2 flex items-center gap-2 overflow-x-auto custom-sidebar-scroll shrink-0 z-20 shadow-sm">
+                                <div className="hidden">
                                   {universalTaskFilters.map((f) => (
                                     <button
                                       key={f.key}
@@ -1503,11 +1522,11 @@ export default function ChatApp({ user, onLogout }) {
                                   )}
                                 </div>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[122px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[170px] md:top-[122px] right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
                                     <i className="fa-solid fa-arrow-down"></i>
                                 </button>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[90px] right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[96px] right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
                                     <i className="fa-solid fa-arrow-up"></i>
                                 </button>
 

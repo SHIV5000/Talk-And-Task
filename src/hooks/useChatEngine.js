@@ -224,7 +224,8 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
     });
 };
     const scheduleMessageDB = async (text, dt, isTask, taskData) => {
-        const payload = { text, senderEmail: user.email, senderUid: user.uid, groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: dt, status: "pending", isTask, createdAt: serverTimestamp() };
+        const scheduledDate = new Date(dt);
+        const payload = { text, senderEmail: user.email, senderUid: user.uid, groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp() };
         if (isTask && taskData) { payload.taskDeadline = taskData.deadline; payload.taskAssignees = taskData.assignees; }
         await addDoc(collection(db, "scheduled_messages"), payload);
     };

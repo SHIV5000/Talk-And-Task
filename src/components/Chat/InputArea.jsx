@@ -194,7 +194,7 @@ export default function InputArea({
           )}
         </div>
 
-        <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white">
+        <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white resize-y min-h-[46px] max-h-[34vh]">
           <div
             contentEditable
             ref={chatInputRef}
@@ -205,7 +205,7 @@ export default function InputArea({
             onBlur={() => { if (activeGroup?.id && user?.uid) deleteDoc(doc(db, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium resize-y min-h-[46px]"
+            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words"
             style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -232,7 +232,7 @@ export default function InputArea({
         <button
           onClick={handleSendOfflineAware}
           disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+          className={`shrink-0 min-w-[42px] w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
         >
           <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
         </button>

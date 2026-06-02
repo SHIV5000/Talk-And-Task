@@ -3,14 +3,47 @@ import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { db } from '../../firebase.js';
 import {
   collection, addDoc, serverTimestamp, updateDoc, doc,
-  deleteDoc, setDoc, onSnapshot, query, orderBy,
+  deleteDoc, setDoc, onSnapshot, query, orderBy, getDocs, where,
 } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { hasPermission } from '../../utils/rbac.js';
 
 // Utility to strip HTML
 const stripHtml = (html) =>
   html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
+
+
+const SYSTEM_ROLES = ['Super Admin', 'Auditor', 'Group Moderator'];
+const PERMISSION_AREAS = ['Users', 'Tasks', 'Messages', 'Logs', 'Settings', 'Backups', 'Integrations', 'Compliance'];
+const PERMISSION_ACTIONS = ['read', 'create', 'update', 'delete'];
+
+const makePermissionGrid = (enabled = false) => PERMISSION_AREAS.reduce((acc, area) => {
+  acc[area] = PERMISSION_ACTIONS.reduce((row, action) => ({ ...row, [action]: enabled }), {});
+  return acc;
+}, {});
+
+const DEFAULT_ROLES = [
+  { id: 'super-admin', name: 'Super Admin', system: true, permissions: makePermissionGrid(true) },
+  { id: 'auditor', name: 'Auditor', system: true, permissions: { ...makePermissionGrid(false), Logs: { read: true, create: false, update: false, delete: false }, Compliance: { read: true, create: false, update: false, delete: false } } },
+  { id: 'group-moderator', name: 'Group Moderator', system: true, permissions: { ...makePermissionGrid(false), Users: { read: true, create: false, update: false, delete: false }, Tasks: { read: true, create: true, update: true, delete: false }, Messages: { read: true, create: true, update: true, delete: false } } },
+];
+
+const formatDateTime = (value) => {
+  const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '—';
+};
+
+const toDateInput = (value) => (value?.toDate ? value.toDate() : value ? new Date(value) : new Date()).toISOString().split('T')[0];
+
+const downloadTextFile = (filename, content, type = 'application/json') => {
+  const blob = new Blob([content], { type });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
 
 const tagThemes = {
   teal: { bg: 'bg-teal-50', text: 'text-teal-700' },
@@ -67,6 +100,7 @@ export default function AdminPanel({
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserApprove, setNewUserApprove] = useState(true);
+  const [newUserTempPassword, setNewUserTempPassword] = useState('');
   const [selectedUsers, setSelectedUsers] = useState(new Set());
 
   // ----- Tasks table -----
@@ -116,6 +150,21 @@ export default function AdminPanel({
   });
   const [isOrgSaved, setIsOrgSaved] = useState(false);
 
+
+  // ----- Enterprise Admin Workspace -----
+  const [sessions, setSessions] = useState([]);
+  const [roles, setRoles] = useState(DEFAULT_ROLES);
+  const [selectedRoleId, setSelectedRoleId] = useState('super-admin');
+  const [showRoleMatrix, setShowRoleMatrix] = useState(false);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [retentionPolicies, setRetentionPolicies] = useState([]);
+  const [retentionRuns, setRetentionRuns] = useState([]);
+  const [newRetentionPolicy, setNewRetentionPolicy] = useState({ category: 'Chat Messages', ttlDays: 30, action: 'archive', isActive: true });
+  const [exportsHistory, setExportsHistory] = useState([]);
+  const [storageIndex, setStorageIndex] = useState([]);
+  const [dsarForm, setDsarForm] = useState({ uid: '', startDate: '', endDate: '', mode: 'access' });
+  const [adminSettings, setAdminSettings] = useState({ institutionName: '', pointOfContactEmail: '', fileUploadSizeMb: maxFileSizeMb || 5 });
+
   // ===== REAL-TIME LISTENERS =====
   // Organization doc
   useEffect(() => {
@@ -126,6 +175,32 @@ export default function AdminPanel({
       }
     });
     return () => unsub();
+  }, []);
+
+
+
+  useEffect(() => {
+    const unsubs = [
+      onSnapshot(collection(db, 'sessions'), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0)))),
+      onSnapshot(collection(db, 'roles'), (snap) => {
+        const stored = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const merged = [...DEFAULT_ROLES.filter((role) => !stored.some((s) => s.id === role.id || s.name === role.name)), ...stored];
+        setRoles(merged);
+      }),
+      onSnapshot(collection(db, 'retentionPolicies'), (snap) => setRetentionPolicies(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(query(collection(db, 'retention_cleanup_logs'), orderBy('timestamp', 'desc')), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(query(collection(db, 'exports'), orderBy('timestamp', 'desc')), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(doc(db, 'settings', 'institution'), (snap) => {
+        if (snap.exists()) setAdminSettings((prev) => ({ ...prev, ...snap.data() }));
+      }),
+    ];
+    return () => unsubs.forEach((unsub) => unsub());
+  }, []);
+
+  useEffect(() => {
+    DEFAULT_ROLES.forEach((role) => {
+      setDoc(doc(db, 'roles', role.id), { ...role, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+    });
   }, []);
 
   // Broadcast acks (for live & historical)
@@ -225,25 +300,170 @@ export default function AdminPanel({
       totalMessages: recentMsgs.length,
       activeTasks: recentTasks.filter((t) => t.taskData?.status !== 'Completed').length,
       completedTasks: recentTasks.filter((t) => t.taskData?.status === 'Completed').length,
+      totalUsers: (dbUsers || []).length,
+      activeSessionsToday: sessions.filter((session) => session.lastActivity?.toMillis?.() >= now - day).length,
       activeUsers: (dbUsers || []).filter((u) => u.lastActive?.toMillis?.() >= cutoff).length,
+      upcomingBackupStatus: exportsHistory[0]?.status || 'Not scheduled',
+      nextRetentionRun: retentionPolicies.some((policy) => policy.isActive) ? 'Daily 02:00 UTC' : 'No active policies',
       pendingApprovals: (dbUsers || []).filter((u) => !u.isApproved).length,
       overdueTasks: overdueTasks.length,
       newestUser: [...(dbUsers || [])].sort(
         (a, b) => (b.lastActive?.toMillis?.() || 0) - (a.lastActive?.toMillis?.() || 0)
       )[0],
     };
-  }, [messages, dbUsers, overviewTimeRange, allTasks]);
+  }, [messages, dbUsers, overviewTimeRange, allTasks, sessions, exportsHistory, retentionPolicies]);
 
   const recentAuditFeed = useMemo(
     () =>
-      (filteredAuditLogs || []).slice(0, 15).map((log) => ({
+      (filteredAuditLogs || []).slice(0, 20).map((log) => ({
         ...log,
         userName: (dbUsers || []).find((u) => u.email === log.user)?.name || 'System',
       })),
     [filteredAuditLogs, dbUsers]
   );
 
+  const criticalAuditFeed = useMemo(() => {
+    const criticalTypes = ['FORCE_LOGOUT', 'FORCE_LOGOUT_ALL', 'ROLE_CREATE', 'ROLE_UPDATE', 'ROLE_DELETE', 'USER_ROLE_UPDATE', 'DSAR_EXPORT', 'DSAR_DELETE', 'RETENTION_POLICY_UPDATE', 'RETENTION_RUN', 'BACKUP_EXPORT', 'API_KEY_CREATE', 'API_KEY_REVOKE'];
+    return (filteredAuditLogs || []).filter((log) => criticalTypes.includes(log.type)).slice(0, 20);
+  }, [filteredAuditLogs]);
+
+  const selectedRole = useMemo(() => roles.find((role) => role.id === selectedRoleId) || roles[0] || DEFAULT_ROLES[0], [roles, selectedRoleId]);
+  const selectedDsarUser = useMemo(() => dbUsers.find((u) => u.uid === dsarForm.uid), [dbUsers, dsarForm.uid]);
+  const canRunBackups = hasPermission(currentUserData, roles, 'Backups', 'create');
+  const canRunCompliance = hasPermission(currentUserData, roles, 'Compliance', 'create');
+
   // ===== FUNCTIONS =====
+
+  const logAuditEvent = async (type, target = '', details = {}) => {
+    await addDoc(collection(db, 'audit_logs'), {
+      type,
+      user: currentUserData?.email || currentUserData?.uid || 'admin',
+      adminId: currentUserData?.uid || currentUserData?.email || 'admin',
+      content: `${type}: ${target}`,
+      target,
+      details,
+      immutableId: `${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      timestamp: serverTimestamp(),
+    }).catch(() => {});
+  };
+
+  const updateRolePermission = async (role, area, action, checked) => {
+    const permissions = { ...(role.permissions || makePermissionGrid(false)) };
+    permissions[area] = { ...(permissions[area] || {}), [action]: checked };
+    await setDoc(doc(db, 'roles', role.id), { ...role, permissions, updatedAt: serverTimestamp() }, { merge: true });
+    await logAuditEvent('ROLE_UPDATE', role.id, { role: role.name, area, action, checked });
+  };
+
+  const createRole = async () => {
+    const name = newRoleName.trim();
+    if (!name) return alert('Enter a role name.');
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `role-${Date.now()}`;
+    await setDoc(doc(db, 'roles', id), { id, name, system: false, permissions: makePermissionGrid(false), createdAt: serverTimestamp() });
+    await logAuditEvent('ROLE_CREATE', id, { name });
+    setNewRoleName('');
+    setSelectedRoleId(id);
+  };
+
+  const deleteRole = async (role) => {
+    if (role.system || SYSTEM_ROLES.includes(role.name)) return alert('System roles cannot be deleted.');
+    if (!window.confirm(`Delete role ${role.name}?`)) return;
+    await deleteDoc(doc(db, 'roles', role.id));
+    await logAuditEvent('ROLE_DELETE', role.id, { name: role.name });
+    setSelectedRoleId('super-admin');
+  };
+
+  const updateUserRoles = async (userRecord, roleName, checked) => {
+    const nextRoles = checked ? [...new Set([...(userRecord.roles || []), roleName])] : (userRecord.roles || []).filter((role) => role !== roleName);
+    await updateDoc(doc(db, 'users', userRecord.uid), { roles: nextRoles });
+    await logAuditEvent('USER_ROLE_UPDATE', userRecord.uid, { email: userRecord.email, roles: nextRoles });
+  };
+
+  const forceLogoutSession = async (session) => {
+    if (!window.confirm(`Force logout ${session.email || session.uid}?`)) return;
+    await deleteDoc(doc(db, 'sessions', session.id));
+    await logAuditEvent('FORCE_LOGOUT', session.id, { affectedUid: session.uid, email: session.email, ip: session.ip });
+  };
+
+  const forceLogoutAll = async () => {
+    if (!window.confirm('This will immediately sign out every user across all devices. Are you sure?')) return;
+    await Promise.all(sessions.map((session) => deleteDoc(doc(db, 'sessions', session.id))));
+    await logAuditEvent('FORCE_LOGOUT_ALL', 'all-sessions', { affectedUsers: sessions.map((s) => s.uid), count: sessions.length });
+  };
+
+  const saveRetentionPolicy = async () => {
+    const payload = { ...newRetentionPolicy, ttlDays: Number(newRetentionPolicy.ttlDays), category: 'Chat Messages', updatedAt: serverTimestamp(), exemptTasks: true, exemptAuditLogs: true };
+    await addDoc(collection(db, 'retentionPolicies'), payload);
+    await logAuditEvent('RETENTION_POLICY_UPDATE', 'Chat Messages', payload);
+  };
+
+  const updateRetentionPolicy = async (policy, updates) => {
+    await updateDoc(doc(db, 'retentionPolicies', policy.id), { ...updates, updatedAt: serverTimestamp() });
+    await logAuditEvent('RETENTION_POLICY_UPDATE', policy.id, updates);
+  };
+
+  const runCleanupNow = async (policy) => {
+    const threshold = Date.now() - Number(policy.ttlDays || 30) * 24 * 60 * 60 * 1000;
+    const oldMessages = (messages || []).filter((m) => !m.isTask && (m.timestamp?.toMillis?.() || Date.now()) < threshold).slice(0, 500);
+    const runRef = await addDoc(collection(db, 'retention_cleanup_logs'), { ruleId: policy.id, ruleName: policy.category, timestamp: serverTimestamp(), status: 'running', affected: 0 });
+    for (const msg of oldMessages) {
+      if (policy.action === 'archive') await setDoc(doc(db, 'archived_messages', msg.id), { ...msg, archivedAt: serverTimestamp() });
+      await deleteDoc(doc(db, 'messages', msg.id));
+    }
+    await updateDoc(doc(db, 'retention_cleanup_logs', runRef.id), { status: 'completed', affected: oldMessages.length });
+    await logAuditEvent('RETENTION_RUN', policy.id, { affected: oldMessages.length, action: policy.action, ttlDays: policy.ttlDays });
+  };
+
+  const exportFullDatabase = async () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      requestedBy: currentUserData?.email || 'admin',
+      collections: { users: dbUsers, groups, messages, auditLogs: filteredAuditLogs, settings: adminSettings },
+    };
+    const fileName = `talk-task-export-${Date.now()}.json`;
+    await addDoc(collection(db, 'exports'), { fileName, size: JSON.stringify(payload).length, timestamp: serverTimestamp(), status: 'ready', downloadUrl: 'Generated in browser download' });
+    await logAuditEvent('BACKUP_EXPORT', fileName, { collections: Object.keys(payload.collections) });
+    downloadTextFile(fileName, JSON.stringify(payload, null, 2));
+  };
+
+  const buildStorageIndex = () => {
+    const files = [];
+    dbUsers.forEach((u) => { if (u.profilePicUrl) files.push({ name: `${u.name || u.email} avatar`, path: `users/${u.uid}/profilePicUrl`, url: u.profilePicUrl }); });
+    groups.forEach((g) => { if (g.profilePicUrl) files.push({ name: `${g.name} avatar`, path: `groups/${g.id}/profilePicUrl`, url: g.profilePicUrl }); });
+    messages.forEach((m) => { if (m.fileUrl) files.push({ name: m.fileName || 'attachment', path: `messages/${m.id}/fileUrl`, url: m.fileUrl }); });
+    setStorageIndex(files);
+  };
+
+  const generateDsarReport = async () => {
+    if (!selectedDsarUser) return alert('Select a user first.');
+    const start = dsarForm.startDate ? new Date(`${dsarForm.startDate}T00:00:00`).getTime() : 0;
+    const end = dsarForm.endDate ? new Date(`${dsarForm.endDate}T23:59:59`).getTime() : Number.MAX_SAFE_INTEGER;
+    const inRange = (ts) => { const ms = ts?.toMillis?.() || 0; return ms >= start && ms <= end; };
+    const userMessages = messages.filter((m) => (m.senderUid === selectedDsarUser.uid || m.senderEmail === selectedDsarUser.email) && inRange(m.timestamp));
+    const userTasks = messages.filter((m) => m.isTask && (m.senderEmail === selectedDsarUser.email || (m.taskData?.assignees || []).includes(selectedDsarUser.email)) && inRange(m.timestamp));
+    const userLogs = filteredAuditLogs.filter((l) => (l.adminId === selectedDsarUser.uid || l.user === selectedDsarUser.email) && inRange(l.timestamp));
+    const report = { metadata: { generatedAt: new Date().toISOString(), requestedBy: currentUserData?.email || 'admin', user: selectedDsarUser.email, dateRange: { start: dsarForm.startDate, end: dsarForm.endDate }, totalRecords: userMessages.length + userTasks.length + userLogs.length }, profile: selectedDsarUser, messages: userMessages, tasks: userTasks, auditLogs: userLogs, sessions: sessions.filter((s) => s.uid === selectedDsarUser.uid) };
+    await logAuditEvent('DSAR_EXPORT', selectedDsarUser.uid, report.metadata);
+    downloadTextFile(`dsar-${selectedDsarUser.uid}-${Date.now()}.json`, JSON.stringify(report, null, 2));
+  };
+
+  const executeHardDelete = async () => {
+    if (!selectedDsarUser) return alert('Select a user first.');
+    const code = `DELETE ${selectedDsarUser.email}`;
+    if (window.prompt(`This permanently anonymises personal data for ${selectedDsarUser.name || selectedDsarUser.email}. Type: ${code}`) !== code) return;
+    await updateDoc(doc(db, 'users', selectedDsarUser.uid), { name: 'Deleted User', emailHash: btoa(selectedDsarUser.email || selectedDsarUser.uid), email: '', isArchived: true, profilePicUrl: null });
+    await Promise.all(messages.filter((m) => m.senderUid === selectedDsarUser.uid || m.senderEmail === selectedDsarUser.email).map((m) => updateDoc(doc(db, 'messages', m.id), { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: m.isTask ? m.text : '[deleted]' }).catch(() => {})));
+    await Promise.all(sessions.filter((s) => s.uid === selectedDsarUser.uid).map((s) => deleteDoc(doc(db, 'sessions', s.id))));
+    await logAuditEvent('DSAR_DELETE', selectedDsarUser.uid, { confirmationCode: code });
+  };
+
+  const saveInstitutionSettings = async () => {
+    const payload = { ...adminSettings, fileUploadSizeMb: Number(adminSettings.fileUploadSizeMb || maxFileSizeMb || 5), activeUsersCount: dbUsers.length, updatedAt: serverTimestamp() };
+    await setDoc(doc(db, 'settings', 'institution'), payload, { merge: true });
+    if (setMaxFileSizeMb) setMaxFileSizeMb(payload.fileUploadSizeMb);
+    localStorage.setItem('maxFileSizeMb', String(payload.fileUploadSizeMb));
+    await logAuditEvent('SETTINGS_UPDATE', 'institution', payload);
+  };
+
   // --- Tasks ---
   const toggleTaskExpand = (id) => {
     const newSet = new Set(expandedTasks);
@@ -299,6 +519,8 @@ export default function AdminPanel({
       isAdmin: false,
       canCreateGroups: false,
       isArchived: false,
+      roles: [],
+      tempPasswordSet: !!newUserTempPassword,
       lastActive: serverTimestamp(),
       toolPreferences: {
         reply: true,
@@ -313,6 +535,7 @@ export default function AdminPanel({
     });
     setNewUserEmail('');
     setNewUserName('');
+    setNewUserTempPassword('');
     setShowAddUser(false);
   };
 
@@ -468,7 +691,7 @@ export default function AdminPanel({
 
       {/* Tabs */}
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll shrink-0 shadow-sm z-10 relative">
-        {['overview', 'users', 'groups', 'tasks', 'logs', 'broadcast', 'tags', 'limits', 'organization'].map((tab) => (
+        {['overview', 'users', 'security', 'groups', 'tasks', 'logs', 'broadcast', 'tags', 'lifecycle', 'recovery', 'compliance', 'organization'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -480,12 +703,15 @@ export default function AdminPanel({
           >
             {tab === 'overview' && <i className="fa-solid fa-gauge-high mr-2"></i>}
             {tab === 'users' && <i className="fa-solid fa-users mr-2"></i>}
+            {tab === 'security' && <i className="fa-solid fa-shield-halved mr-2"></i>}
             {tab === 'groups' && <i className="fa-solid fa-people-group mr-2"></i>}
             {tab === 'tasks' && <i className="fa-solid fa-list-check mr-2"></i>}
             {tab === 'logs' && <i className="fa-solid fa-clock-rotate-left mr-2"></i>}
             {tab === 'broadcast' && <i className="fa-solid fa-bullhorn mr-2"></i>}
             {tab === 'tags' && <i className="fa-solid fa-hashtag mr-2"></i>}
-            {tab === 'limits' && <i className="fa-solid fa-file-arrow-up mr-2"></i>}
+            {tab === 'lifecycle' && <i className="fa-solid fa-recycle mr-2"></i>}
+            {tab === 'recovery' && <i className="fa-solid fa-cloud-arrow-down mr-2"></i>}
+            {tab === 'compliance' && <i className="fa-solid fa-scale-balanced mr-2"></i>}
             {tab === 'organization' && <i className="fa-solid fa-building-columns mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
@@ -562,6 +788,19 @@ export default function AdminPanel({
               </div>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                ['Total Users', overviewMetrics.totalUsers, 'fa-address-book', 'text-indigo-700'],
+                ['Active Sessions Today', overviewMetrics.activeSessionsToday, 'fa-user-clock', 'text-teal-700'],
+                ['Upcoming Backup', overviewMetrics.upcomingBackupStatus, 'fa-database', 'text-slate-700'],
+                ['Next Retention Run', overviewMetrics.nextRetentionRun, 'fa-recycle', 'text-emerald-700'],
+              ].map(([label, value, icon, tone]) => (
+                <div key={label} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                  <div className="flex justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className={`mt-1 text-lg font-black ${tone}`}>{value}</p></div><i className={`fa-solid ${icon} text-xl text-slate-300`}></i></div>
+                </div>
+              ))}
+            </div>
+
             {/* additional cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
@@ -577,6 +816,15 @@ export default function AdminPanel({
                   <p className="text-2xl font-extrabold text-rose-600 mt-1">{overviewMetrics.overdueTasks}</p>
                 </div>
                 <button className="text-xs font-bold text-rose-600 bg-rose-50 px-4 py-2 rounded-lg hover:bg-rose-100 transition-colors">View All</button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50"><h3 className="font-bold text-slate-800 flex items-center gap-2"><i className="fa-solid fa-triangle-exclamation text-rose-500"></i> Critical Audit Timeline</h3></div>
+              <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto custom-sidebar-scroll">
+                {criticalAuditFeed.length === 0 ? <p className="p-6 text-sm text-slate-400 italic text-center">No critical events yet.</p> : criticalAuditFeed.map((log) => (
+                  <div key={log.id} className="px-5 py-3"><div className="flex items-center justify-between gap-3"><span className="text-xs font-black text-rose-600">{log.type}</span><span className="text-[11px] text-slate-400">{formatDateTime(log.timestamp)}</span></div><p className="text-sm text-slate-700 mt-1">{stripHtml(log.content || log.target || '')}</p></div>
+                ))}
               </div>
             </div>
 
@@ -617,12 +865,13 @@ export default function AdminPanel({
             {activeTab === 'users' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
                 <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
-                <button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button>
+                <div className="flex gap-2"><button onClick={() => setShowRoleMatrix(true)} className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-50"><i className="fa-solid fa-user-shield mr-2"></i>Manage Roles</button><button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button></div>
               </div>
               {showAddUser && (
                 <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-end">
                   <div><label className="text-xs font-bold text-slate-500 block mb-1">Email</label><input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="user@example.com" /></div>
                   <div><label className="text-xs font-bold text-slate-500 block mb-1">Name</label><input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Full Name" /></div>
+                  <div><label className="text-xs font-bold text-slate-500 block mb-1">Temporary Password</label><input type="text" value={newUserTempPassword} onChange={(e) => setNewUserTempPassword(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Set in Auth console" /></div>
                   <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newUserApprove} onChange={(e) => setNewUserApprove(e.target.checked)} className="w-4 h-4 accent-indigo-600" /> Approve immediately</label>
                   <button onClick={handleAddUser} className="bg-teal-500 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-teal-600">Save</button>
                   <button onClick={() => setShowAddUser(false)} className="bg-slate-200 text-slate-600 px-5 py-2 rounded-lg text-sm font-bold hover:bg-slate-300">Cancel</button>
@@ -649,10 +898,12 @@ export default function AdminPanel({
                       <th className="px-3 py-3">S.No.</th>
                       <th className="px-3 py-3">User</th>
                       <th className="px-3 py-3">Email</th>
+                      <th className="px-3 py-3">Roles</th>
                       <th className="px-3 py-3">Status</th>
                       <th className="px-2 py-3 text-center">Admin</th>
                       <th className="px-2 py-3 text-center">Groups</th>
-                      <th className="px-3 py-3 text-center">Login</th>
+                      <th className="px-3 py-3 text-center">Last Login</th>
+                      <th className="px-3 py-3 text-center">DSAR</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -662,10 +913,12 @@ export default function AdminPanel({
                         <td className="px-3 py-3 text-slate-500">{idx + 1}</td>
                         <td className="px-3 py-3"><div className="flex items-center gap-2"><MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-7 h-7" /><span className="font-medium text-slate-800">{u.name}</span>{u.isAdmin && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">ADMIN</span>}</div></td>
                         <td className="px-3 py-3 text-slate-500">{u.email}</td>
+                        <td className="px-3 py-3 min-w-[220px]"><div className="flex flex-wrap gap-1">{roles.map((role) => (<label key={role.id} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" checked={(u.roles || []).includes(role.name)} onChange={(e) => updateUserRoles(u, role.name, e.target.checked)} className="accent-indigo-600" /> <span onClick={(e) => { e.preventDefault(); setSelectedRoleId(role.id); setShowRoleMatrix(true); }}>{role.name}</span></label>))}</div></td>
                         <td className="px-3 py-3"><button onClick={() => handleToggleApprove(u)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${u.isApproved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>{u.isApproved ? 'APPROVED' : 'PENDING'}</button></td>
                         <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.isAdmin || false} onChange={() => handleToggleAdmin(u)} className="w-4 h-4 accent-indigo-600" /></td>
                         <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-4 h-4 accent-indigo-600" /></td>
-                        <td className="px-3 py-3 text-center text-[11px] text-slate-500">{u.lastActive?.toDate ? new Date(u.lastActive.toDate()).toLocaleDateString() : '—'}</td>
+                        <td className="px-3 py-3 text-center text-[11px] text-slate-500">{formatDateTime(u.lastLogin || u.lastActive)}</td>
+                        <td className="px-3 py-3 text-center"><select onChange={(e) => { if (!e.target.value) return; setDsarForm((prev) => ({ ...prev, uid: u.uid, mode: e.target.value })); setActiveTab('compliance'); e.target.value = ''; }} className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white"><option value="">DSAR Actions</option><option value="access">Export User Data</option><option value="delete">Right to be Forgotten</option></select></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1101,6 +1354,49 @@ export default function AdminPanel({
           </div>
         )}
 
+
+
+        {showRoleMatrix && (
+          <div className="fixed inset-0 bg-slate-900/40 z-[250] flex justify-end" onClick={() => setShowRoleMatrix(false)}>
+            <div className="w-full max-w-4xl bg-white h-full shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="p-5 border-b border-slate-200 flex items-center justify-between"><div><h2 className="text-lg font-black text-slate-800">Granular RBAC Role Matrix</h2><p className="text-xs text-slate-500 font-bold">System roles are immutable. Custom roles can be created and edited.</p></div><button onClick={() => setShowRoleMatrix(false)} className="text-slate-400 hover:text-rose-500"><i className="fa-solid fa-xmark text-xl"></i></button></div>
+              <div className="flex flex-1 min-h-0">
+                <div className="w-64 border-r border-slate-200 p-4 overflow-y-auto custom-sidebar-scroll">
+                  <div className="flex gap-2 mb-4"><input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="New role" className="min-w-0 flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs" /><button onClick={createRole} className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold">Add</button></div>
+                  {roles.map((role) => <button key={role.id} onClick={() => setSelectedRoleId(role.id)} className={`w-full text-left px-3 py-2 rounded-xl text-sm font-bold mb-1 ${selectedRole?.id === role.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>{role.name}{role.system && <span className="ml-2 text-[9px] text-slate-400">SYSTEM</span>}</button>)}
+                </div>
+                <div className="flex-1 p-5 overflow-auto custom-sidebar-scroll">
+                  <div className="flex items-center justify-between mb-4"><h3 className="font-black text-slate-800">{selectedRole?.name}</h3>{selectedRole && !selectedRole.system && <button onClick={() => deleteRole(selectedRole)} className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">Delete Role</button>}</div>
+                  <table className="w-full text-sm border border-slate-200 rounded-xl overflow-hidden"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3 text-left">Area</th>{PERMISSION_ACTIONS.map((action) => <th key={action} className="p-3 text-center">{action}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{PERMISSION_AREAS.map((area) => <tr key={area}><td className="p-3 font-bold text-slate-700">{area}</td>{PERMISSION_ACTIONS.map((action) => <td key={action} className="p-3 text-center"><input type="checkbox" disabled={selectedRole?.system} checked={!!selectedRole?.permissions?.[area]?.[action]} onChange={(e) => updateRolePermission(selectedRole, area, action, e.target.checked)} className="accent-indigo-600" /></td>)}</tr>)}</tbody></table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'security' && (
+          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-shield-halved text-rose-600 mr-2"></i>Security & Sessions</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active logins refresh through Firestore session documents.</p></div><button onClick={forceLogoutAll} className="bg-rose-600 text-white px-5 py-3 rounded-xl font-black shadow-sm hover:bg-rose-700"><i className="fa-solid fa-power-off mr-2"></i>Force Logout All Users</button></div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3 text-left">User</th><th className="p-3 text-left">IP</th><th className="p-3 text-left">Device / Browser / OS</th><th className="p-3 text-left">Location</th><th className="p-3 text-left">Login</th><th className="p-3 text-left">Last Activity</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{sessions.map((session) => <tr key={session.id} className="hover:bg-slate-50"><td className="p-3 font-bold text-slate-800">{session.email || session.uid}</td><td className="p-3 text-slate-600">{session.ip || '—'}</td><td className="p-3 text-slate-600">{session.deviceType || 'Device'} / {session.browser || 'Browser'} / {session.os || 'OS'}</td><td className="p-3 text-slate-600">{session.location?.city || '—'}, {session.location?.country || '—'}</td><td className="p-3 text-xs text-slate-500">{formatDateTime(session.loginTime)}</td><td className="p-3 text-xs text-slate-500">{formatDateTime(session.lastActivity)}</td><td className="p-3 text-right"><button onClick={() => forceLogoutSession(session)} className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded-lg hover:bg-rose-100">Force Logout</button></td></tr>)}</tbody></table>{sessions.length === 0 && <p className="p-6 text-center text-sm text-slate-400">No active sessions.</p>}</div>
+          </div>
+        )}
+
+        {activeTab === 'lifecycle' && (
+          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Retention policies are scoped to non-task chat messages only. Task trails and audit logs are exempt.</p></div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end"><div><label className="text-xs font-bold text-slate-500">Category</label><input value="Chat Messages" disabled className="block border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50" /></div><div><label className="text-xs font-bold text-slate-500">TTL</label><select value={newRetentionPolicy.ttlDays} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, ttlDays: Number(e.target.value) })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option></select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={newRetentionPolicy.action} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, action: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value="archive">Archive</option><option value="delete">Delete permanently</option></select></div><button onClick={saveRetentionPolicy} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Add Rule</button></div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Policies</div>{retentionPolicies.map((policy) => <div key={policy.id} className="p-4 border-b last:border-0 flex items-center justify-between gap-3"><div><div className="font-bold text-slate-800">{policy.category}</div><div className="text-xs text-slate-500">{policy.ttlDays} days • {policy.action} • Tasks/audit exempt</div></div><div className="flex gap-2"><button onClick={() => updateRetentionPolicy(policy, { isActive: !policy.isActive })} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${policy.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{policy.isActive ? 'Active' : 'Inactive'}</button><button onClick={() => runCleanupNow(policy)} disabled={!hasPermission(currentUserData, roles, 'Settings', 'update')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 disabled:opacity-50">Run Cleanup Now</button></div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Past Cleanup Executions</div>{retentionRuns.map((run) => <div key={run.id} className="p-4 border-b last:border-0"><div className="flex justify-between"><span className="font-bold text-slate-700">{run.ruleName || run.ruleId}</span><span className="text-xs text-slate-400">{formatDateTime(run.timestamp)}</span></div><div className="text-xs text-slate-500">{run.affected || 0} documents • {run.status}</div></div>)}</div></div>
+          </div>
+        )}
+
+        {activeTab === 'recovery' && (
+          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4"><div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-cloud-arrow-down text-indigo-600 mr-2"></i>Disaster Recovery</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Exports are logged to Firestore and downloaded as JSON.</p></div><button onClick={exportFullDatabase} disabled={!canRunBackups} className="bg-indigo-600 text-white px-5 py-3 rounded-xl font-black disabled:opacity-50">Export Full Database (JSON)</button></div><div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Export History</div>{exportsHistory.map((item) => <div key={item.id} className="p-4 border-b last:border-0"><div className="font-bold text-slate-700">{item.fileName}</div><div className="text-xs text-slate-500">{formatDateTime(item.timestamp)} • {item.size || 0} bytes • {item.status}</div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b flex justify-between"><span>Storage Link Index</span><button onClick={buildStorageIndex} className="text-xs text-indigo-600 font-bold">Refresh</button></div>{storageIndex.map((file, idx) => <div key={`${file.path}-${idx}`} className="p-4 border-b last:border-0 flex justify-between gap-3"><div className="min-w-0"><div className="font-bold text-slate-700 truncate">{file.name}</div><div className="text-xs text-slate-500 truncate">{file.path}</div></div><button onClick={() => window.open(file.url, '_blank')} className="text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg">Download</button></div>)}</div></div></div>
+        )}
+
+        {activeTab === 'compliance' && (
+          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4"><div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-scale-balanced text-purple-600 mr-2"></i>Compliance (DSAR)</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Generate access reports or execute right-to-be-forgotten workflows.</p></div><div className="bg-white rounded-2xl border border-slate-200 p-5 grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500">User</label><select value={dsarForm.uid} onChange={(e) => setDsarForm({ ...dsarForm, uid: e.target.value })} className="modern-date-input"><option value="">Select user</option>{dbUsers.map((u) => <option key={u.uid} value={u.uid}>{u.name} — {u.email}</option>)}</select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={dsarForm.mode} onChange={(e) => setDsarForm({ ...dsarForm, mode: e.target.value })} className="modern-date-input"><option value="access">Generate Access Report</option><option value="delete">Execute Hard Delete</option></select></div><div><label className="text-xs font-bold text-slate-500">Start Date</label><input type="date" value={dsarForm.startDate} onChange={(e) => setDsarForm({ ...dsarForm, startDate: e.target.value })} className="modern-date-input" /></div><div><label className="text-xs font-bold text-slate-500">End Date</label><input type="date" value={dsarForm.endDate} onChange={(e) => setDsarForm({ ...dsarForm, endDate: e.target.value })} className="modern-date-input" /></div><div className="md:col-span-2 flex gap-3"><button onClick={generateDsarReport} disabled={!canRunCompliance} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">Generate Access Report</button><button onClick={executeHardDelete} disabled={!canRunCompliance} className="bg-rose-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">Execute Hard Delete</button></div></div></div>
+        )}
+
         {/* ========= ORGANIZATION TAB ========= */}
         {activeTab === 'organization' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
@@ -1120,6 +1416,27 @@ export default function AdminPanel({
                   </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Official Institution Name</label>
+                      <input type="text" value={adminSettings.institutionName || ''} onChange={(e) => setAdminSettings({ ...adminSettings, institutionName: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Point-of-Contact Email</label>
+                      <input type="email" value={adminSettings.pointOfContactEmail || ''} onChange={(e) => setAdminSettings({ ...adminSettings, pointOfContactEmail: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">File Upload Size Limit (MB)</label>
+                      <input type="number" min="1" value={adminSettings.fileUploadSizeMb || maxFileSizeMb || 5} onChange={(e) => setAdminSettings({ ...adminSettings, fileUploadSizeMb: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Active User Count</label>
+                      <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
+                    </div>
+                    <div className="md:col-span-2 flex justify-end"><button type="button" onClick={saveInstitutionSettings} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Save Institution Settings</button></div>
+                  </div>
+
                   <div>
                     <label className="text-xs font-bold text-slate-500 block mb-1">Organization Name</label>
                     <input type="text" value={orgDetails.orgName} onChange={(e) => setOrgDetails({ ...orgDetails, orgName: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
@@ -1163,7 +1480,7 @@ export default function AdminPanel({
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-500 block mb-1">Active Users</label>
-                    <input type="number" value={orgDetails.activeUsersCount} onChange={(e) => setOrgDetails({ ...orgDetails, activeUsersCount: parseInt(e.target.value) || 0 })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                    <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
                   </div>
                 </div>
 
