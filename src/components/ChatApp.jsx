@@ -94,7 +94,7 @@ const AdvancedSearchPage = ({ messages, dbUsers, onBack, onOpen }) => {
 };
 
 const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, currentUserData, dbUsers, groups, activeGroup, isVipAdmin, handleReactionIntercept, deleteMessageDB, setActiveModal, sendMessageToDB, handleToggleBookmark, handleTogglePin, customTags, toolPreferences, setReplyingTo, setSelectedMessage, sidebarWidth }) => {
-    const threadMessages = messages.filter(m => m.replyToId === activeReplies.id).sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
+    const threadMessages = messages.filter(m => m.replyToId === activeReplies.id).sort((a,b) => (a.timestamp?.toMillis?.() || Date.now()) - (b.timestamp?.toMillis?.() || Date.now()));
     const [text, setText] = useState('');
     const [threadPendingFiles, setThreadPendingFiles] = useState([]);
     const [showThreadFileRename, setShowThreadFileRename] = useState(false);
@@ -659,8 +659,11 @@ export default function ChatApp({ user, onLogout }) {
 
         const topLevel = filtered.filter(m => !m.replyToId);
         if (!searchQuery.trim() && (chatFilter === 'all' || chatFilter === 'messages')) {
-            return topLevel.sort((a,b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0));
+            // FIX: Use Date.now() instead of 0 to prevent null timestamps from jumping to 1970
+            return topLevel.sort((a,b) => (a.timestamp?.toMillis?.() || Date.now()) - (b.timestamp?.toMillis?.() || Date.now()));
         }
+
+        return topLevel;
 
         return topLevel;
     }, [messages, activeGroup, user.email, chatFilter, chatDateFilter, searchQuery]);
