@@ -106,7 +106,7 @@ body {
 button:where(.text-slate-400),
 button:where(.text-slate-500),
 button:where(.text-slate-600),
-button:where(.text-[#54656f]) {
+button.text-\[\#54656f\] {
     color: #4F46E5 !important;
 }
 
@@ -195,3 +195,28 @@ aside .hover\:bg-white\/10:hover {
 .input-toolbar button:hover { color: var(--app-accent); }
 html[data-theme="dark"] body, html[data-theme="dark"] .bg-slate-50 { background-color: #0f172a; }
 html[data-theme="dark"] .themed-surface { background-color: #111827; color: #e5e7eb; }
+
+/* Mobile-first PWA navigation and smooth scroll experience */
+html { scroll-behavior: smooth; }
+.custom-sidebar-scroll, .chat-main-panel, [class*="overflow-y-auto"] { scroll-behavior: smooth; }
+@media (max-width: 767px) {
+  body { background: #312E81; }
+  .mobile-home-sidebar {
+    width: 100vw !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 100dvh;
+    position: relative;
+    z-index: 20;
+  }
+  .chat-main-panel {
+    width: 100vw;
+    min-width: 0;
+  }
+  .chat-main-panel .custom-wysiwyg {
+    min-height: 44px !important;
+    max-height: 34vh !important;
+  }
+  .doodle-watermark { display: none; }
+  .msg-row-spacing { margin-bottom: 1rem; }
+}

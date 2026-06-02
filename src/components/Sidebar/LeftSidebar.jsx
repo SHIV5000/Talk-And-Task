@@ -22,6 +22,7 @@ export default function LeftSidebar({
   isVipAdmin,
   setViewMode,
   sidebarWidth,
+  isMobileHome = false,
 }) {
   const [showSearch, setShowSearch] = useState(false);
 
@@ -55,9 +56,11 @@ export default function LeftSidebar({
         className={`${
           mobileSidebarOpen
             ? 'mobile-sidebar-panel open flex'
-            : 'hidden md:flex'
+            : isMobileHome
+              ? 'mobile-home-sidebar flex md:flex'
+              : 'hidden md:flex'
         } w-[30%] min-w-[300px] max-w-[400px] bg-[#312E81] text-white border-r border-white/10 flex-col shrink-0 shadow-2xl h-full`}
-        style={{ width: mobileSidebarOpen ? undefined : `${sidebarWidth || 320}px` }}
+        style={{ width: mobileSidebarOpen || isMobileHome ? undefined : `${sidebarWidth || 320}px` }}
       >
         {/* Header */}
         <div className="shrink-0 border-b-2 border-white/20 safe-top px-3 py-3">
@@ -130,6 +133,7 @@ export default function LeftSidebar({
             scrollbarColor: 'rgba(255, 255, 255, 0.25) transparent',
           }}
         >
+          <div className="px-4 pt-4 pb-2 text-[10px] font-black uppercase tracking-[0.22em] text-white/50">Groups</div>
           {myGroups.map(g => {
             const hasUnread = messages.some(
               m =>
@@ -177,6 +181,7 @@ export default function LeftSidebar({
             );
           })}
 
+          <div className="px-4 pt-4 pb-2 text-[10px] font-black uppercase tracking-[0.22em] text-white/50">Members / Direct Messages</div>
           {dmUsers.map(u => {
             const dmIdList = [user.uid, u.uid].sort();
             const dmIdStr = dmIdList.join('_');

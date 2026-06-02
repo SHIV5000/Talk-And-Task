@@ -16,7 +16,8 @@ export default function ProfileSettingsModal({
   setProfileForm,
   profilePicInputRef,
   profileUploadProgress,
-  handleProfileSubmit
+  handleProfileSubmit,
+  user
 }) {
   const [activeTab, setActiveTab] = useState('profile');
   const fontScaleOptions = [
@@ -59,6 +60,17 @@ export default function ProfileSettingsModal({
                 </div>
                 <input type="file" ref={profilePicInputRef} className="hidden" accept="image/*" />
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">Tap to change avatar</div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-2 ml-1">Email</label>
+                <input
+                  type="email"
+                  value={user?.email || currentUserData?.email || ''}
+                  disabled
+                  className="w-full p-3.5 border border-slate-200 rounded-xl text-[15px] outline-none bg-slate-100 text-slate-500 cursor-not-allowed font-semibold shadow-sm"
+                />
+                <p className="mt-1.5 text-[11px] text-slate-400 font-semibold ml-1">Email is managed by your Google sign-in.</p>
               </div>
 
               <div>

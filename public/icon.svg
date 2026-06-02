@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Talk &amp; Task icon</title>
+  <desc id="desc">Indigo rounded app icon with a white chat and task mark.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#312e81"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path fill="#fff" d="M112 156c0-31 25-56 56-56h176c31 0 56 25 56 56v112c0 31-25 56-56 56H226l-78 64c-14 11-36 1-36-17V156Z" opacity=".96"/>
+  <path fill="#4f46e5" d="M178 172h156c13 0 24 11 24 24s-11 24-24 24H178c-13 0-24-11-24-24s11-24 24-24Zm0 76h92c13 0 24 11 24 24s-11 24-24 24h-92c-13 0-24-11-24-24s11-24 24-24Z"/>
+  <circle cx="344" cy="340" r="72" fill="#10b981" stroke="#fff" stroke-width="22"/>
+  <path fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="30" d="m311 339 24 25 46-55"/>
+</svg>
