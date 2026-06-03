@@ -12,13 +12,16 @@ const EMPTY_FORM = {
   featureFlagsOverride: {},
 };
 
-const getTenantPackageId = (tenant = {}) => (
-  tenant.subscriptionPackageId
-  || tenant.packageId
-  || tenant.subscriptionPackage
-  || tenant.subscriptionType
-  || ''
-);
+const getTenantPackageId = (tenant) => {
+  const record = tenant || {};
+  return (
+    record.subscriptionPackageId
+    || record.packageId
+    || record.subscriptionPackage
+    || record.subscriptionType
+    || ''
+  );
+};
 
 const toNumberOrNull = (value) => {
   if (value === '' || value === null || value === undefined) return null;
@@ -26,16 +29,19 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const fromTenant = (tenant = {}) => ({
-  orgName: tenant.orgName || tenant.name || tenant.organizationName || '',
-  orgId: tenant.id || tenant.orgId || '',
-  adminName: tenant.adminName || '',
-  adminEmail: tenant.adminEmail || tenant.email || '',
-  subscriptionPackageId: getTenantPackageId(tenant),
-  storageLimitOverride: tenant.storageLimitOverride ?? '',
-  maxUsersOverride: tenant.maxUsersOverride ?? '',
-  featureFlagsOverride: tenant.featureFlagsOverride || {},
-});
+const fromTenant = (tenant) => {
+  const record = tenant || {};
+  return {
+    orgName: record.orgName || record.name || record.organizationName || '',
+    orgId: record.id || record.orgId || '',
+    adminName: record.adminName || '',
+    adminEmail: record.adminEmail || record.email || '',
+    subscriptionPackageId: getTenantPackageId(record),
+    storageLimitOverride: record.storageLimitOverride ?? '',
+    maxUsersOverride: record.maxUsersOverride ?? '',
+    featureFlagsOverride: record.featureFlagsOverride || {},
+  };
+};
 
 export default function TenantForm({
   mode = 'create',
@@ -195,7 +201,7 @@ export default function TenantForm({
         onChange={(featureFlagsOverride) => updateField('featureFlagsOverride', featureFlagsOverride)}
       />
 
-      <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+      <div className="sticky bottom-0 z-10 -mx-5 flex justify-end gap-3 border-t border-slate-100 bg-white/95 px-5 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur">
         {onCancel && (
           <button
             type="button"
