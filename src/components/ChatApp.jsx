@@ -11,7 +11,6 @@ import ChatView from './Chat/ChatView.jsx';
 import InputArea from './Chat/InputArea.jsx';
 import ModalManager from './Modals/ModalManager.jsx';
 import MessageBubble from './Chat/MessageBubble.jsx';
-import { AuthContext } from '../contexts/AuthContext.jsx';
 
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
@@ -309,8 +308,9 @@ const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserDat
     );
 };
 
-export default function ChatApp({ user, onLogout }) {
-    const { appVersion } = useAuth();
+export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) {
+    const { appVersion: contextAppVersion } = useAuth();
+    const appVersion = contextAppVersion || appVersionProp;
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [activeTaskSidebar, setActiveTaskSidebar] = useState(null);
@@ -1310,7 +1310,6 @@ export default function ChatApp({ user, onLogout }) {
     }
 
     return (
-        <AuthContext.Provider value={{ appVersion: APP_VERSION }}>
         <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
 
             {globalAnnouncement?.isActive && globalAnnouncement.id !== dismissedBroadcastId && (
@@ -1646,6 +1645,5 @@ export default function ChatApp({ user, onLogout }) {
                 )}
             </div>
         </div>
-        </AuthContext.Provider>
     );
 }
