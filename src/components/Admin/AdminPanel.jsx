@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import StorageDashboard from '../DeveloperConsole/Storage/StorageDashboard.jsx';
 import { db } from '../../firebase.js';
 import {
   collection, addDoc, serverTimestamp, updateDoc, doc,
@@ -8,6 +9,7 @@ import {
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { hasPermission } from '../../utils/rbac.js';
+import VersionManager from '../DeveloperConsole/Version/VersionManager.jsx';
 
 // Utility to strip HTML
 const stripHtml = (html) =>
@@ -85,11 +87,29 @@ export default function AdminPanel({
   customTags,
   globalAnnouncement,
   currentUserData,
+  isVipAdmin,
   maxFileSizeMb,
   setMaxFileSizeMb,
+  featureFlags = {},
 }) {
   // ===== TABS =====
   const [activeTab, setActiveTab] = useState('overview');
+  const hasFeature = useCallback((flag) => featureFlags?.[flag] !== false, [featureFlags]);
+  const adminTabs = useMemo(() => [
+    { id: 'overview', flag: 'advancedAnalytics' },
+    { id: 'users' },
+    { id: 'security', flag: 'dataGovernance' },
+    { id: 'groups' },
+    { id: 'tasks', flag: 'taskCards' },
+    { id: 'logs', flag: 'auditLogs' },
+    { id: 'broadcast' },
+    { id: 'tags', flag: 'customBranding' },
+    { id: 'lifecycle', flag: 'dataGovernance' },
+    { id: 'recovery', flag: 'dsarCompliance' },
+    { id: 'compliance', flag: 'dsarCompliance' },
+    { id: 'organization' },
+  ].filter((tab) => !tab.flag || hasFeature(tab.flag)).map((tab) => tab.id), [hasFeature]);
+
   const [limitDraft, setLimitDraft] = useState(maxFileSizeMb || 5);
 
   // ----- Overview time range -----
@@ -329,8 +349,8 @@ export default function AdminPanel({
 
   const selectedRole = useMemo(() => roles.find((role) => role.id === selectedRoleId) || roles[0] || DEFAULT_ROLES[0], [roles, selectedRoleId]);
   const selectedDsarUser = useMemo(() => dbUsers.find((u) => u.uid === dsarForm.uid), [dbUsers, dsarForm.uid]);
-  const canRunBackups = hasPermission(currentUserData, roles, 'Backups', 'create');
-  const canRunCompliance = hasPermission(currentUserData, roles, 'Compliance', 'create');
+  const canRunBackups = hasFeature('dsarCompliance') && hasPermission(currentUserData, roles, 'Backups', 'create');
+  const canRunCompliance = hasFeature('dsarCompliance') && hasPermission(currentUserData, roles, 'Compliance', 'create');
 
   // ===== FUNCTIONS =====
 
@@ -618,6 +638,7 @@ export default function AdminPanel({
 
   // --- Print / Export ---
   const printSelectedPDF = () => {
+    if (activeTab === 'logs' && !hasFeature('auditLogs')) return;
     const doc = new jsPDF('p', 'mm', 'a4');
     doc.setFont('Inter');
     doc.setFontSize(16);
@@ -657,6 +678,10 @@ export default function AdminPanel({
     doc.save(`admin_report_${activeTab}_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
+  useEffect(() => {
+    if (!adminTabs.includes(activeTab)) setActiveTab(adminTabs[0] || 'users');
+  }, [activeTab, adminTabs]);
+
   // ===== RENDER =====
   return (
     <div className="flex flex-col h-full w-full bg-slate-50 overflow-hidden animate-in fade-in z-40 relative">
@@ -669,7 +694,7 @@ export default function AdminPanel({
           <h1 className="font-bold text-lg text-white tracking-wide">Admin Workspace v25.0</h1>
         </div>
         <div className="flex items-center gap-2">
-          {['users', 'logs'].includes(activeTab) && (
+          {(['users', 'logs'].includes(activeTab) && (activeTab !== 'logs' || hasFeature('auditLogs'))) && (
             <button
               onClick={printSelectedPDF}
               className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm backdrop-blur border border-white/30"
@@ -691,7 +716,7 @@ export default function AdminPanel({
 
       {/* Tabs */}
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll shrink-0 shadow-sm z-10 relative">
-        {['overview', 'users', 'security', 'groups', 'tasks', 'logs', 'broadcast', 'tags', 'lifecycle', 'recovery', 'compliance', 'organization'].map((tab) => (
+        {adminTabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -712,6 +737,7 @@ export default function AdminPanel({
             {tab === 'lifecycle' && <i className="fa-solid fa-recycle mr-2"></i>}
             {tab === 'recovery' && <i className="fa-solid fa-cloud-arrow-down mr-2"></i>}
             {tab === 'compliance' && <i className="fa-solid fa-scale-balanced mr-2"></i>}
+            {tab === 'storage' && <i className="fa-solid fa-hard-drive mr-2"></i>}
             {tab === 'organization' && <i className="fa-solid fa-building-columns mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
@@ -720,6 +746,10 @@ export default function AdminPanel({
 
       {/* Main content */}
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
+
+        {activeTab === 'storage' && (
+          <StorageDashboard currentUserData={currentUserData} isVipAdmin={isVipAdmin} />
+        )}
 
         {activeTab === 'limits' && (
           <div className="p-6 overflow-y-auto custom-sidebar-scroll h-full">
@@ -734,7 +764,7 @@ export default function AdminPanel({
         )}
 
         {/* ========= OVERVIEW TAB ========= */}
-        {activeTab === 'overview' && (
+        {activeTab === 'overview' && hasFeature('advancedAnalytics') && (
           <div className="flex flex-col gap-6 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             {/* time range */}
             <div className="flex items-center gap-2 justify-end">
@@ -750,7 +780,7 @@ export default function AdminPanel({
 
             {/* Metric cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div onClick={() => setActiveTab('logs')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer group">
+              <div onClick={() => hasFeature('auditLogs') && setActiveTab('logs')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-indigo-500 transition-colors">Messages</p>
@@ -759,7 +789,7 @@ export default function AdminPanel({
                   <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-comments"></i></div>
                 </div>
               </div>
-              <div onClick={() => setActiveTab('tasks')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-amber-300 transition-all cursor-pointer group">
+              <div onClick={() => hasFeature('taskCards') && setActiveTab('tasks')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-amber-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-amber-500 transition-colors">Active Tasks</p>
@@ -768,7 +798,7 @@ export default function AdminPanel({
                   <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-spinner"></i></div>
                 </div>
               </div>
-              <div onClick={() => { setActiveTab('tasks'); setTaskStatusFilter('Completed'); }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer group">
+              <div onClick={() => { if (hasFeature('taskCards')) { setActiveTab('tasks'); setTaskStatusFilter('Completed'); } }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-500 transition-colors">Completed</p>
@@ -810,7 +840,7 @@ export default function AdminPanel({
                 </div>
                 <button onClick={() => setActiveTab('users')} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-colors">Manage Users</button>
               </div>
-              <div onClick={() => { setActiveTab('tasks'); setTaskStatusFilter('In Progress'); }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
+              <div onClick={() => { if (hasFeature('taskCards')) { setActiveTab('tasks'); setTaskStatusFilter('In Progress'); } }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Overdue Tasks</p>
                   <p className="text-2xl font-extrabold text-rose-600 mt-1">{overviewMetrics.overdueTasks}</p>
@@ -819,17 +849,17 @@ export default function AdminPanel({
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            {hasFeature('auditLogs') && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50"><h3 className="font-bold text-slate-800 flex items-center gap-2"><i className="fa-solid fa-triangle-exclamation text-rose-500"></i> Critical Audit Timeline</h3></div>
               <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto custom-sidebar-scroll">
                 {criticalAuditFeed.length === 0 ? <p className="p-6 text-sm text-slate-400 italic text-center">No critical events yet.</p> : criticalAuditFeed.map((log) => (
                   <div key={log.id} className="px-5 py-3"><div className="flex items-center justify-between gap-3"><span className="text-xs font-black text-rose-600">{log.type}</span><span className="text-[11px] text-slate-400">{formatDateTime(log.timestamp)}</span></div><p className="text-sm text-slate-700 mt-1">{stripHtml(log.content || log.target || '')}</p></div>
                 ))}
               </div>
-            </div>
+            </div>}
 
             {/* activity feed */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-0">
+            {hasFeature('auditLogs') && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-0">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2"><i className="fa-solid fa-clock-rotate-left text-indigo-500"></i> Recent Activity</h3>
               </div>
@@ -854,18 +884,18 @@ export default function AdminPanel({
                   ))
                 )}
               </div>
-            </div>
+            </div>}
           </div>
         )}
 
         {/* ========= USERS / GROUPS TABS ========= */}
-        {(activeTab === 'users' || activeTab === 'groups') && (
+        {(activeTab === 'users' || activeTab === 'groups' || (activeTab === 'tasks' && hasFeature('taskCards')) || (activeTab === 'logs' && hasFeature('auditLogs')) || (activeTab === 'tags' && hasFeature('customBranding'))) && (
           <div className="flex flex-col gap-6 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             {/* Users Section */}
             {activeTab === 'users' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
                 <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
-                <div className="flex gap-2"><button onClick={() => setShowRoleMatrix(true)} className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-50"><i className="fa-solid fa-user-shield mr-2"></i>Manage Roles</button><button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button></div>
+                <div className="flex gap-2"><button onClick={() => setShowRoleMatrix(true)} disabled={!hasFeature('dataGovernance')} className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-50"><i className="fa-solid fa-user-shield mr-2"></i>Manage Roles</button><button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button></div>
               </div>
               {showAddUser && (
                 <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-end">
@@ -1356,7 +1386,7 @@ export default function AdminPanel({
 
 
 
-        {showRoleMatrix && (
+        {showRoleMatrix && hasFeature('dataGovernance') && (
           <div className="fixed inset-0 bg-slate-900/40 z-[250] flex justify-end" onClick={() => setShowRoleMatrix(false)}>
             <div className="w-full max-w-4xl bg-white h-full shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="p-5 border-b border-slate-200 flex items-center justify-between"><div><h2 className="text-lg font-black text-slate-800">Granular RBAC Role Matrix</h2><p className="text-xs text-slate-500 font-bold">System roles are immutable. Custom roles can be created and edited.</p></div><button onClick={() => setShowRoleMatrix(false)} className="text-slate-400 hover:text-rose-500"><i className="fa-solid fa-xmark text-xl"></i></button></div>
@@ -1374,14 +1404,14 @@ export default function AdminPanel({
           </div>
         )}
 
-        {activeTab === 'security' && (
+        {activeTab === 'security' && hasFeature('dataGovernance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-shield-halved text-rose-600 mr-2"></i>Security & Sessions</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active logins refresh through Firestore session documents.</p></div><button onClick={forceLogoutAll} className="bg-rose-600 text-white px-5 py-3 rounded-xl font-black shadow-sm hover:bg-rose-700"><i className="fa-solid fa-power-off mr-2"></i>Force Logout All Users</button></div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3 text-left">User</th><th className="p-3 text-left">IP</th><th className="p-3 text-left">Device / Browser / OS</th><th className="p-3 text-left">Location</th><th className="p-3 text-left">Login</th><th className="p-3 text-left">Last Activity</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{sessions.map((session) => <tr key={session.id} className="hover:bg-slate-50"><td className="p-3 font-bold text-slate-800">{session.email || session.uid}</td><td className="p-3 text-slate-600">{session.ip || '—'}</td><td className="p-3 text-slate-600">{session.deviceType || 'Device'} / {session.browser || 'Browser'} / {session.os || 'OS'}</td><td className="p-3 text-slate-600">{session.location?.city || '—'}, {session.location?.country || '—'}</td><td className="p-3 text-xs text-slate-500">{formatDateTime(session.loginTime)}</td><td className="p-3 text-xs text-slate-500">{formatDateTime(session.lastActivity)}</td><td className="p-3 text-right"><button onClick={() => forceLogoutSession(session)} className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded-lg hover:bg-rose-100">Force Logout</button></td></tr>)}</tbody></table>{sessions.length === 0 && <p className="p-6 text-center text-sm text-slate-400">No active sessions.</p>}</div>
           </div>
         )}
 
-        {activeTab === 'lifecycle' && (
+        {activeTab === 'lifecycle' && hasFeature('dataGovernance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Retention policies are scoped to non-task chat messages only. Task trails and audit logs are exempt.</p></div>
             <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end"><div><label className="text-xs font-bold text-slate-500">Category</label><input value="Chat Messages" disabled className="block border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50" /></div><div><label className="text-xs font-bold text-slate-500">TTL</label><select value={newRetentionPolicy.ttlDays} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, ttlDays: Number(e.target.value) })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option></select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={newRetentionPolicy.action} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, action: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value="archive">Archive</option><option value="delete">Delete permanently</option></select></div><button onClick={saveRetentionPolicy} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Add Rule</button></div>
@@ -1389,11 +1419,11 @@ export default function AdminPanel({
           </div>
         )}
 
-        {activeTab === 'recovery' && (
+        {activeTab === 'recovery' && hasFeature('dsarCompliance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4"><div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-cloud-arrow-down text-indigo-600 mr-2"></i>Disaster Recovery</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Exports are logged to Firestore and downloaded as JSON.</p></div><button onClick={exportFullDatabase} disabled={!canRunBackups} className="bg-indigo-600 text-white px-5 py-3 rounded-xl font-black disabled:opacity-50">Export Full Database (JSON)</button></div><div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Export History</div>{exportsHistory.map((item) => <div key={item.id} className="p-4 border-b last:border-0"><div className="font-bold text-slate-700">{item.fileName}</div><div className="text-xs text-slate-500">{formatDateTime(item.timestamp)} • {item.size || 0} bytes • {item.status}</div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b flex justify-between"><span>Storage Link Index</span><button onClick={buildStorageIndex} className="text-xs text-indigo-600 font-bold">Refresh</button></div>{storageIndex.map((file, idx) => <div key={`${file.path}-${idx}`} className="p-4 border-b last:border-0 flex justify-between gap-3"><div className="min-w-0"><div className="font-bold text-slate-700 truncate">{file.name}</div><div className="text-xs text-slate-500 truncate">{file.path}</div></div><button onClick={() => window.open(file.url, '_blank')} className="text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg">Download</button></div>)}</div></div></div>
         )}
 
-        {activeTab === 'compliance' && (
+        {activeTab === 'compliance' && hasFeature('dsarCompliance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4"><div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-scale-balanced text-purple-600 mr-2"></i>Compliance (DSAR)</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Generate access reports or execute right-to-be-forgotten workflows.</p></div><div className="bg-white rounded-2xl border border-slate-200 p-5 grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500">User</label><select value={dsarForm.uid} onChange={(e) => setDsarForm({ ...dsarForm, uid: e.target.value })} className="modern-date-input"><option value="">Select user</option>{dbUsers.map((u) => <option key={u.uid} value={u.uid}>{u.name} — {u.email}</option>)}</select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={dsarForm.mode} onChange={(e) => setDsarForm({ ...dsarForm, mode: e.target.value })} className="modern-date-input"><option value="access">Generate Access Report</option><option value="delete">Execute Hard Delete</option></select></div><div><label className="text-xs font-bold text-slate-500">Start Date</label><input type="date" value={dsarForm.startDate} onChange={(e) => setDsarForm({ ...dsarForm, startDate: e.target.value })} className="modern-date-input" /></div><div><label className="text-xs font-bold text-slate-500">End Date</label><input type="date" value={dsarForm.endDate} onChange={(e) => setDsarForm({ ...dsarForm, endDate: e.target.value })} className="modern-date-input" /></div><div className="md:col-span-2 flex gap-3"><button onClick={generateDsarReport} disabled={!canRunCompliance} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">Generate Access Report</button><button onClick={executeHardDelete} disabled={!canRunCompliance} className="bg-rose-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">Execute Hard Delete</button></div></div></div>
         )}
 
@@ -1417,7 +1447,7 @@ export default function AdminPanel({
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                  <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {hasFeature('customBranding') && <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Official Institution Name</label>
                       <input type="text" value={adminSettings.institutionName || ''} onChange={(e) => setAdminSettings({ ...adminSettings, institutionName: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
@@ -1434,8 +1464,25 @@ export default function AdminPanel({
                       <label className="text-xs font-bold text-slate-500 block mb-1">Active User Count</label>
                       <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
                     </div>
+                    <div className="md:col-span-2">
+                      <VersionManager currentVersion={appVersion} />
+                    </div>
                     <div className="md:col-span-2 flex justify-end"><button type="button" onClick={saveInstitutionSettings} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Save Institution Settings</button></div>
-                  </div>
+                  </div>}
+
+                  {hasFeature('apiAccess') && (
+                    <div className="md:col-span-2 bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-between gap-4">
+                      <div><h3 className="font-black"><i className="fa-solid fa-code mr-2"></i>API Access</h3><p className="text-xs text-slate-300 font-bold uppercase tracking-wider">Manage integration keys and webhook settings.</p></div>
+                      <button type="button" onClick={() => logAuditEvent('API_SETTINGS_VIEW', 'organization')} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-sm font-bold">Open API Settings</button>
+                    </div>
+                  )}
+
+                  {hasFeature('prioritySupport') && (
+                    <div className="md:col-span-2 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-2xl p-4 flex items-center justify-between gap-4">
+                      <div><h3 className="font-black"><i className="fa-solid fa-headset mr-2"></i>Priority Support</h3><p className="text-xs font-bold uppercase tracking-wider">Escalation workflows and premium support contacts are enabled.</p></div>
+                      <button type="button" className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Contact Support</button>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-xs font-bold text-slate-500 block mb-1">Organization Name</label>

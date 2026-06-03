@@ -22,7 +22,7 @@ const MessageBubble = React.memo(({
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
   jumpToPrivateSource, handleAddInlineComment, customTags = [], setActiveReplies, setActiveTaskSidebar, isThreadView = false,
-  onOpenTask, taskSidebarMode = false, threadExpanded = false, onToggleThread, threadReplies = []
+  onOpenTask, taskSidebarMode = false, threadExpanded = false, onToggleThread, threadReplies = [], featureFlags = {}
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
@@ -459,7 +459,7 @@ const MessageBubble = React.memo(({
             {menuOpen && (
               <div ref={menuRef} className="absolute top-8 right-2 z-[120] bg-white rounded-xl shadow-lg border-2 border-slate-300 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
                 {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setInlineReplyOpen(true); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply</button>}
-                {!msg.isTask && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
+                {!msg.isTask && featureFlags.taskCards !== false && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
                 <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
                 <button onClick={() => { setMenuOpen(false); handleToggleBookmark(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600"><i className={`fa-solid fa-bookmark w-5 ${isBookmarked ? 'text-indigo-600' : ''}`}></i> {isBookmarked ? 'Unbookmark' : 'Bookmark'}</button>
                 {canPinItem && <button onClick={() => { setMenuOpen(false); handleTogglePin(msg); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className={`fa-solid fa-thumbtack w-5 ${msg.isPinned ? 'text-indigo-600' : ''}`}></i> {msg.isPinned ? 'Unpin' : 'Pin'}</button>}

@@ -4,7 +4,7 @@ import { serverTimestamp, doc, updateDoc, onSnapshot } from 'firebase/firestore'
 import {
   auth, onAuthStateChanged, signOut,
   GoogleAuthProvider, signInWithPopup, setPersistence, inMemoryPersistence,
-  db, collection, query, where, getDocs, setDoc
+  db, collection, query, where, getDocs, setDoc, onSnapshot
 } from './firebase.js';
 import ChatApp from './components/ChatApp.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
