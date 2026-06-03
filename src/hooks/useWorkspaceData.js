@@ -125,7 +125,11 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
             }
         });
 
-        const unsubUsers = onSnapshot(query(collection(db, "users"), where("orgId", "==", orgId), orderBy("email", "asc")), (snapshot) => setDbUsers(snapshot.docs.map(document => document.data())));
+        const unsubUsers = onSnapshot(query(collection(db, "users"), where("orgId", "==", orgId)), (snapshot) => {
+            const fetchedUsers = snapshot.docs.map(document => document.data());
+            fetchedUsers.sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+            setDbUsers(fetchedUsers);
+        });
         
         const unsubGroups = onSnapshot(orgCollection("groups"), (snapshot) => {
             setGroups(snapshot.docs.map(document => ({ id: document.id, ...document.data() })));
