@@ -15,6 +15,7 @@ import MessageBubble from './Chat/MessageBubble.jsx';
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
 import useChatEngine from '../hooks/useChatEngine.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 // Utils & Firebase Core
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
@@ -27,7 +28,6 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 const formatNotificationTime = (value) => { const date = value?.toDate ? value.toDate() : value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return ''; const diff = Date.now() - date.getTime(); if (diff < 60000) return 'Just now'; if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`; return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 const getSnoozeDate = (mode) => { const date = new Date(); if (mode === '15m') date.setMinutes(date.getMinutes() + 15); else if (mode === '1h') date.setHours(date.getHours() + 1); else { date.setHours(17, 0, 0, 0); if (date <= new Date()) date.setDate(date.getDate() + 1); } return date; };
-const APP_VERSION = "25.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -280,6 +280,7 @@ const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserDat
 };
 
 export default function ChatApp({ user, onLogout }) {
+    const { appVersion } = useAuth();
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [activeTaskSidebar, setActiveTaskSidebar] = useState(null);
@@ -1594,7 +1595,7 @@ export default function ChatApp({ user, onLogout }) {
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={currentUserData} appVersion={APP_VERSION}
+                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={currentUserData} appVersion={appVersion}
                             />
                           </>
                         ) : null}
