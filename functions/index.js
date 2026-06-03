@@ -334,6 +334,52 @@ exports.migrateToMultiTenant = onCall(async (request) => {
   return { ok: true, orgId, migratedCollections, usersUpdated };
 });
 
+exports.createUser = onCall(async (request) => {
+  await assertPermission(request, 'Users', 'create');
+  const data = request.data || {};
+  const email = String(data.email || '').trim();
+  const name = String(data.name || '').trim();
+  const password = String(data.password || '').trim();
+  const orgId = String(data.orgId || DEFAULT_ORG_ID).trim() || DEFAULT_ORG_ID;
+  const isApproved = !!data.isApproved;
+
+  if (!email || !name) throw new HttpsError('invalid-argument', 'email and name are required.');
+  if (password && password.length < 6) throw new HttpsError('invalid-argument', 'Temporary password must be at least 6 characters.');
+
+  const authPayload = { email, displayName: name, disabled: false };
+  if (password) authPayload.password = password;
+
+  const userRecord = await admin.auth().createUser(authPayload);
+  await db.collection('users').doc(userRecord.uid).set({
+    uid: userRecord.uid,
+    email,
+    name,
+    orgId,
+    isApproved,
+    isAdmin: false,
+    canCreateGroups: false,
+    isArchived: false,
+    roles: [],
+    tempPasswordSet: !!password,
+    createdAt: serverTimestamp(),
+    lastActive: serverTimestamp(),
+    toolPreferences: {
+      reply: true,
+      react: true,
+      edit: true,
+      delete: true,
+      pin: true,
+      bookmark: true,
+      showWatermark: true,
+      soundProfile: 'classic',
+    },
+  }, { merge: true });
+
+  await logAuditEvent('CREATE_USER', request.auth.uid, userRecord.uid, { email, orgId, isApproved });
+
+  return { ok: true, uid: userRecord.uid, isApproved };
+});
+
 exports.setCustomClaims = onCall(async (request) => {
   await assertPlatformOwner(request);
   const { uid, orgId, role, isPlatformOwner = false, claims = {} } = request.data || {};
