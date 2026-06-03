@@ -4,7 +4,8 @@ export default function ContextMenuModal({
   selectedMessage,
   setActiveModal,
   setReplyingTo,
-  chatInputRef
+  chatInputRef,
+  featureFlags = {},
 }) {
   if (!selectedMessage) return null;
 
@@ -44,7 +45,7 @@ export default function ContextMenuModal({
           </button>
 
           {/* Convert to Task */}
-          <button
+          {featureFlags.taskCards !== false && <button
             onClick={() => setActiveModal('task_convert')}
             className="w-full flex items-center gap-4 px-5 py-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all text-left text-[16px] font-semibold text-[#3b4a54] group"
           >
@@ -52,7 +53,7 @@ export default function ContextMenuModal({
               <i className="fa-regular fa-square-check text-lg"></i>
             </div>
             Convert to Official Task
-          </button>
+          </button>}
         </div>
       </div>
     </div>
