@@ -49,7 +49,7 @@ const createTenantDirectly = async (payload) => {
   await setDoc(doc(db, 'organizations', orgId), tenantPayload, { merge: true });
   await setDoc(doc(db, 'organizations', orgId, 'org_details', DETAILS_DOC_FALLBACK_ID), tenantPayload, { merge: true });
 
-  if (payload.adminEmail) {
+ if (payload.adminEmail) {
     await addDoc(collection(db, 'tenantInvitations'), {
       orgId,
       email: payload.adminEmail,
@@ -60,6 +60,30 @@ const createTenantDirectly = async (payload) => {
       updatedAt: now,
     });
   }
+
+  // --- NEW: CREATE DEFAULT WELCOME GROUP & MESSAGE ---
+  const defaultGroupRef = doc(collection(db, 'organizations', orgId, 'groups'));
+  await setDoc(defaultGroupRef, {
+    name: "Welcome",
+    members: payload.adminEmail ? [payload.adminEmail] : [],
+    admins: payload.adminEmail ? [payload.adminEmail] : [],
+    createdBy: "system",
+    createdAt: now,
+    isArchived: false,
+    profilePicUrl: null
+  });
+
+  await addDoc(collection(db, 'organizations', orgId, 'messages'), {
+    text: "👋 <strong>Welcome to Talk & Task!</strong><br><br>This is your default workspace. You can invite your team, share files, and convert any message here into a trackable task.",
+    senderUid: "system",
+    senderEmail: "Developer Console",
+    groupId: defaultGroupRef.id,
+    timestamp: now,
+    isTask: false,
+    seenBy: payload.adminEmail ? [payload.adminEmail] : [],
+    reactions: {}
+  });
+  // ---------------------------------------------------
 
   return orgId;
 };
