@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import VersionDisplay from '../Common/VersionDisplay.jsx';
 
 const inRange = (message, start, end) => {
   const ms = message.timestamp?.toMillis?.() || (message.timestamp?.toDate ? message.timestamp.toDate().getTime() : 0);
@@ -8,7 +9,7 @@ const inRange = (message, start, end) => {
   return true;
 };
 
-export default function RightSidebar({ messages = [], user, sidebarWidth, dbUsers = [], currentUserData, appVersion }) {
+export default function RightSidebar({ messages = [], user, sidebarWidth, dbUsers = [], currentUserData }) {
   const [preset, setPreset] = useState('today');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');

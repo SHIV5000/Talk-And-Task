@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import StorageDashboard from '../DeveloperConsole/Storage/StorageDashboard.jsx';
 import { db } from '../../firebase.js';
 import {
   collection, addDoc, serverTimestamp, updateDoc, doc,
@@ -86,6 +87,7 @@ export default function AdminPanel({
   customTags,
   globalAnnouncement,
   currentUserData,
+  isVipAdmin,
   maxFileSizeMb,
   setMaxFileSizeMb,
   appVersion,
@@ -693,7 +695,7 @@ export default function AdminPanel({
 
       {/* Tabs */}
       <div className="flex gap-2 px-4 pt-4 bg-white border-b border-slate-200 flex-wrap overflow-x-auto custom-sidebar-scroll shrink-0 shadow-sm z-10 relative">
-        {['overview', 'users', 'security', 'groups', 'tasks', 'logs', 'broadcast', 'tags', 'lifecycle', 'recovery', 'compliance', 'organization'].map((tab) => (
+        {['overview', 'users', 'security', 'groups', 'tasks', 'logs', 'broadcast', 'tags', 'lifecycle', 'recovery', 'compliance', 'storage', 'organization'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -714,6 +716,7 @@ export default function AdminPanel({
             {tab === 'lifecycle' && <i className="fa-solid fa-recycle mr-2"></i>}
             {tab === 'recovery' && <i className="fa-solid fa-cloud-arrow-down mr-2"></i>}
             {tab === 'compliance' && <i className="fa-solid fa-scale-balanced mr-2"></i>}
+            {tab === 'storage' && <i className="fa-solid fa-hard-drive mr-2"></i>}
             {tab === 'organization' && <i className="fa-solid fa-building-columns mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
@@ -722,6 +725,10 @@ export default function AdminPanel({
 
       {/* Main content */}
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
+
+        {activeTab === 'storage' && (
+          <StorageDashboard currentUserData={currentUserData} isVipAdmin={isVipAdmin} />
+        )}
 
         {activeTab === 'limits' && (
           <div className="p-6 overflow-y-auto custom-sidebar-scroll h-full">
