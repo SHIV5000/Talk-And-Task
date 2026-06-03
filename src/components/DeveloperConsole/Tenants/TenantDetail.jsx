@@ -14,13 +14,16 @@ const formatDateTime = (value) => {
   return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '—';
 };
 
-const getTenantPackageId = (tenant = {}) => (
-  tenant.subscriptionPackageId
-  || tenant.packageId
-  || tenant.subscriptionPackage
-  || tenant.subscriptionType
-  || ''
-);
+const getTenantPackageId = (tenant) => {
+  const record = tenant || {};
+  return (
+    record.subscriptionPackageId
+    || record.packageId
+    || record.subscriptionPackage
+    || record.subscriptionType
+    || ''
+  );
+};
 
 const getPackageName = (tenant, packages = []) => {
   const packageId = getTenantPackageId(tenant);

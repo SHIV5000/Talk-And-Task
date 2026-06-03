@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 export default function LeftSidebar({
   user,
@@ -26,7 +27,12 @@ export default function LeftSidebar({
   featureFlags = {},
 }) {
   const canOpenAdminWorkspace = Boolean(featureFlags.dataGovernance || featureFlags.dsarCompliance || featureFlags.auditLogs || featureFlags.apiAccess || featureFlags.customBranding || featureFlags.taskCards);
+  const { isPlatformOwner } = useAuth();
   const [showSearch, setShowSearch] = useState(false);
+  const openDeveloperConsole = () => {
+    window.history.pushState({}, '', '/developer-hq');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
 
   return (
     <div className="relative z-20 h-full">
@@ -273,6 +279,19 @@ export default function LeftSidebar({
               className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <i className="fa-solid fa-headset"></i> Priority Support
+            </button>
+          </div>
+        )}
+
+
+        {isPlatformOwner && (
+          <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
+            <button
+              type="button"
+              onClick={openDeveloperConsole}
+              className="w-full bg-amber-400/20 hover:bg-amber-400/30 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-terminal"></i> Developer Console
             </button>
           </div>
         )}

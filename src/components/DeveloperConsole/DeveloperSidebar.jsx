@@ -2,6 +2,12 @@ import React from 'react';
 
 const developerLinks = [
   {
+    href: '/developer-hq',
+    label: 'Dashboard',
+    description: 'Command center',
+    icon: 'fa-gauge-high',
+  },
+  {
     href: '/developer-hq/tenants',
     label: 'Tenants',
     description: 'Workspace access',
@@ -49,7 +55,9 @@ export default function DeveloperSidebar({ activePath = getCurrentPath() }) {
 
       <nav className="flex-1 min-h-0 overflow-y-auto custom-sidebar-scroll p-3 space-y-2">
         {developerLinks.map((link) => {
-          const isActive = activePath === link.href || activePath.startsWith(`${link.href}/`);
+          const isActive = link.href === '/developer-hq'
+            ? activePath === link.href
+            : activePath === link.href || activePath.startsWith(`${link.href}/`);
 
           return (
             <a
@@ -82,6 +90,10 @@ export default function DeveloperSidebar({ activePath = getCurrentPath() }) {
           </div>
           <p className="text-[11px] text-white/45 mt-1 leading-relaxed">Manage tenant operations and platform releases.</p>
         </div>
+        <a href="/app" className="mt-2 flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-3 py-2.5 text-xs font-black text-white/85 transition hover:bg-white/20">
+          <i className="fa-solid fa-arrow-left"></i>
+          Back to app
+        </a>
       </div>
     </aside>
   );
