@@ -15,6 +15,8 @@ import {
   setDoc,
   collection,
   getDocs,
+  query,
+  where,
 } from '../firebase.js';
 import { notifyRuntimeEvent } from '../utils/runtimeEventNotifier.js';
 
@@ -82,11 +84,35 @@ async function readAppVersion() {
   return configSnap.data()?.appVersion || DEFAULT_APP_VERSION;
 }
 
+
+async function findTenantInvitation(email) {
+  const lowerEmail = String(email || '').trim().toLowerCase();
+  if (!lowerEmail) return null;
+
+  const invitationSnap = await getDocs(query(collection(db, 'tenantInvitations'), where('email', '==', lowerEmail))).catch(() => null);
+  const invitationDoc = invitationSnap?.docs?.[0];
+  return invitationDoc ? { id: invitationDoc.id, ...invitationDoc.data() } : null;
+}
+
+function applyInvitationProfile(profile, invitation) {
+  if (!invitation?.orgId) return profile;
+  return {
+    ...profile,
+    orgId: profile.orgId || invitation.orgId,
+    role: profile.role || invitation.role || 'admin',
+    isApproved: profile.isApproved !== false,
+    isAdmin: profile.isAdmin || invitation.role === 'admin',
+    canCreateGroups: profile.canCreateGroups !== false,
+  };
+}
+
 async function ensureUserProfile(loggedInUser, claims = {}) {
   const userRef = doc(db, 'users', loggedInUser.uid);
   const userSnap = await getDoc(userRef);
   const lowerEmail = (loggedInUser.email || '').toLowerCase();
   const isPlatformOwnerEmail = lowerEmail === PLATFORM_OWNER_EMAIL;
+
+  const invitation = await findTenantInvitation(lowerEmail);
 
   if (!userSnap.exists()) {
     const allUsersSnap = await getDocs(collection(db, 'users'));
@@ -112,11 +138,22 @@ async function ensureUserProfile(loggedInUser, claims = {}) {
       },
       lastActive: serverTimestamp(),
     };
-    await setDoc(userRef, newProfile);
-    return newProfile;
+    const invitedProfile = applyInvitationProfile(newProfile, invitation);
+    await setDoc(userRef, invitedProfile, { merge: true });
+    return invitedProfile;
   }
 
-  const existingProfile = { id: userSnap.id, ...userSnap.data() };
+  const existingProfile = applyInvitationProfile({ id: userSnap.id, ...userSnap.data() }, invitation);
+  if (invitation?.orgId && (!userSnap.data()?.orgId || !userSnap.data()?.role)) {
+    await setDoc(userRef, {
+      orgId: existingProfile.orgId,
+      role: existingProfile.role,
+      isApproved: existingProfile.isApproved,
+      isAdmin: existingProfile.isAdmin,
+      canCreateGroups: existingProfile.canCreateGroups,
+    }, { merge: true });
+  }
+
   if (isPlatformOwnerEmail) {
     const ownerPatch = {
       isApproved: true,

@@ -2,9 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import { auth, db } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
+const buildFallbackUserData = (user) => ({
+    uid: user?.uid || '',
+    email: user?.email || '',
+    name: user?.displayName || (user?.email || '').split('@')[0] || 'User',
+    isApproved: true,
+    isAdmin: false,
+    canCreateGroups: false,
+    toolPreferences: {},
+});
+
 export default function useWorkspaceData(user, profileForm, setProfileForm) {
     const [isVipAdmin, setIsVipAdmin] = useState(false);
-    const [currentUserData, setCurrentUserData] = useState(null);
+    const [currentUserData, setCurrentUserData] = useState(() => buildFallbackUserData(user));
     const [dbUsers, setDbUsers] = useState([]);
     const [groups, setGroups] = useState([]);
     const [activeReminders, setActiveReminders] = useState([]);
@@ -93,7 +103,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
 
         const unsubCurrent = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
             if (docSnapshot.exists()) {
-                const data = docSnapshot.data(); 
+                const data = { uid: user.uid, email: user.email, ...docSnapshot.data() }; 
                 setCurrentUserData(data);
                 if (!profileForm.name && data.name) {
                     setProfileForm({
@@ -107,6 +117,8 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
                     });
                 }
                 if (data.toolPreferences) setToolPreferences(prev => ({ ...prev, ...data.toolPreferences }));
+            } else {
+                setCurrentUserData(buildFallbackUserData(user));
             }
         });
 

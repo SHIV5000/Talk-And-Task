@@ -7,6 +7,7 @@
     <meta name="theme-color" content="#4F46E5" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -19,8 +20,10 @@
 </head>
 <body class="overflow-hidden">
     <div id="root"></div>
-    <audio id="app-sound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3" preload="auto"></audio>
-    <audio id="task-sound" src="https://cdn.pixabay.com/download/audio/2021/08/09/audio_9ed1023bc2.mp3" preload="auto"></audio>
+    <script>
+      // Compatibility guard for any stale cached bundle that referenced this name globally.
+      var currentUserData = null;
+    </script>
     <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
