@@ -201,7 +201,7 @@ export default function TenantForm({
         onChange={(featureFlagsOverride) => updateField('featureFlagsOverride', featureFlagsOverride)}
       />
 
-      <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+      <div className="sticky bottom-0 z-10 -mx-5 flex justify-end gap-3 border-t border-slate-100 bg-white/95 px-5 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur">
         {onCancel && (
           <button
             type="button"
