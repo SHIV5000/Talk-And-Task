@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { auth, db } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
-export default function useWorkspaceData(user, profileForm, setProfileForm) {
+export default function useWorkspaceData(orgId, user, profileForm, setProfileForm) {
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [currentUserData, setCurrentUserData] = useState(null);
     const [dbUsers, setDbUsers] = useState([]);
@@ -17,6 +17,9 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
         reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
     });
 
+    const orgCollection = useCallback((collectionName) => collection(db, "organizations", orgId, collectionName), [orgId]);
+    const orgDoc = useCallback((collectionName, id) => doc(db, "organizations", orgId, collectionName, id), [orgId]);
+
     const verifyAdminStatus = useCallback(async () => {
         if (!auth.currentUser) return false;
         try {
@@ -30,19 +33,19 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
     }, [verifyAdminStatus]);
 
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!orgId || !user?.uid) return;
 
-        const qPersonal = query(collection(db, "reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false));
+        const qPersonal = query(orgCollection("reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false));
         const unsubPersonal = onSnapshot(qPersonal, (snapshot) => setActiveReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-        const qAlerts = query(collection(db, "notifications"), where("userId", "==", user.uid), where("isRead", "==", false));
+        const qAlerts = query(orgCollection("notifications"), where("userId", "==", user.uid), where("isRead", "==", false));
         const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
             const now = Date.now();
             const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => !n.snoozeUntil || (n.snoozeUntil?.toMillis?.() || new Date(n.snoozeUntil).getTime() || 0) <= now).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
             setGenericNotifications(sorted);
         });
 
-        const unsubTags = onSnapshot(collection(db, "workspace_tags"), (snapshot) => {
+        const unsubTags = onSnapshot(orgCollection("workspace_tags"), (snapshot) => {
             if (snapshot.empty) {
                 setCustomTags([
                     { id: '1', label: '#Approved', shortCode: 'APP', bgClass: 'bg-teal-50', textClass: 'text-teal-700' },
@@ -56,7 +59,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
         });
 
         // 👇 UPDATED: Now fetches the ID for Broadcast Acknowledgements 👇
-        const unsubAnnouncement = onSnapshot(doc(db, "workspace", "announcement"), (docSnap) => {
+        const unsubAnnouncement = onSnapshot(orgDoc("workspace", "announcement"), (docSnap) => {
             if (docSnap.exists()) {
                 setGlobalAnnouncement({ id: docSnap.id, ...docSnap.data() });
             } else {
@@ -66,9 +69,9 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
 
         let unsubAdmin = () => {}; let unsubAudit = () => {};
         if (currentUserData?.isAdmin || isVipAdmin) {
-            const qAdmin = query(collection(db, "reminders"), orderBy("remindAt", "desc"));
+            const qAdmin = query(orgCollection("reminders"), orderBy("remindAt", "desc"));
             unsubAdmin = onSnapshot(qAdmin, (snapshot) => setAllAdminReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
-            const qAudit = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"));
+            const qAudit = query(orgCollection("audit_logs"), orderBy("timestamp", "desc"));
             unsubAudit = onSnapshot(qAudit, (snapshot) => {
                 setImmutableAuditLogs(snapshot.docs.map(d => {
                     const data = d.data();
@@ -82,10 +85,10 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
             });
         }
         return () => { unsubPersonal(); unsubAlerts(); unsubAdmin(); unsubAudit(); unsubTags(); unsubAnnouncement(); };
-    }, [user?.uid, currentUserData?.isAdmin, isVipAdmin]);
+    }, [orgId, user?.uid, currentUserData?.isAdmin, isVipAdmin, orgCollection, orgDoc]);
 
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!orgId || !user?.uid) return;
 
         const heartbeatInterval = setInterval(() => { 
             updateDoc(doc(db, "users", user.uid), { lastActive: serverTimestamp() }).catch(() => {}); 
@@ -110,14 +113,14 @@ export default function useWorkspaceData(user, profileForm, setProfileForm) {
             }
         });
 
-        const unsubUsers = onSnapshot(query(collection(db, "users"), orderBy("email", "asc")), (snapshot) => setDbUsers(snapshot.docs.map(document => document.data())));
+        const unsubUsers = onSnapshot(query(collection(db, "users"), where("orgId", "==", orgId), orderBy("email", "asc")), (snapshot) => setDbUsers(snapshot.docs.map(document => document.data())));
         
-        const unsubGroups = onSnapshot(collection(db, "groups"), (snapshot) => {
+        const unsubGroups = onSnapshot(orgCollection("groups"), (snapshot) => {
             setGroups(snapshot.docs.map(document => ({ id: document.id, ...document.data() })));
         });
 
         return () => { clearInterval(heartbeatInterval); unsubCurrent(); unsubUsers(); unsubGroups(); };
-    }, [user, currentUserData?.isAdmin, isVipAdmin, profileForm.name, setProfileForm]);
+    }, [orgId, user, currentUserData?.isAdmin, isVipAdmin, profileForm.name, setProfileForm, orgCollection]);
 
     return {
         isVipAdmin, currentUserData, dbUsers, groups,
