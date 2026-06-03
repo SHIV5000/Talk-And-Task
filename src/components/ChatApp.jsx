@@ -309,7 +309,7 @@ const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserDat
 };
 
 export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) {
-    const { appVersion: contextAppVersion } = useAuth();
+    const { appVersion: contextAppVersion , orgId } = useAuth();
     const appVersion = contextAppVersion || appVersionProp;
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
@@ -434,7 +434,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         activeReminders, genericNotifications, allAdminReminders,
         immutableAuditLogs, toolPreferences, setToolPreferences,
         globalAnnouncement
-    } = useWorkspaceData(user, profileForm, setProfileForm);
+    } = useWorkspaceData(user, profileForm, setProfileForm, orgId);
 
     const featureFlags = useMemo(() => normalizeFeatureFlags(currentUserData?.featureFlags), [currentUserData?.featureFlags]);
 
@@ -457,6 +457,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     } = useChatEngine({
+        orgId,
         user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData
     });
 
