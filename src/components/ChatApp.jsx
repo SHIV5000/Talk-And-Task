@@ -424,7 +424,7 @@ export default function ChatApp({ user, onLogout }) {
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     } = useChatEngine({
-        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB
+        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData
     });
 
 
@@ -1353,6 +1353,7 @@ export default function ChatApp({ user, onLogout }) {
                   groupPicUploadProgress={groupPicUploadProgress}
                   globalAnnouncement={globalAnnouncement}
                   currentUserData={currentUserData}
+                  isVipAdmin={isVipAdmin}
                   maxFileSizeMb={MAX_FILE_SIZE_MB}
                   setMaxFileSizeMb={setMaxFileSizeMb}
                 />

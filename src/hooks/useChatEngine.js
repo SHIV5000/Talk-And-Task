@@ -3,15 +3,36 @@ import { db, storage } from '../firebase.js';
 import { collection, addDoc, onSnapshot, query, orderBy, limitToLast, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../utils/imageUtils.js';
+import { getEffectiveStorageLimitMB, toNumberOrNull } from '../utils/storageLimits.js';
 
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
 
-export default function useChatEngine({ user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB }) {
+export default function useChatEngine({ user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData }) {
     const [messages, setMessages] = useState([]);
     const [typingStatus, setTypingStatus] = useState([]);
     const [offlineDrafts, setOfflineDrafts] = useState([]);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const prevMessagesCountRef = useRef(0);
+    const [orgStorageDetails, setOrgStorageDetails] = useState(null);
+
+    useEffect(() => {
+        const orgId = currentUserData?.orgId || currentUserData?.organizationId || currentUserData?.tenantId;
+        if (!orgId) {
+            setOrgStorageDetails(currentUserData?.org_details || null);
+            return;
+        }
+
+        const unsubscribe = onSnapshot(doc(db, 'organizations', orgId), (docSnapshot) => {
+            if (docSnapshot.exists()) {
+                const data = docSnapshot.data();
+                setOrgStorageDetails(data.org_details || data.orgDetails || data);
+            } else {
+                setOrgStorageDetails(null);
+            }
+        }, () => setOrgStorageDetails(null));
+
+        return () => unsubscribe();
+    }, [currentUserData?.orgId, currentUserData?.organizationId, currentUserData?.tenantId, currentUserData?.org_details]);
 
     const playAlertSound = useCallback((type = 'incoming') => {
         try {
@@ -185,6 +206,14 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
     const safeCaption = caption || ""; // Prevents .trim() crashes
 
     if (file.size > maxFileSizeMb * 1024 * 1024) throw new Error(`File too large. Max ${maxFileSizeMb} MB.`);
+
+    if (orgStorageDetails) {
+        const storageUsedMB = toNumberOrNull(orgStorageDetails.storageUsedMB) || 0;
+        const effectiveStorageLimitMB = getEffectiveStorageLimitMB(orgStorageDetails);
+        if (storageUsedMB >= effectiveStorageLimitMB) {
+            throw new Error(`Storage limit reached. Used ${storageUsedMB.toFixed(2)} MB of ${effectiveStorageLimitMB.toFixed(2)} MB.`);
+        }
+    }
 
     let processedFile = file;
     try { 
