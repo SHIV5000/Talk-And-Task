@@ -241,96 +241,90 @@ const assertPermission = async (request, area, action) => {
   throw new HttpsError('permission-denied', `Missing ${area}.${action} permission.`);
 };
 
+const toCreateUserHttpsError = (error) => {
+  const code = error?.code;
+  const message = String(error?.message || '').toLowerCase();
+
+  if (code === 'auth/email-already-exists') {
+    return new HttpsError('already-exists', 'A user with this email already exists.');
+  }
+
+  if (code === 'auth/invalid-email') {
+    return new HttpsError('invalid-argument', 'Email address is invalid.');
+  }
+
+  const isWeakPasswordFailure = code === 'auth/weak-password'
+    || message.includes('weak password')
+    || message.includes('password is too weak')
+    || message.includes('password must be');
+  if (code === 'auth/invalid-password' || isWeakPasswordFailure) {
+    return new HttpsError('invalid-argument', 'Password is invalid or too weak.');
+  }
+
+  return new HttpsError('internal', error?.message || 'Failed to create user.');
+};
+
 
 exports.createUser = onCall(async (request) => {
   await assertPermission(request, 'Users', 'create');
-  const data = request.data || {};
-  const email = String(data.email || '').trim();
-  const name = String(data.name || data.displayName || '').trim();
-  const password = String(data.password || data.tempPassword || '').trim();
-  const orgId = data.orgId || request.auth.token?.orgId || DEFAULT_ORG_ID;
-  const role = data.role || (data.isAdmin ? 'admin' : 'member');
-  const isAdmin = role === 'admin' || !!data.isAdmin;
-  const isPlatformOwner = !!data.isPlatformOwner;
+  const {
+    email,
+    password,
+    displayName = null,
+    disabled = false,
+    emailVerified = false,
+    orgId = DEFAULT_ORG_ID,
+    role = 'member',
+    isPlatformOwner = false,
+    claims = {},
+  } = request.data || {};
 
-  if (!email) throw new HttpsError('invalid-argument', 'email is required.');
-  if (!name) throw new HttpsError('invalid-argument', 'name is required.');
-  if (!password) throw new HttpsError('invalid-argument', 'password is required.');
+  if (!email) throw new HttpsError('invalid-argument', 'Email is required.');
+  if (!password) throw new HttpsError('invalid-argument', 'Password is required.');
 
   let userRecord;
   try {
     userRecord = await admin.auth().createUser({
       email,
       password,
-      displayName: name,
-      disabled: !!data.disabled,
-      emailVerified: !!data.emailVerified,
+      displayName: displayName || undefined,
+      disabled: !!disabled,
+      emailVerified: !!emailVerified,
     });
-
-    const customClaims = {
-      orgId,
-      role,
-      isPlatformOwner,
-      admin: isAdmin || isPlatformOwner,
-    };
-    await admin.auth().setCustomUserClaims(userRecord.uid, customClaims);
-
-    await db.collection('users').doc(userRecord.uid).set({
-      uid: userRecord.uid,
-      email,
-      name,
-      orgId,
-      role,
-      isAdmin: isAdmin || isPlatformOwner,
-      isPlatformOwner,
-      isApproved: data.isApproved !== false,
-      canCreateGroups: !!data.canCreateGroups,
-      isArchived: false,
-      roles: Array.isArray(data.roles) ? data.roles : [],
-      tempPasswordSet: true,
-      createdAt: serverTimestamp(),
-      createdBy: request.auth.uid,
-      updatedAt: serverTimestamp(),
-      toolPreferences: {
-        reply: true,
-        react: true,
-        edit: true,
-        delete: true,
-        pin: true,
-        bookmark: true,
-        showWatermark: true,
-        soundProfile: 'classic',
-      },
-    });
-
-    await logAuditEvent('CREATE_USER', request.auth.uid, userRecord.uid, {
-      email,
-      orgId,
-      role,
-      isPlatformOwner,
-    });
-
-    return { ok: true, uid: userRecord.uid };
   } catch (error) {
-    if (userRecord?.uid) {
-      try {
-        await admin.auth().deleteUser(userRecord.uid);
-        logger.info('Cleaned up Auth user after createUser failure.', {
-          uid: userRecord.uid,
-          cleanupSucceeded: true,
-          originalError: error.message,
-        });
-      } catch (cleanupError) {
-        logger.error('Failed to clean up Auth user after createUser failure.', {
-          uid: userRecord.uid,
-          cleanupSucceeded: false,
-          cleanupError: cleanupError.message,
-          originalError: error.message,
-        });
-      }
-    }
-    throw error;
+    throw toCreateUserHttpsError(error);
   }
+
+  const customClaims = {
+    ...claims,
+    orgId,
+    role,
+    isPlatformOwner: !!isPlatformOwner,
+    admin: !!claims.admin || role === 'admin' || !!isPlatformOwner,
+  };
+  await admin.auth().setCustomUserClaims(userRecord.uid, customClaims);
+  await db.collection('users').doc(userRecord.uid).set({
+    email,
+    displayName,
+    orgId,
+    role,
+    isPlatformOwner: !!isPlatformOwner,
+    disabled: !!disabled,
+    emailVerified: !!emailVerified,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+  await db.collection('organizations').doc(orgId).collection('audit_logs').add({
+    type: 'CREATE_USER',
+    adminId: request.auth.uid,
+    user: request.auth.uid,
+    target: userRecord.uid,
+    details: { email, orgId, role, isPlatformOwner: !!isPlatformOwner },
+    content: `CREATE_USER: ${userRecord.uid}`,
+    immutableId: `CREATE_USER_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    timestamp: serverTimestamp(),
+  });
+  return { ok: true, uid: userRecord.uid };
 });
 
 exports.forceLogoutSession = onCall(async (request) => {
