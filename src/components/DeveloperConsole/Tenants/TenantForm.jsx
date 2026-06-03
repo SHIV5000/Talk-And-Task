@@ -12,13 +12,16 @@ const EMPTY_FORM = {
   featureFlagsOverride: {},
 };
 
-const getTenantPackageId = (tenant = {}) => (
-  tenant.subscriptionPackageId
-  || tenant.packageId
-  || tenant.subscriptionPackage
-  || tenant.subscriptionType
-  || ''
-);
+const getTenantPackageId = (tenant) => {
+  const record = tenant || {};
+  return (
+    record.subscriptionPackageId
+    || record.packageId
+    || record.subscriptionPackage
+    || record.subscriptionType
+    || ''
+  );
+};
 
 const toNumberOrNull = (value) => {
   if (value === '' || value === null || value === undefined) return null;
@@ -26,16 +29,19 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const fromTenant = (tenant = {}) => ({
-  orgName: tenant.orgName || tenant.name || tenant.organizationName || '',
-  orgId: tenant.id || tenant.orgId || '',
-  adminName: tenant.adminName || '',
-  adminEmail: tenant.adminEmail || tenant.email || '',
-  subscriptionPackageId: getTenantPackageId(tenant),
-  storageLimitOverride: tenant.storageLimitOverride ?? '',
-  maxUsersOverride: tenant.maxUsersOverride ?? '',
-  featureFlagsOverride: tenant.featureFlagsOverride || {},
-});
+const fromTenant = (tenant) => {
+  const record = tenant || {};
+  return {
+    orgName: record.orgName || record.name || record.organizationName || '',
+    orgId: record.id || record.orgId || '',
+    adminName: record.adminName || '',
+    adminEmail: record.adminEmail || record.email || '',
+    subscriptionPackageId: getTenantPackageId(record),
+    storageLimitOverride: record.storageLimitOverride ?? '',
+    maxUsersOverride: record.maxUsersOverride ?? '',
+    featureFlagsOverride: record.featureFlagsOverride || {},
+  };
+};
 
 export default function TenantForm({
   mode = 'create',

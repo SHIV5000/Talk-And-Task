@@ -17,13 +17,16 @@ const DETAILS_DOC_FALLBACK_ID = 'details';
 
 const normalizeString = (value = '') => String(value).trim().toLowerCase();
 
-const getTenantPackageId = (tenant = {}) => (
-  tenant.subscriptionPackageId
-  || tenant.packageId
-  || tenant.subscriptionPackage
-  || tenant.subscriptionType
-  || ''
-);
+const getTenantPackageId = (tenant) => {
+  const record = tenant || {};
+  return (
+    record.subscriptionPackageId
+    || record.packageId
+    || record.subscriptionPackage
+    || record.subscriptionType
+    || ''
+  );
+};
 
 const getPackageName = (tenant, packages = []) => {
   const packageId = getTenantPackageId(tenant);
@@ -31,9 +34,15 @@ const getPackageName = (tenant, packages = []) => {
   return pkg?.name || pkg?.packageName || pkg?.title || packageId || 'Unassigned';
 };
 
-const getUserOrgId = (user = {}) => user.orgId || user.organizationId || user.tenantId || '';
+const getUserOrgId = (user) => {
+  const record = user || {};
+  return record.orgId || record.organizationId || record.tenantId || '';
+};
 
-const getStorageUsed = (tenant = {}) => tenant.storageUsedBytes || tenant.storageUsed || tenant.storageBytes || 0;
+const getStorageUsed = (tenant) => {
+  const record = tenant || {};
+  return record.storageUsedBytes || record.storageUsed || record.storageBytes || 0;
+};
 
 const formatBytes = (bytes) => {
   const value = Number(bytes || 0);

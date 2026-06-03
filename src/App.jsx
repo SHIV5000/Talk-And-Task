@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import ChatApp from './components/ChatApp.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
-// Firebase auth/data subscriptions are centralized in AuthContext to avoid duplicate SDK imports in the app shell.
+import DeveloperConsoleLayout from './components/DeveloperConsole/DeveloperConsoleLayout.jsx';
+import PackageList from './components/DeveloperConsole/Packages/PackageList.jsx';
+import StorageDashboard from './components/DeveloperConsole/Storage/StorageDashboard.jsx';
+import TenantList from './components/DeveloperConsole/Tenants/TenantList.jsx';
+import VersionManager from './components/DeveloperConsole/Version/VersionManager.jsx';
 import { notifyRuntimeEvent } from './utils/runtimeEventNotifier.js';
 
 const deploymentInfo = {
@@ -12,6 +16,32 @@ const deploymentInfo = {
   editedAt: typeof __BUILD_COMMIT_DATE__ !== 'undefined' ? __BUILD_COMMIT_DATE__ : 'unknown',
   source: typeof __BUILD_SOURCE_REPO__ !== 'undefined' ? __BUILD_SOURCE_REPO__ : 'unknown',
 };
+
+
+function AccessDenied({ onBack }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 text-slate-800">
+      <div className="max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+          <i className="fa-solid fa-lock text-xl"></i>
+        </div>
+        <h1 className="text-xl font-black">Developer HQ is private</h1>
+        <p className="mt-2 text-sm font-medium text-slate-500">Only the platform owner can access tenant, package, storage, and version controls.</p>
+        <button type="button" onClick={onBack} className="mt-6 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white hover:bg-indigo-700">
+          Go to app
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function getDeveloperConsoleContent(pathname, appVersion) {
+  if (pathname.startsWith('/developer-hq/packages')) return <PackageList />;
+  if (pathname.startsWith('/developer-hq/tenants')) return <TenantList />;
+  if (pathname.startsWith('/developer-hq/storage')) return <StorageDashboard />;
+  if (pathname.startsWith('/developer-hq/version')) return <VersionManager currentVersion={appVersion} />;
+  return null;
+}
 
 function FallbackScreen({ error }) {
   return (
@@ -42,8 +72,9 @@ export default function App() {
 }
 
 function AppShell() {
-  const { user, authChecked, authError, login, logout, appVersion } = useAuth();
+  const { user, authChecked, authError, login, logout, appVersion, isPlatformOwner } = useAuth();
   const [crash, setCrash] = useState(null);
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname || '/');
 
   useEffect(() => {
     notifyRuntimeEvent('app-run', {
@@ -55,6 +86,27 @@ function AppShell() {
       editedAt: deploymentInfo.editedAt,
       source: deploymentInfo.source,
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const syncPath = () => setCurrentPath(window.location.pathname || '/');
+    const handleDocumentClick = (event) => {
+      const link = event.target.closest?.('a[href]');
+      if (!link || link.target || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const url = new URL(link.href, window.location.origin);
+      if (url.origin !== window.location.origin) return;
+      if (!url.pathname.startsWith('/developer-hq') && !url.pathname.startsWith('/app')) return;
+      event.preventDefault();
+      window.history.pushState({}, '', `${url.pathname}${url.search}${url.hash}`);
+      syncPath();
+    };
+
+    window.addEventListener('popstate', syncPath);
+    document.addEventListener('click', handleDocumentClick);
+    return () => {
+      window.removeEventListener('popstate', syncPath);
+      document.removeEventListener('click', handleDocumentClick);
+    };
   }, []);
 
   useEffect(() => {
@@ -111,6 +163,23 @@ function AppShell() {
           </div>
         </div>
       </>
+    );
+  }
+
+  const isDeveloperPath = currentPath.startsWith('/developer-hq');
+  const shouldShowDeveloperConsole = isDeveloperPath || (isPlatformOwner && currentPath === '/');
+
+  if (shouldShowDeveloperConsole) {
+    if (!isPlatformOwner) {
+      return <AccessDenied onBack={() => window.history.pushState({}, '', '/app') || setCurrentPath('/app')} />;
+    }
+
+    return (
+      <ErrorBoundary>
+        <DeveloperConsoleLayout activePath={currentPath}>
+          {getDeveloperConsoleContent(currentPath, appVersion)}
+        </DeveloperConsoleLayout>
+      </ErrorBoundary>
     );
   }
 

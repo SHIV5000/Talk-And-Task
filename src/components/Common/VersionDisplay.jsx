@@ -1,9 +1,9 @@
-import React, { useContext } from 'react';
-import { AuthContext } from '../../contexts/AuthContext.jsx';
+import React from 'react';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 export default function VersionDisplay({ appVersion: propAppVersion }) {
-  const authContext = useContext(AuthContext);
-  const appVersion = propAppVersion || authContext?.appVersion;
+  const { appVersion: contextAppVersion } = useAuth();
+  const appVersion = propAppVersion || contextAppVersion;
 
   if (!appVersion) return null;
 
