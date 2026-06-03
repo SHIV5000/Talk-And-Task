@@ -1,0 +1,8 @@
+node_modules/
+functions/node_modules/
+dist/
+.firebase/
+.vercel/
+.env
+.env.*
+*.log

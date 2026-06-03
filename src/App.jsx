@@ -116,14 +116,14 @@ function AppShell() {
   return (
     <>
       <ErrorBoundary>
-        <SafeChatApp user={user} onLogout={logout} onCrash={setCrash} />
+        <SafeChatApp user={user} onLogout={logout} onCrash={setCrash} appVersion={appVersion} />
       </ErrorBoundary>
     </>
   );
 }
 
 // Thin wrapper that catches synchronous errors and passes them to the fallback screen
-function SafeChatApp({ user, onLogout, onCrash }) {
+function SafeChatApp({ user, onLogout, onCrash, appVersion }) {
   try {
     // ChatApp renders everything, but if it throws, we catch it here
     return <ChatApp user={user} onLogout={onLogout} appVersion={appVersion} />;
