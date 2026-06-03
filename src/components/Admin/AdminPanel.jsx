@@ -94,7 +94,7 @@ export default function AdminPanel({
   setMaxFileSizeMb,
   featureFlags = {},
 }) {
-  const { appVersion: contextAppVersion } = useAuth();
+  const { appVersion: contextAppVersion, orgId } = useAuth();
   const appVersion = contextAppVersion || '25.0';
 
   // ===== TABS =====
@@ -431,7 +431,7 @@ export default function AdminPanel({
     const runRef = await addDoc(collection(db, 'retention_cleanup_logs'), { ruleId: policy.id, ruleName: policy.category, timestamp: serverTimestamp(), status: 'running', affected: 0 });
     for (const msg of oldMessages) {
       if (policy.action === 'archive') await setDoc(doc(db, 'archived_messages', msg.id), { ...msg, archivedAt: serverTimestamp() });
-      await deleteDoc(doc(db, 'messages', msg.id));
+      await deleteDoc(doc(db, "organizations", orgId, "messages", msg.id));
     }
     await updateDoc(doc(db, 'retention_cleanup_logs', runRef.id), { status: 'completed', affected: oldMessages.length });
     await logAuditEvent('RETENTION_RUN', policy.id, { affected: oldMessages.length, action: policy.action, ttlDays: policy.ttlDays });
@@ -475,7 +475,7 @@ export default function AdminPanel({
     const code = `DELETE ${selectedDsarUser.email}`;
     if (window.prompt(`This permanently anonymises personal data for ${selectedDsarUser.name || selectedDsarUser.email}. Type: ${code}`) !== code) return;
     await updateDoc(doc(db, 'users', selectedDsarUser.uid), { name: 'Deleted User', emailHash: btoa(selectedDsarUser.email || selectedDsarUser.uid), email: '', isArchived: true, profilePicUrl: null });
-    await Promise.all(messages.filter((m) => m.senderUid === selectedDsarUser.uid || m.senderEmail === selectedDsarUser.email).map((m) => updateDoc(doc(db, 'messages', m.id), { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: m.isTask ? m.text : '[deleted]' }).catch(() => {})));
+    await Promise.all(messages.filter((m) => m.senderUid === selectedDsarUser.uid || m.senderEmail === selectedDsarUser.email).map((m) => updateDoc(doc(db, "organizations", orgId, "messages", m.id), { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: m.isTask ? m.text : '[deleted]' }).catch(() => {})));
     await Promise.all(sessions.filter((s) => s.uid === selectedDsarUser.uid).map((s) => deleteDoc(doc(db, 'sessions', s.id))));
     await logAuditEvent('DSAR_DELETE', selectedDsarUser.uid, { confirmationCode: code });
   };
@@ -511,7 +511,7 @@ export default function AdminPanel({
     updates['taskData.priority'] = editTaskPriority;
     updates['taskData.deadline'] = editTaskDeadline;
     updates['taskData.assignees'] = editTaskAssignees;
-    await updateDoc(doc(db, 'messages', taskId), updates);
+    await updateDoc(doc(db, "organizations", orgId, "messages", taskId), updates);
     setEditingTaskId(null);
   };
 
@@ -519,7 +519,7 @@ export default function AdminPanel({
 
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm('Delete this task permanently?')) return;
-    await deleteDoc(doc(db, 'messages', taskId));
+    await deleteDoc(doc(db, "organizations", orgId, "messages", taskId));
   };
 
   // --- People (Users) ---

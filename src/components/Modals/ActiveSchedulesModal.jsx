@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase.js';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 export default function ActiveSchedulesModal({ setActiveModal, user, activeReminders }) {
+  const { orgId } = useAuth();
   const [tab, setTab] = useState('reminders');
   const [scheduledMsgs, setScheduledMsgs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -13,30 +15,33 @@ export default function ActiveSchedulesModal({ setActiveModal, user, activeRemin
   const [editDate, setEditDate] = useState('');
 
   useEffect(() => {
-    if (tab === 'scheduled') fetchScheduled();
-  }, [tab, user.uid]);
+    if (tab === 'scheduled' && orgId) fetchScheduled();
+  }, [tab, user.uid, orgId]);
 
   const fetchScheduled = async () => {
     setLoading(true);
+    if (!orgId) return setLoading(false);
     try {
-        const q = query(collection(db, "scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
+        const q = query(collection(db, "organizations", orgId, "scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
         const snap = await getDocs(q);
         setScheduledMsgs(snap.docs.map(d => ({id: d.id, ...d.data()})));
     } catch(e) {}
     setLoading(false);
   };
 
-  const cancelReminder = async (id) => { try { await deleteDoc(doc(db, "reminders", id)); } catch(e) {} };
+  const cancelReminder = async (id) => { if (!orgId) return; try { await deleteDoc(doc(db, "organizations", orgId, "reminders", id)); } catch(e) {} };
   const cancelScheduled = async (id) => {
-      try { await deleteDoc(doc(db, "scheduled_messages", id)); setScheduledMsgs(prev => prev.filter(m => m.id !== id)); } catch(e) {}
+      if (!orgId) return;
+      try { await deleteDoc(doc(db, "organizations", orgId, "scheduled_messages", id)); setScheduledMsgs(prev => prev.filter(m => m.id !== id)); } catch(e) {}
   };
 
   const saveEdit = async (id, isReminder) => {
+      if (!orgId) return;
       try {
           if (isReminder) {
-              await updateDoc(doc(db, "reminders", id), { messageText: editVal, remindAt: editDate });
+              await updateDoc(doc(db, "organizations", orgId, "reminders", id), { messageText: editVal, remindAt: editDate });
           } else {
-              await updateDoc(doc(db, "scheduled_messages", id), { text: editVal, scheduledFor: editDate });
+              await updateDoc(doc(db, "organizations", orgId, "scheduled_messages", id), { text: editVal, scheduledFor: editDate });
               fetchScheduled();
           }
           setEditingId(null);

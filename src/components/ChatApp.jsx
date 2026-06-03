@@ -579,17 +579,18 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [activeGroup?.id, user.email, messages]);
 
     useEffect(() => {
+        if (!orgId) return;
         const checkerInterval = setInterval(async () => {
             const now = new Date();
             const dueTasks = messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && !m.taskData?.deadlineAlerted && m.taskData?.deadline && new Date(m.taskData.deadline) <= now);
             dueTasks.forEach(async (task) => {
-                await updateDoc(doc(db, "messages", task.id), { "taskData.deadlineAlerted": true });
+                await updateDoc(doc(db, "organizations", orgId, "messages", task.id), { "taskData.deadlineAlerted": true });
                 const involved = new Set();
                 if (task.senderEmail) involved.add(task.senderEmail);
                 (task.taskData.assignees || []).forEach(a => involved.add(a));
                 involved.forEach(email => {
                     const u = dbUsers.find(u => u.email === email);
-                    if (u) addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `⏰ DUE NOW: "${task.text}"`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                    if (u) addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: "task", text: `⏰ DUE NOW: "${task.text}"`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
                 });
             });
 
@@ -599,23 +600,23 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 const notifyEmails = [...new Set([...pendingAssignees, task.senderEmail].filter(Boolean))];
                 for (const email of notifyEmails) {
                     const u = dbUsers.find(x => x.email === email);
-                    if (u) await addDoc(collection(db, "notifications"), { userId: u.uid, type: "task", text: `Kindly Ack the Task ${task.id} Allotted to You - Thanks.`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                    if (u) await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: "task", text: `Kindly Ack the Task ${task.id} Allotted to You - Thanks.`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
                 }
-                await updateDoc(doc(db, "messages", task.id), { "taskData.ackReminderSent": true }).catch(()=>{});
+                await updateDoc(doc(db, "organizations", orgId, "messages", task.id), { "taskData.ackReminderSent": true }).catch(()=>{});
             }
 
             const dueReminders = (activeReminders || []).filter(r => !r.isTriggered && r.remindAt && new Date(r.remindAt) <= now);
             for (const rem of dueReminders) {
                 try {
-                    await updateDoc(doc(db, "reminders", rem.id), { isTriggered: true });
-                    await addDoc(collection(db, "notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
+                    await updateDoc(doc(db, "organizations", orgId, "reminders", rem.id), { isTriggered: true });
+                    await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
                     playMelody('taskCreated');
                     setActiveReminderAlert(rem);
                 } catch(e) {}
             }
 
             try {
-                const q = query(collection(db, "scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
+                const q = query(collection(db, "organizations", orgId, "scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
                 const snap = await getDocs(q);
                 for (const document of snap.docs) {
                     const data = document.data();
@@ -634,8 +635,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                             taskData: data.taskData || null,
                             seenBy: [user.email]
                         };
-                        await addDoc(collection(db, "messages"), payload);
-                        await updateDoc(doc(db, "scheduled_messages", document.id), { status: "sent", sentAt: serverTimestamp(), retryCount: data.retryCount || 0 });
+                        await addDoc(collection(db, "organizations", orgId, "messages"), payload);
+                        await updateDoc(doc(db, "organizations", orgId, "scheduled_messages", document.id), { status: "sent", sentAt: serverTimestamp(), retryCount: data.retryCount || 0 });
                         playMelody('messageSent');
                     }
                 }
@@ -643,7 +644,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
         }, 15000);
         return () => clearInterval(checkerInterval);
-    }, [messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
+    }, [orgId, messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
 
     const myGroups = useMemo(() => {
         // Implicitly include "Welcome" or "General" groups for everyone so a default group is always present
@@ -823,7 +824,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         const otherMembers = (activeGroup.members || []).filter(email => email !== user.email);
         const uidsToNotify = dbUsers.filter(u => otherMembers.includes(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
-            addDoc(collection(db, "notifications"), {
+            addDoc(collection(db, "organizations", orgId, "notifications"), {
                 userId: uid, type: "message",
                 text: `New Message in ${activeGroup.name}: "${stripHtml(msgText).substring(0,40)}..."`,
                 groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false
@@ -910,7 +911,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         involved.delete(user.email);
         const uidsToNotify = dbUsers.filter(u => involved.has(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
-            try { await addDoc(collection(db, "notifications"), { userId: uid, type: "task", text: `"${stripHtml(taskMsg.text).substring(0,30)}..." - ${(user.email || "").split('@')[0]} updated ✅`, messageId: taskMsg.id, groupId: taskMsg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
+            try { await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: uid, type: "task", text: `"${stripHtml(taskMsg.text).substring(0,30)}..." - ${(user.email || "").split('@')[0]} updated ✅`, messageId: taskMsg.id, groupId: taskMsg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
         }
     };
 
@@ -921,7 +922,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             const candidates = messages.filter(m => m.isTask && m.taskData?.assignees?.length && (!m.taskData?.assigneeStates || !m.taskData?.masterReviewerEmail));
             for (const m of candidates.slice(0, 20)) {
                 const states = Object.fromEntries((m.taskData.assignees || []).map(e => [e, 'assigned']));
-                await updateDoc(doc(db, "messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "", "taskData.ackBy": m.taskData?.ackBy || {} }).catch(() => {});
+                await updateDoc(doc(db, "organizations", orgId, "messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "", "taskData.ackBy": m.taskData?.ackBy || {} }).catch(() => {});
             }
         };
         migrateAssigneeStates();
@@ -991,7 +992,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 deletedAt: null
             };
 
-            await setDoc(doc(db, "messages", selectedMessage.id), {
+            await setDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), {
                 isTask: true,
                 text: sanitizedTaskTitle,
                 taskData: taskData
@@ -1001,7 +1002,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 if (email !== user.email) {
                     const assigneeUser = dbUsers.find(u => u.email === email);
                     if (assigneeUser) {
-                        addDoc(collection(db, "notifications"), {
+                        addDoc(collection(db, "organizations", orgId, "notifications"), {
                             userId: assigneeUser.uid,
                             type: "task",
                             text: `"${stripHtml(selectedMessage.text).substring(0,30)}..." - Assigned to You 🕒`,
@@ -1028,7 +1029,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const handleSaveTaskTitle = async () => {
         if (!newTaskTitle.trim() || !selectedMessage) return;
         try {
-            await updateDoc(doc(db, "messages", selectedMessage.id), { text: newTaskTitle });
+            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { text: newTaskTitle });
             setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
             playMelody('taskUpdated');
             setIsEditingTaskTitle(false);
@@ -1041,7 +1042,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(email => {   const u = dbUsers.find(x => x.email === email);
     return u ? u.name : (email||"").split('@')[0];}).join(', ') }];
-            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
+            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
             playMelody('taskUpdated');
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
@@ -1052,7 +1053,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         try {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
-            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
+            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
             playMelody('taskUpdated');
             setActiveModal(null);
         } catch (error) {}
@@ -1064,7 +1065,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: trailComment }];
             const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
-            await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
             playMelody('taskUpdated');
@@ -1084,7 +1085,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 const now = new Date();
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
-                await updateDoc(doc(db, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+                await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
                 playMelody('taskFileUpload');
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
@@ -1092,10 +1093,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     };
 
     const setReminder = async () => {
-        if (!selectedMessage || !reminderDateTime) return;
+        if (!selectedMessage || !reminderDateTime || !orgId) return;
         try {
-            await addDoc(collection(db, "reminders"), { userId: user.uid, userEmail: user.email, messageId: selectedMessage.id, messageText: stripHtml(selectedMessage.text) || selectedMessage.fileName || "File Attachment", remindAt: reminderDateTime, isTriggered: false });
-            await updateDoc(doc(db, "messages", selectedMessage.id), { hasReminder: true });
+            await addDoc(collection(db, "organizations", orgId, "reminders"), { userId: user.uid, userEmail: user.email, messageId: selectedMessage.id, messageText: stripHtml(selectedMessage.text) || selectedMessage.fileName || "File Attachment", remindAt: reminderDateTime, isTriggered: false });
+            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { hasReminder: true });
             setActiveModal(null); setReminderDateTime("");
             addToast("Reminder set successfully!", "success");
         } catch (error) { alert("Failed to save reminder."); }
@@ -1113,7 +1114,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             const now = new Date();
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             const newStatus = targetMsg.taskData.status === 'Pending' ? 'In Progress' : targetMsg.taskData.status;
-            await updateDoc(doc(db, "messages", targetMsg.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            await updateDoc(doc(db, "organizations", orgId, "messages", targetMsg.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
             playMelody('taskUpdated');
         } catch (error) {}
@@ -1125,7 +1126,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         if (msg && msg.senderEmail !== user.email) {
             const sender = dbUsers.find(u => u.email === msg.senderEmail);
             if (sender) {
-                addDoc(collection(db, "notifications"), {
+                addDoc(collection(db, "organizations", orgId, "notifications"), {
                     userId: sender.uid, type: "reaction",
                     text: `${currentUserData?.name || user.email.split('@')[0]} affixed ${tagLabel} to your message.`,
                     messageId: msgId, groupId: activeGroup?.id || '', timestamp: serverTimestamp(), isRead: false
@@ -1137,10 +1138,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const handleWipeAllTasks = async () => {
         if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
         try {
-            const q = query(collection(db, "messages"), where("isTask", "==", true));
+            const q = query(collection(db, "organizations", orgId, "messages"), where("isTask", "==", true));
             const snapshot = await getDocs(q);
             if (snapshot.empty) return alert("No tasks found! You are already clean.");
-            await Promise.all(snapshot.docs.map(document => deleteDoc(doc(db, "messages", document.id))));
+            await Promise.all(snapshot.docs.map(document => deleteDoc(doc(db, "organizations", orgId, "messages", document.id))));
             alert(`🧹 Successfully wiped ${snapshot.docs.length} tasks! Clean slate ready.`);
         } catch (error) { alert("Failed to clean database."); }
     };
@@ -1533,7 +1534,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                           <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
                                             <div className="p-3 bg-white flex justify-between items-center border-b border-slate-200">
                                               <span className="text-[13px] font-black text-slate-800 uppercase tracking-wide">Alerts</span>
-                                              <button onClick={() => genericNotifications.map(n => deleteDoc(doc(db, "notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
+                                              <button onClick={() => genericNotifications.map(n => deleteDoc(doc(db, "organizations", orgId, "notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
                                             </div>
                                             <div className="max-h-[70vh] overflow-y-auto bg-white divide-y divide-slate-100">
                                               {totalNotifications === 0 ? <div className="p-5 text-center text-[13px] font-medium text-slate-400">No new activity</div> : (
@@ -1542,14 +1543,14 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                                     <div key={task.id} onClick={() => { setShowNotifications(false); navigateToMessageFromNotification(task.id, task.groupId); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700">
                                                       <div className="font-black text-rose-600">Pending Task</div>
                                                       <div className="line-clamp-2">{stripHtml(task.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(task.timestamp)}</div>
-                                                      <button onClick={(e)=>{ e.stopPropagation(); updateDoc(doc(db, 'messages', task.id), { 'taskData.dismissedBy': [...(task.taskData?.dismissedBy || []), user.uid] }); }} className="mt-1 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
+                                                      <button onClick={(e)=>{ e.stopPropagation(); updateDoc(doc(db, "organizations", orgId, "messages", task.id), { 'taskData.dismissedBy': [...(task.taskData?.dismissedBy || []), user.uid] }); }} className="mt-1 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                     </div>
                                                   ))}
                                                   {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => (
                                                     <div key={n.id} onClick={() => { setShowNotifications(false); if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700 relative pr-12">
-                                                      <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "notifications", n.id)); }} className="absolute top-2 right-3 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
+                                                      <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "organizations", orgId, "notifications", n.id)); }} className="absolute top-2 right-3 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                       <div className="font-black text-indigo-600">{n.type === 'reply' ? 'Reply' : n.type === 'message' ? 'Message' : n.type === 'mention' ? 'Mention' : n.type === 'reminder' ? 'Reminder' : n.type === 'task' ? 'Task' : 'Alert'}</div>
-                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; updateDoc(doc(db, 'notifications', n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
+                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; updateDoc(doc(db, "organizations", orgId, "notifications", n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
                                                     </div>
                                                   ))}
                                                 </>
