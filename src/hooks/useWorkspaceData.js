@@ -12,7 +12,7 @@ const buildFallbackUserData = (user) => ({
     toolPreferences: {},
 });
 
-export default function useWorkspaceData(user, profileForm, setProfileForm) {
+export default function useWorkspaceData(user, profileForm, setProfileForm, orgId) {
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [currentUserData, setCurrentUserData] = useState(() => buildFallbackUserData(user));
     const [dbUsers, setDbUsers] = useState([]);
