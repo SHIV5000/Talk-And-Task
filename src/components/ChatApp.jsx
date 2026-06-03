@@ -11,6 +11,7 @@ import ChatView from './Chat/ChatView.jsx';
 import InputArea from './Chat/InputArea.jsx';
 import ModalManager from './Modals/ModalManager.jsx';
 import MessageBubble from './Chat/MessageBubble.jsx';
+import { AuthContext } from '../contexts/AuthContext.jsx';
 
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
@@ -27,7 +28,6 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 const formatNotificationTime = (value) => { const date = value?.toDate ? value.toDate() : value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return ''; const diff = Date.now() - date.getTime(); if (diff < 60000) return 'Just now'; if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`; return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 const getSnoozeDate = (mode) => { const date = new Date(); if (mode === '15m') date.setMinutes(date.getMinutes() + 15); else if (mode === '1h') date.setHours(date.getHours() + 1); else { date.setHours(17, 0, 0, 0); if (date <= new Date()) date.setDate(date.getDate() + 1); } return date; };
-const APP_VERSION = "25.0";
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -308,7 +308,7 @@ const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserDat
     );
 };
 
-export default function ChatApp({ user, onLogout }) {
+export default function ChatApp({ user, onLogout, appVersion }) {
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [activeTaskSidebar, setActiveTaskSidebar] = useState(null);
@@ -455,7 +455,7 @@ export default function ChatApp({ user, onLogout }) {
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     } = useChatEngine({
-        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB
+        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData
     });
 
 
@@ -1308,6 +1308,7 @@ export default function ChatApp({ user, onLogout }) {
     }
 
     return (
+        <AuthContext.Provider value={{ appVersion: APP_VERSION }}>
         <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
 
             {globalAnnouncement?.isActive && globalAnnouncement.id !== dismissedBroadcastId && (
@@ -1386,6 +1387,7 @@ export default function ChatApp({ user, onLogout }) {
                   groupPicUploadProgress={groupPicUploadProgress}
                   globalAnnouncement={globalAnnouncement}
                   currentUserData={currentUserData}
+                  isVipAdmin={isVipAdmin}
                   maxFileSizeMb={MAX_FILE_SIZE_MB}
                   setMaxFileSizeMb={setMaxFileSizeMb}
                   featureFlags={featureFlags}
@@ -1642,5 +1644,6 @@ export default function ChatApp({ user, onLogout }) {
                 )}
             </div>
         </div>
+        </AuthContext.Provider>
     );
 }

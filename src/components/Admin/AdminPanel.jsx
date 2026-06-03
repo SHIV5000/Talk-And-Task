@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
+import StorageDashboard from '../DeveloperConsole/Storage/StorageDashboard.jsx';
 import { db } from '../../firebase.js';
 import {
   collection, addDoc, serverTimestamp, updateDoc, doc,
@@ -8,6 +9,7 @@ import {
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { hasPermission } from '../../utils/rbac.js';
+import VersionManager from '../DeveloperConsole/Version/VersionManager.jsx';
 
 // Utility to strip HTML
 const stripHtml = (html) =>
@@ -85,6 +87,7 @@ export default function AdminPanel({
   customTags,
   globalAnnouncement,
   currentUserData,
+  isVipAdmin,
   maxFileSizeMb,
   setMaxFileSizeMb,
   featureFlags = {},
@@ -734,6 +737,7 @@ export default function AdminPanel({
             {tab === 'lifecycle' && <i className="fa-solid fa-recycle mr-2"></i>}
             {tab === 'recovery' && <i className="fa-solid fa-cloud-arrow-down mr-2"></i>}
             {tab === 'compliance' && <i className="fa-solid fa-scale-balanced mr-2"></i>}
+            {tab === 'storage' && <i className="fa-solid fa-hard-drive mr-2"></i>}
             {tab === 'organization' && <i className="fa-solid fa-building-columns mr-2"></i>}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
@@ -742,6 +746,10 @@ export default function AdminPanel({
 
       {/* Main content */}
       <div className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col">
+
+        {activeTab === 'storage' && (
+          <StorageDashboard currentUserData={currentUserData} isVipAdmin={isVipAdmin} />
+        )}
 
         {activeTab === 'limits' && (
           <div className="p-6 overflow-y-auto custom-sidebar-scroll h-full">
@@ -1455,6 +1463,9 @@ export default function AdminPanel({
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Active User Count</label>
                       <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <VersionManager currentVersion={appVersion} />
                     </div>
                     <div className="md:col-span-2 flex justify-end"><button type="button" onClick={saveInstitutionSettings} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Save Institution Settings</button></div>
                   </div>}
