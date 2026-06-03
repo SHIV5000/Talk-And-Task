@@ -385,6 +385,34 @@ exports.onboardTenant = onCall(async (request) => {
     status: 'active',
     createdAt: existing.exists ? existing.data().createdAt : serverTimestamp(),
   }, batchState);
+
+  // --- NEW: CREATE DEFAULT WELCOME GROUP & MESSAGE ---
+  const groupRef = db.collection('organizations').doc(orgId).collection('groups').doc();
+  const adminEmail = data.adminEmail || '';
+  
+  await queueBatchSet(batchState, groupRef, {
+    name: "Welcome",
+    members: adminEmail ? [adminEmail] : [],
+    admins: adminEmail ? [adminEmail] : [],
+    createdBy: "system",
+    createdAt: serverTimestamp(),
+    isArchived: false,
+    profilePicUrl: null
+  }, { merge: true });
+
+  const msgRef = db.collection('organizations').doc(orgId).collection('messages').doc();
+  await queueBatchSet(batchState, msgRef, {
+    text: "👋 <strong>Welcome to Talk & Task!</strong><br><br>This is your default workspace. You can invite your team, share files, and convert any message here into a trackable task.",
+    senderUid: "system",
+    senderEmail: "Developer Console",
+    groupId: groupRef.id,
+    timestamp: serverTimestamp(),
+    isTask: false,
+    seenBy: adminEmail ? [adminEmail] : [],
+    reactions: {}
+  }, { merge: true });
+  // ---------------------------------------------------
+
   await commitBatchIfNeeded(batchState, true);
 
   if (data.ownerUid) {
