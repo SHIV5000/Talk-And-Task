@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function sameOrg(orgId) {
+      return signedIn() &&
+        request.auth.token.orgId is string &&
+        request.auth.token.orgId == orgId;
+    }
+
+    // Tenant uploads belong under organizations/{orgId}/uploads/...
+    // Quota/storage-used enforcement is intentionally handled outside rules:
+    // - the client should pre-check the org quota before starting an upload;
+    // - the updateStorageUsed Cloud Function should maintain authoritative usage.
+    match /organizations/{orgId}/uploads/{allPaths=**} {
+      allow read: if sameOrg(orgId);
+      allow write: if sameOrg(orgId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

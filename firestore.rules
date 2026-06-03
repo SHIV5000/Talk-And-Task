@@ -1,0 +1,125 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isPlatformOwner() {
+      return signedIn() && request.auth.token.platformOwner == true;
+    }
+
+    function hasOrgClaim() {
+      return signedIn() && request.auth.token.orgId is string && request.auth.token.orgId.size() > 0;
+    }
+
+    function sameOrg(orgId) {
+      return hasOrgClaim() && request.auth.token.orgId == orgId;
+    }
+
+    function orgPath(orgId) {
+      return /databases/$(database)/documents/organizations/$(orgId);
+    }
+
+    function orgExists(orgId) {
+      return exists(orgPath(orgId));
+    }
+
+    function orgIsSuspended(orgId) {
+      return orgExists(orgId) && (
+        get(orgPath(orgId)).data.suspended == true ||
+        get(orgPath(orgId)).data.status == 'suspended'
+      );
+    }
+
+    function sameOrgProfile() {
+      return signedIn() &&
+        resource.data.orgId is string &&
+        request.auth.token.orgId == resource.data.orgId;
+    }
+
+    function requestOwnProfileOrgIsValid() {
+      return !request.resource.data.keys().hasAny(['orgId']) ||
+        (request.resource.data.orgId is string && request.auth.token.orgId == request.resource.data.orgId);
+    }
+
+    function protectedUserFieldsUnchanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'name',
+        'profilePicUrl',
+        'toolPreferences',
+        'fontSize',
+        'fontFamily',
+        'themeFont',
+        'accentColor',
+        'displayMode',
+        'fontScale',
+        'lastActive',
+        'lastLogin',
+        'lastLogout',
+        'lastActiveGroupId'
+      ]);
+    }
+
+    function userCreateDoesNotGrantPrivileges() {
+      return request.resource.data.uid == request.auth.uid &&
+        requestOwnProfileOrgIsValid() &&
+        request.resource.data.isAdmin != true &&
+        request.resource.data.platformOwner != true &&
+        request.resource.data.roles == null;
+    }
+
+    function canWriteOrgAppData(orgId) {
+      return sameOrg(orgId) && orgExists(orgId) && !orgIsSuspended(orgId);
+    }
+
+    function userUpdateIsOwnSafeProfile(uid) {
+      return request.auth.uid == uid && protectedUserFieldsUnchanged();
+    }
+
+    match /platform/config {
+      allow read, write: if isPlatformOwner();
+    }
+
+    match /platform/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /subscriptionPackages/{packageId} {
+      allow read: if signedIn();
+      allow write: if isPlatformOwner();
+    }
+
+    match /subscriptionPackages/{packageId}/{document=**} {
+      allow read, write: if isPlatformOwner();
+    }
+
+    match /organizations/{orgId} {
+      allow read: if isPlatformOwner() || sameOrg(orgId);
+      allow create, update, delete: if isPlatformOwner();
+
+      match /{collectionId}/{documentId} {
+        allow read: if isPlatformOwner() || sameOrg(orgId);
+        allow create, update, delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
+
+        match /{nestedDocument=**} {
+          allow read: if isPlatformOwner() || sameOrg(orgId);
+          allow create, update, delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
+        }
+      }
+    }
+
+    match /users/{uid} {
+      allow get: if isPlatformOwner() || (signedIn() && request.auth.uid == uid) || sameOrgProfile();
+      allow list: if isPlatformOwner() || sameOrgProfile();
+      allow create: if isPlatformOwner() || (signedIn() && request.auth.uid == uid && userCreateDoesNotGrantPrivileges());
+      allow update: if isPlatformOwner() || (signedIn() && request.auth.uid == uid && userUpdateIsOwnSafeProfile(uid));
+      allow delete: if isPlatformOwner();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
