@@ -126,7 +126,7 @@ function AppShell() {
 function SafeChatApp({ user, onLogout, onCrash }) {
   try {
     // ChatApp renders everything, but if it throws, we catch it here
-    return <ChatApp user={user} onLogout={onLogout} />;
+    return <ChatApp user={user} onLogout={onLogout} appVersion={appVersion} />;
   } catch (error) {
     // Immediately show the error
     onCrash(error);

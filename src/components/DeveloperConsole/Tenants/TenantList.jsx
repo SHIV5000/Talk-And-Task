@@ -1,0 +1,323 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db } from '../../../firebase.js';
+import TenantDetail from './TenantDetail.jsx';
+import TenantForm from './TenantForm.jsx';
+
+const DETAILS_DOC_FALLBACK_ID = 'details';
+
+const normalizeString = (value = '') => String(value).trim().toLowerCase();
+
+const getTenantPackageId = (tenant = {}) => (
+  tenant.subscriptionPackageId
+  || tenant.packageId
+  || tenant.subscriptionPackage
+  || tenant.subscriptionType
+  || ''
+);
+
+const getPackageName = (tenant, packages = []) => {
+  const packageId = getTenantPackageId(tenant);
+  const pkg = packages.find((item) => item.id === packageId || item.name === packageId || item.packageName === packageId);
+  return pkg?.name || pkg?.packageName || pkg?.title || packageId || 'Unassigned';
+};
+
+const getUserOrgId = (user = {}) => user.orgId || user.organizationId || user.tenantId || '';
+
+const getStorageUsed = (tenant = {}) => tenant.storageUsedBytes || tenant.storageUsed || tenant.storageBytes || 0;
+
+const formatBytes = (bytes) => {
+  const value = Number(bytes || 0);
+  if (!value) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  return `${(value / (1024 ** exponent)).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+};
+
+const buildTenantRecord = (orgDoc, detailsDoc) => {
+  const orgData = orgDoc.data();
+  const detailsData = detailsDoc?.data?.() || {};
+  return {
+    ...orgData,
+    ...detailsData,
+    id: orgDoc.id,
+    orgId: orgDoc.id,
+    detailsDocId: detailsDoc?.id || orgData.detailsDocId || DETAILS_DOC_FALLBACK_ID,
+  };
+};
+
+const buildSavePayload = (payload) => ({
+  orgName: payload.orgName,
+  name: payload.orgName,
+  adminName: payload.adminName || '',
+  adminEmail: payload.adminEmail || '',
+  subscriptionPackageId: payload.subscriptionPackageId || '',
+  featureFlagsOverride: payload.featureFlagsOverride || {},
+  storageLimitOverride: payload.storageLimitOverride,
+  maxUsersOverride: payload.maxUsersOverride,
+  updatedAt: serverTimestamp(),
+});
+
+export default function TenantList() {
+  const [tenants, setTenants] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [subscriptionPackages, setSubscriptionPackages] = useState([]);
+  const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showOnboardForm, setShowOnboardForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [actionTenantId, setActionTenantId] = useState('');
+  const [error, setError] = useState('');
+
+  const loadTenants = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const orgSnap = await getDocs(collection(db, 'organizations'));
+      const tenantRecords = await Promise.all(orgSnap.docs.map(async (orgDoc) => {
+        const detailsSnap = await getDocs(collection(db, 'organizations', orgDoc.id, 'org_details'));
+        return buildTenantRecord(orgDoc, detailsSnap.docs[0]);
+      }));
+      tenantRecords.sort((a, b) => (a.orgName || a.name || a.id).localeCompare(b.orgName || b.name || b.id));
+      setTenants(tenantRecords);
+      setSelectedTenantId((currentId) => currentId || tenantRecords[0]?.id || '');
+    } catch (loadError) {
+      setError(`Failed to load tenants: ${loadError.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTenants();
+  }, [loadTenants]);
+
+  useEffect(() => {
+    const unsubscribePackages = onSnapshot(collection(db, 'subscriptionPackages'), (snap) => {
+      setSubscriptionPackages(snap.docs.map((packageDoc) => ({ id: packageDoc.id, ...packageDoc.data() })));
+    }, (snapshotError) => setError(`Failed to load packages: ${snapshotError.message}`));
+
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
+      setUsers(snap.docs.map((userDoc) => ({ id: userDoc.id, ...userDoc.data() })));
+    }, (snapshotError) => setError(`Failed to load users: ${snapshotError.message}`));
+
+    return () => {
+      unsubscribePackages();
+      unsubscribeUsers();
+    };
+  }, []);
+
+  const usersByOrg = useMemo(() => users.reduce((acc, user) => {
+    const orgId = getUserOrgId(user);
+    if (!orgId) return acc;
+    acc[orgId] = (acc[orgId] || 0) + 1;
+    return acc;
+  }, {}), [users]);
+
+  const hydratedTenants = useMemo(() => tenants.map((tenant) => ({
+    ...tenant,
+    userCount: usersByOrg[tenant.id] || usersByOrg[tenant.orgId] || 0,
+  })), [tenants, usersByOrg]);
+
+  const filteredTenants = useMemo(() => {
+    const term = normalizeString(searchTerm);
+    if (!term) return hydratedTenants;
+    return hydratedTenants.filter((tenant) => [
+      tenant.id,
+      tenant.orgName,
+      tenant.name,
+      tenant.adminEmail,
+      getPackageName(tenant, subscriptionPackages),
+    ].some((value) => normalizeString(value).includes(term)));
+  }, [hydratedTenants, searchTerm, subscriptionPackages]);
+
+  const selectedTenant = hydratedTenants.find((tenant) => tenant.id === selectedTenantId) || filteredTenants[0] || null;
+
+  const refreshSelectedTenant = (tenantId, patch) => {
+    setTenants((currentTenants) => currentTenants.map((tenant) => (
+      tenant.id === tenantId ? { ...tenant, ...patch } : tenant
+    )));
+  };
+
+  const handleOnboardTenant = async (payload) => {
+    setIsSaving(true);
+    setError('');
+    try {
+      const onboardTenant = httpsCallable(getFunctions(), 'onboardTenant');
+      await onboardTenant(payload);
+      setShowOnboardForm(false);
+      await loadTenants();
+      setSelectedTenantId(payload.orgId);
+    } catch (callableError) {
+      setError(`Failed to onboard tenant: ${callableError.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveTenant = async (tenant, payload) => {
+    setIsSaving(true);
+    setError('');
+    try {
+      const detailsDocRef = doc(db, 'organizations', tenant.id, 'org_details', tenant.detailsDocId || DETAILS_DOC_FALLBACK_ID);
+      const savePayload = buildSavePayload(payload);
+      await setDoc(detailsDocRef, savePayload, { merge: true });
+      refreshSelectedTenant(tenant.id, { ...savePayload, updatedAt: new Date() });
+    } catch (saveError) {
+      setError(`Failed to save tenant: ${saveError.message}`);
+      throw saveError;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSuspendTenant = async (tenant) => {
+    if (!window.confirm(`Suspend ${tenant.orgName || tenant.name || tenant.id}?`)) return;
+    setActionTenantId(tenant.id);
+    setError('');
+    try {
+      const suspendTenant = httpsCallable(getFunctions(), 'suspendTenant');
+      await suspendTenant({ orgId: tenant.id });
+      const detailsDocRef = doc(db, 'organizations', tenant.id, 'org_details', tenant.detailsDocId || DETAILS_DOC_FALLBACK_ID);
+      await updateDoc(detailsDocRef, { status: 'suspended', isSuspended: true, updatedAt: serverTimestamp() }).catch(() => {});
+      refreshSelectedTenant(tenant.id, { status: 'suspended', isSuspended: true, updatedAt: new Date() });
+    } catch (callableError) {
+      setError(`Failed to suspend tenant: ${callableError.message}`);
+    } finally {
+      setActionTenantId('');
+    }
+  };
+
+  const handleDeleteTenant = async (tenant) => {
+    if (!window.confirm(`Permanently delete ${tenant.orgName || tenant.name || tenant.id}? This cannot be undone.`)) return;
+    setActionTenantId(tenant.id);
+    setError('');
+    try {
+      const deleteTenant = httpsCallable(getFunctions(), 'deleteTenant');
+      await deleteTenant({ orgId: tenant.id });
+      setTenants((currentTenants) => currentTenants.filter((item) => item.id !== tenant.id));
+      setSelectedTenantId('');
+    } catch (callableError) {
+      setError(`Failed to delete tenant: ${callableError.message}`);
+    } finally {
+      setActionTenantId('');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Developer Console</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">Tenant management</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Manage organization packages, tenant limits, feature overrides, and lifecycle actions.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowOnboardForm((current) => !current)}
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
+        >
+          {showOnboardForm ? 'Hide onboarding' : 'Onboard tenant'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      )}
+
+      {showOnboardForm && (
+        <TenantForm
+          mode="create"
+          subscriptionPackages={subscriptionPackages}
+          isSaving={isSaving}
+          onCancel={() => setShowOnboardForm(false)}
+          onSubmit={handleOnboardTenant}
+        />
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(320px,420px),1fr]">
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 p-4">
+            <label className="block text-sm font-medium text-slate-700" htmlFor="tenant-search">
+              Search tenants
+            </label>
+            <input
+              id="tenant-search"
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Name, ID, admin, package…"
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div className="max-h-[720px] overflow-auto">
+            {isLoading ? (
+              <div className="p-6 text-sm font-semibold text-slate-500">Loading tenant organizations…</div>
+            ) : filteredTenants.length === 0 ? (
+              <div className="p-6 text-sm text-slate-500">No tenants found.</div>
+            ) : filteredTenants.map((tenant) => {
+              const isSelected = tenant.id === selectedTenant?.id;
+              return (
+                <button
+                  key={tenant.id}
+                  type="button"
+                  onClick={() => setSelectedTenantId(tenant.id)}
+                  className={`w-full border-b border-slate-100 p-4 text-left transition hover:bg-slate-50 ${isSelected ? 'bg-primary-light/60' : 'bg-white'}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-slate-900">{tenant.orgName || tenant.name || tenant.id}</h3>
+                      <p className="mt-1 truncate text-xs text-slate-500">{tenant.id}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${tenant.status === 'suspended' || tenant.isSuspended ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {tenant.status === 'suspended' || tenant.isSuspended ? 'Suspended' : 'Active'}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <span className="block text-slate-400">Package</span>
+                      <span className="font-semibold text-slate-700">{getPackageName(tenant, subscriptionPackages)}</span>
+                    </div>
+                    <div>
+                      <span className="block text-slate-400">Users</span>
+                      <span className="font-semibold text-slate-700">{tenant.userCount}</span>
+                    </div>
+                    <div>
+                      <span className="block text-slate-400">Storage</span>
+                      <span className="font-semibold text-slate-700">{formatBytes(getStorageUsed(tenant))}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <TenantDetail
+          tenant={selectedTenant}
+          subscriptionPackages={subscriptionPackages}
+          isSaving={isSaving}
+          actionTenantId={actionTenantId}
+          onSave={handleSaveTenant}
+          onSuspend={handleSuspendTenant}
+          onDelete={handleDeleteTenant}
+        />
+      </div>
+    </div>
+  );
+}

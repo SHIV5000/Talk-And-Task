@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import VersionDisplay from '../Common/VersionDisplay.jsx';
 
 const inRange = (message, start, end) => {
   const ms = message.timestamp?.toMillis?.() || (message.timestamp?.toDate ? message.timestamp.toDate().getTime() : 0);
@@ -8,7 +9,7 @@ const inRange = (message, start, end) => {
   return true;
 };
 
-export default function RightSidebar({ messages = [], user, sidebarWidth, dbUsers = [], currentUserData, appVersion }) {
+export default function RightSidebar({ messages = [], user, sidebarWidth, dbUsers = [], currentUserData, appVersion, featureFlags = {} }) {
   const [preset, setPreset] = useState('today');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -45,12 +46,14 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
     ['custom', 'Date Picker'],
   ];
 
+  if (featureFlags.advancedAnalytics === false) return null;
+
   return (
     <aside className="hidden lg:flex shrink-0 h-full bg-slate-100 border-l border-slate-200 flex-col p-3 gap-2 overflow-hidden" style={{ width: `${sidebarWidth || 380}px` }}>
       <div className="bg-white text-slate-800 rounded-2xl p-3 shadow-sm border border-slate-200">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">User Analytics</div>
         <div className="mt-2 text-sm font-black truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
-        <div className="mt-1 text-xs font-bold text-slate-400">Ver. {appVersion}</div>
+        <div className="mt-1 text-xs font-bold text-slate-400">{appVersion}</div>
       </div>
       <div className="rounded-2xl p-3 bg-white border border-emerald-100 shadow-sm flex items-center justify-between">
         <div><div className="text-[10px] font-bold uppercase text-slate-500">Online Users</div><div className="text-lg font-black text-emerald-700">{onlineCount}</div></div>
