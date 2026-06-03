@@ -240,6 +240,92 @@ const assertPermission = async (request, area, action) => {
   throw new HttpsError('permission-denied', `Missing ${area}.${action} permission.`);
 };
 
+const toCreateUserHttpsError = (error) => {
+  const code = error?.code;
+  const message = String(error?.message || '').toLowerCase();
+
+  if (code === 'auth/email-already-exists') {
+    return new HttpsError('already-exists', 'A user with this email already exists.');
+  }
+
+  if (code === 'auth/invalid-email') {
+    return new HttpsError('invalid-argument', 'Email address is invalid.');
+  }
+
+  const isWeakPasswordFailure = code === 'auth/weak-password'
+    || message.includes('weak password')
+    || message.includes('password is too weak')
+    || message.includes('password must be');
+  if (code === 'auth/invalid-password' || isWeakPasswordFailure) {
+    return new HttpsError('invalid-argument', 'Password is invalid or too weak.');
+  }
+
+  return new HttpsError('internal', error?.message || 'Failed to create user.');
+};
+
+
+exports.createUser = onCall(async (request) => {
+  await assertPermission(request, 'Users', 'create');
+  const {
+    email,
+    password,
+    displayName = null,
+    disabled = false,
+    emailVerified = false,
+    orgId = DEFAULT_ORG_ID,
+    role = 'member',
+    isPlatformOwner = false,
+    claims = {},
+  } = request.data || {};
+
+  if (!email) throw new HttpsError('invalid-argument', 'Email is required.');
+  if (!password) throw new HttpsError('invalid-argument', 'Password is required.');
+
+  let userRecord;
+  try {
+    userRecord = await admin.auth().createUser({
+      email,
+      password,
+      displayName: displayName || undefined,
+      disabled: !!disabled,
+      emailVerified: !!emailVerified,
+    });
+  } catch (error) {
+    throw toCreateUserHttpsError(error);
+  }
+
+  const customClaims = {
+    ...claims,
+    orgId,
+    role,
+    isPlatformOwner: !!isPlatformOwner,
+    admin: !!claims.admin || role === 'admin' || !!isPlatformOwner,
+  };
+  await admin.auth().setCustomUserClaims(userRecord.uid, customClaims);
+  await db.collection('users').doc(userRecord.uid).set({
+    email,
+    displayName,
+    orgId,
+    role,
+    isPlatformOwner: !!isPlatformOwner,
+    disabled: !!disabled,
+    emailVerified: !!emailVerified,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+  await db.collection('organizations').doc(orgId).collection('audit_logs').add({
+    type: 'CREATE_USER',
+    adminId: request.auth.uid,
+    user: request.auth.uid,
+    target: userRecord.uid,
+    details: { email, orgId, role, isPlatformOwner: !!isPlatformOwner },
+    content: `CREATE_USER: ${userRecord.uid}`,
+    immutableId: `CREATE_USER_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    timestamp: serverTimestamp(),
+  });
+  return { ok: true, uid: userRecord.uid };
+});
+
 exports.forceLogoutSession = onCall(async (request) => {
   await assertPermission(request, 'Users', 'update');
   const { uid, sessionId } = request.data || {};
