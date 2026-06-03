@@ -17,9 +17,11 @@ export default function ProfileSettingsModal({
   profilePicInputRef,
   profileUploadProgress,
   handleProfileSubmit,
-  user
+  user,
+  featureFlags = {},
 }) {
   const [activeTab, setActiveTab] = useState('profile');
+  const tabs = featureFlags.customBranding === false ? ['profile'] : ['profile', 'theme'];
   const fontScaleOptions = [
     { key: 'compact', label: 'Compact' },
     { key: 'normal', label: 'Normal' },
@@ -39,13 +41,13 @@ export default function ProfileSettingsModal({
         </div>
 
         <div className="px-6 pt-5 flex gap-2 bg-slate-50 border-b border-slate-100">
-          {['profile', 'theme'].map(tab => (
+          {tabs.map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-t-xl text-sm font-bold capitalize transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-indigo-600'}`}>{tab}</button>
           ))}
         </div>
         
         <div className="p-6 space-y-7 max-h-[72vh] overflow-y-auto custom-sidebar-scroll">
-          {activeTab === 'profile' ? (
+          {activeTab === 'profile' || featureFlags.customBranding === false ? (
             <>
               <div className="flex flex-col items-center gap-4">
                 <div className="w-32 h-32 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden relative cursor-pointer group shadow-inner border-4 border-slate-50" onClick={() => profilePicInputRef.current?.click()}>

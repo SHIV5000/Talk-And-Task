@@ -43,6 +43,35 @@ const THEME_FONTS = {
   System: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
 };
 const FONT_SCALE = { compact: '0.94rem', normal: '1rem', comfortable: '1.06rem', large: '1.13rem' };
+
+const DEFAULT_FEATURE_FLAGS = {
+  chat: true,
+  taskCards: true,
+  advancedAnalytics: true,
+  dataGovernance: true,
+  dsarCompliance: true,
+  customBranding: true,
+  apiAccess: true,
+  auditLogs: true,
+  prioritySupport: true,
+};
+
+const normalizeFeatureFlags = (flags = {}) => ({
+  ...DEFAULT_FEATURE_FLAGS,
+  ...(flags || {}),
+});
+
+const FeatureLockedPanel = ({ title, message, icon = 'fa-lock' }) => (
+  <div className="flex-1 h-full flex items-center justify-center bg-slate-50 p-8 text-center">
+    <div className="max-w-md bg-white border border-slate-200 rounded-3xl shadow-sm p-8">
+      <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mb-4">
+        <i className={`fa-solid ${icon} text-2xl`}></i>
+      </div>
+      <h2 className="text-xl font-black text-slate-800 mb-2">{title}</h2>
+      <p className="text-sm font-semibold text-slate-500 leading-relaxed">{message}</p>
+    </div>
+  </div>
+);
 const universalTaskFilters = [
   { key: 'all', label: 'All', icon: 'fa-layer-group' },
   { key: 'tasks-pending', label: 'Pending Tasks', icon: 'fa-hourglass-half' },
@@ -404,6 +433,8 @@ export default function ChatApp({ user, onLogout }) {
         immutableAuditLogs, toolPreferences, setToolPreferences,
         globalAnnouncement
     } = useWorkspaceData(user, profileForm, setProfileForm);
+
+    const featureFlags = useMemo(() => normalizeFeatureFlags(currentUserData?.featureFlags), [currentUserData?.featureFlags]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -893,6 +924,7 @@ export default function ChatApp({ user, onLogout }) {
     }, [messages]);
 
     const convertToTask = async () => {
+        if (!featureFlags.taskCards) return alert("Task cards are not enabled for your account.");
         if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
         try {
             const now = new Date();
@@ -1219,6 +1251,7 @@ export default function ChatApp({ user, onLogout }) {
     // 👇 modalProps – ADD the new acknowledgment & proof states so they reach TaskConvertModal
     const modalProps = {
         activeModal, setActiveModal, selectedMessage, setSelectedMessage,
+        featureFlags,
         setReplyingTo, chatInputRef, currentUserData, profileForm,
         setProfileForm, profilePicInputRef, profileUploadProgress,
         setProfileUploadProgress, handleProfileSubmit, toolPreferences,
@@ -1355,9 +1388,10 @@ export default function ChatApp({ user, onLogout }) {
                   currentUserData={currentUserData}
                   maxFileSizeMb={MAX_FILE_SIZE_MB}
                   setMaxFileSizeMb={setMaxFileSizeMb}
+                  featureFlags={featureFlags}
                 />
                 ) : viewMode === "advanced" ? (
-                    <AdvancedSearchPage messages={messages} dbUsers={dbUsers} onBack={() => setViewMode('chat')} onOpen={(id, groupId, replyToId) => { setViewMode('chat'); navigateToMessageFromNotification(id, groupId, replyToId); }} />
+                    featureFlags.chat ? <AdvancedSearchPage messages={messages} dbUsers={dbUsers} onBack={() => setViewMode('chat')} onOpen={(id, groupId, replyToId) => { setViewMode('chat'); navigateToMessageFromNotification(id, groupId, replyToId); }} /> : <FeatureLockedPanel title="Chat is disabled" message="Message search is unavailable because chat is not enabled for your account." icon="fa-comments" />
                 ) : (
                     <div className="flex h-full w-full relative">
                         <LeftSidebar sidebarWidth={leftWidth}
@@ -1366,10 +1400,13 @@ export default function ChatApp({ user, onLogout }) {
                             getUnreadInfoForGroup={getUnreadInfoForGroup} messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
                             sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={isVipAdmin} setViewMode={setViewMode}
                             isMobileHome={!activeGroup}
+                            featureFlags={featureFlags}
                         />
                         <div className="hidden md:block app-resizer" onMouseDown={startResize('left')} title="Resize sidebar" />
 
-                        {!activeGroup ? (
+                        {!featureFlags.chat ? (
+                            <FeatureLockedPanel title="Chat is disabled" message="Chat workspaces and direct messages are not enabled for your account." icon="fa-comments" />
+                        ) : !activeGroup ? (
                             <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
                                 <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
                                     <i className="fa-solid fa-comments text-4xl"></i>
@@ -1544,6 +1581,7 @@ export default function ChatApp({ user, onLogout }) {
                                     handleAddInlineComment={handleAddInlineComment} jumpToPrivateSource={(msgId, groupId) => navigateToMessageFromNotification(msgId, groupId)}
                                     customTags={customTags} setActiveReplies={setActiveReplies}
                                     setActiveTaskSidebar={setActiveTaskSidebar}
+                                    featureFlags={featureFlags}
                                 />
 
                                 <InputArea
@@ -1587,14 +1625,14 @@ export default function ChatApp({ user, onLogout }) {
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
                           </>
-                        ) : true ? (
+                        ) : featureFlags.advancedAnalytics ? (
                           <>
-                            <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task hub" />
+                            <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize analytics sidebar" />
                             <RightSidebar
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={currentUserData} appVersion={APP_VERSION}
+                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={currentUserData} appVersion={APP_VERSION} featureFlags={featureFlags}
                             />
                           </>
                         ) : null}

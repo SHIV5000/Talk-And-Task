@@ -13,7 +13,8 @@ import ActiveSchedulesModal from './ActiveSchedulesModal.jsx'; // 👈 IMPORTED 
 import UploadOverlay from '../Common/UploadOverlay.jsx';
 
 export default function ModalManager(props) {
-  const { activeModal, isUploading, uploadProgress } = props;
+  const { activeModal, isUploading, uploadProgress, featureFlags = {} } = props;
+  const hasFeature = (flag) => featureFlags?.[flag] !== false;
 
   if (!activeModal && !isUploading) return null;
 
@@ -23,14 +24,14 @@ export default function ModalManager(props) {
       {activeModal === 'edit_profile' && <ProfileSettingsModal {...props} />}
       {activeModal === 'group_form_modal' && <GroupFormModal {...props} />}
       {activeModal === 'group_settings' && <GroupSettingsModal {...props} />}
-      {activeModal === 'task_trail' && props.selectedMessage?.taskData && (
+      {activeModal === 'task_trail' && hasFeature('taskCards') && props.selectedMessage?.taskData && (
         <TaskTrailModal {...props} readOnly={props.readOnly} />
       )}
-      {activeModal === 'task_convert' && <TaskConvertModal {...props} />}
+      {activeModal === 'task_convert' && hasFeature('taskCards') && <TaskConvertModal {...props} />}
       {activeModal === 'reminder' && <ReminderModal {...props} />}
       {activeModal === 'schedule_send' && <ScheduleSendModal {...props} />}
       {activeModal === 'admin_edit_user' && <AdminEditUserModal {...props} />}
-      {activeModal === 'task_analytics' && <TaskAnalyticsModal {...props} />}
+      {activeModal === 'task_analytics' && hasFeature('taskCards') && <TaskAnalyticsModal {...props} />}
       
       {/* 👈 REGISTERED HERE */}
       {activeModal === 'active_schedules' && <ActiveSchedulesModal {...props} />} 
