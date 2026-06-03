@@ -51,7 +51,7 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
       <div className="bg-white text-slate-800 rounded-2xl p-3 shadow-sm border border-slate-200">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">User Analytics</div>
         <div className="mt-2 text-sm font-black truncate">{currentUserData?.name || user.email.split('@')[0]}</div>
-        <VersionDisplay />
+        <div className="mt-1 text-xs font-bold text-slate-400">{appVersion}</div>
       </div>
       <div className="rounded-2xl p-3 bg-white border border-emerald-100 shadow-sm flex items-center justify-between">
         <div><div className="text-[10px] font-bold uppercase text-slate-500">Online Users</div><div className="text-lg font-black text-emerald-700">{onlineCount}</div></div>

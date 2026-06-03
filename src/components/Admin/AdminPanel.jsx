@@ -9,6 +9,7 @@ import {
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { hasPermission } from '../../utils/rbac.js';
+import VersionManager from '../DeveloperConsole/Version/VersionManager.jsx';
 
 // Utility to strip HTML
 const stripHtml = (html) =>
@@ -89,6 +90,7 @@ export default function AdminPanel({
   isVipAdmin,
   maxFileSizeMb,
   setMaxFileSizeMb,
+  appVersion,
 }) {
   // ===== TABS =====
   const [activeTab, setActiveTab] = useState('overview');
@@ -1440,6 +1442,9 @@ export default function AdminPanel({
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Active User Count</label>
                       <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <VersionManager currentVersion={appVersion} />
                     </div>
                     <div className="md:col-span-2 flex justify-end"><button type="button" onClick={saveInstitutionSettings} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Save Institution Settings</button></div>
                   </div>
