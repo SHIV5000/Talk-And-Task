@@ -23,7 +23,9 @@ export default function LeftSidebar({
   setViewMode,
   sidebarWidth,
   isMobileHome = false,
+  featureFlags = {},
 }) {
+  const canOpenAdminWorkspace = Boolean(featureFlags.dataGovernance || featureFlags.dsarCompliance || featureFlags.auditLogs || featureFlags.apiAccess || featureFlags.customBranding || featureFlags.taskCards);
   const [showSearch, setShowSearch] = useState(false);
 
   return (
@@ -264,7 +266,18 @@ export default function LeftSidebar({
         </div>
 
         {/* Admin Workspace v25.0 button (visible if user is admin) */}
-        {(currentUserData?.isAdmin || isVipAdmin) && (
+        {featureFlags.prioritySupport && (
+          <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
+            <button
+              type="button"
+              className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-headset"></i> Priority Support
+            </button>
+          </div>
+        )}
+
+        {(currentUserData?.isAdmin || isVipAdmin) && canOpenAdminWorkspace && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
               onClick={() => setViewMode('admin')}

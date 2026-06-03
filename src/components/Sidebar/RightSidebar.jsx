@@ -9,7 +9,7 @@ const inRange = (message, start, end) => {
   return true;
 };
 
-export default function RightSidebar({ messages = [], user, sidebarWidth, dbUsers = [], currentUserData }) {
+export default function RightSidebar({ messages = [], user, sidebarWidth, dbUsers = [], currentUserData, appVersion, featureFlags = {} }) {
   const [preset, setPreset] = useState('today');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -45,6 +45,8 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
     ['month', 'This Month'],
     ['custom', 'Date Picker'],
   ];
+
+  if (featureFlags.advancedAnalytics === false) return null;
 
   return (
     <aside className="hidden lg:flex shrink-0 h-full bg-slate-100 border-l border-slate-200 flex-col p-3 gap-2 overflow-hidden" style={{ width: `${sidebarWidth || 380}px` }}>
