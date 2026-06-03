@@ -535,10 +535,15 @@ export default function AdminPanel({
 
   const handleAddUser = async () => {
     if (!newUserEmail || !newUserName) return alert('Please enter email and name.');
+    
+    // Grab the active organization ID from the admin's profile
+    const currentOrgId = currentUserData?.orgId || '';
+
     await addDoc(collection(db, 'users'), {
       uid: `manual_${Date.now()}`,
       email: newUserEmail,
       name: newUserName,
+      orgId: currentOrgId, // <-- NEW: Maps the user to the active tenant
       isApproved: newUserApprove,
       isAdmin: false,
       canCreateGroups: false,
