@@ -16,6 +16,7 @@ import { AuthContext } from '../contexts/AuthContext.jsx';
 // Custom Enterprise Hooks
 import useWorkspaceData from '../hooks/useWorkspaceData.js';
 import useChatEngine from '../hooks/useChatEngine.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 // Utils & Firebase Core
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
@@ -308,7 +309,8 @@ const TaskSidebar = ({ activeTask, setActiveTask, messages, user, currentUserDat
     );
 };
 
-export default function ChatApp({ user, onLogout, appVersion }) {
+export default function ChatApp({ user, onLogout }) {
+    const { appVersion } = useAuth();
     const [activeModal, setActiveModal] = useState(null);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [activeTaskSidebar, setActiveTaskSidebar] = useState(null);
@@ -1634,7 +1636,7 @@ export default function ChatApp({ user, onLogout, appVersion }) {
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={currentUserData} appVersion={APP_VERSION} featureFlags={featureFlags}
+                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={currentUserData} appVersion={appVersion}
                             />
                           </>
                         ) : null}
