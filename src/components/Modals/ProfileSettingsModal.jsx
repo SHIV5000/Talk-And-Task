@@ -75,7 +75,7 @@ export default function ProfileSettingsModal({
                   disabled
                   className="w-full p-3.5 border border-slate-200 rounded-xl text-[15px] outline-none bg-slate-100 text-slate-500 cursor-not-allowed font-semibold shadow-sm"
                 />
-                <p className="mt-1.5 text-[11px] text-slate-400 font-semibold ml-1">Email is managed by your Google sign-in.</p>
+                <p className="mt-1.5 text-[11px] text-slate-400 font-semibold ml-1">Email is managed by your sign-in account.</p>
               </div>
 
               <div>

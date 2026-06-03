@@ -7,6 +7,7 @@ import {
   signOut,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithEmailAndPassword,
   setPersistence,
   inMemoryPersistence,
   serverTimestamp,
@@ -263,13 +264,32 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, [clearSession, hydrateSession]);
 
-  const login = useCallback(async (event) => {
-    event?.preventDefault?.();
-    setAuthError('');
-
+  const requestNotificationPermission = useCallback(() => {
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
+  }, []);
+
+  const notifyLoginSuccess = useCallback(async (loggedInUser, note) => {
+    const deploymentInfo = getBuildDeploymentInfo();
+
+    await notifyRuntimeEvent('user-login', {
+      status: 'LOGIN_OK',
+      note,
+      userName: loggedInUser.displayName || (loggedInUser.email || '').split('@')[0] || 'unknown',
+      userEmail: loggedInUser.email || 'unknown',
+      branch: deploymentInfo.branch,
+      commitHash: deploymentInfo.commitHash,
+      commitName: deploymentInfo.commitName,
+      editedAt: deploymentInfo.editedAt,
+      source: deploymentInfo.source,
+    }).catch(() => {});
+  }, []);
+
+  const login = useCallback(async (event) => {
+    event?.preventDefault?.();
+    setAuthError('');
+    requestNotificationPermission();
 
     try {
       await setPersistence(auth, inMemoryPersistence);
@@ -278,24 +298,47 @@ export function AuthProvider({ children }) {
       const result = await signInWithPopup(auth, provider);
       const loggedInUser = result.user;
       await hydrateSession(loggedInUser);
-
-      const deploymentInfo = getBuildDeploymentInfo();
-
-      await notifyRuntimeEvent('user-login', {
-        status: 'LOGIN_OK',
-        note: 'User authenticated successfully. Safe checkpoint for rollback mapping.',
-        userName: loggedInUser.displayName || (loggedInUser.email || '').split('@')[0] || 'unknown',
-        userEmail: loggedInUser.email || 'unknown',
-        branch: deploymentInfo.branch,
-        commitHash: deploymentInfo.commitHash,
-        commitName: deploymentInfo.commitName,
-        editedAt: deploymentInfo.editedAt,
-        source: deploymentInfo.source,
-      }).catch(() => {});
+      await notifyLoginSuccess(loggedInUser, 'User authenticated with Google successfully. Safe checkpoint for rollback mapping.');
     } catch (err) {
       setAuthError('Google Sign-In Cancelled or Failed.');
     }
-  }, [hydrateSession]);
+  }, [hydrateSession, notifyLoginSuccess, requestNotificationPermission]);
+
+  const loginWithEmailPassword = useCallback(async (email, password) => {
+    const trimmedEmail = String(email || '').trim();
+    const trimmedPassword = String(password || '').trim();
+    setAuthError('');
+
+    if (!trimmedEmail || !trimmedPassword) {
+      setAuthError('Enter your email and temporary password.');
+      return;
+    }
+
+    requestNotificationPermission();
+
+    try {
+      await setPersistence(auth, inMemoryPersistence);
+      const result = await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
+      const loggedInUser = result.user;
+      await hydrateSession(loggedInUser);
+      await notifyLoginSuccess(loggedInUser, 'User authenticated with email/password successfully. Safe checkpoint for rollback mapping.');
+    } catch (err) {
+      const code = err?.code || '';
+      if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(code)) {
+        setAuthError('Invalid email or password. Use the email and temporary password your admin created.');
+        return;
+      }
+      if (code === 'auth/too-many-requests') {
+        setAuthError('Too many failed login attempts. Please wait and try again.');
+        return;
+      }
+      if (code === 'auth/invalid-email') {
+        setAuthError('Please enter a valid email address.');
+        return;
+      }
+      setAuthError('Email/password sign-in failed. Please try again.');
+    }
+  }, [hydrateSession, notifyLoginSuccess, requestNotificationPermission]);
 
   const logout = useCallback(async () => {
     try {
@@ -321,6 +364,7 @@ export function AuthProvider({ children }) {
     storageLimitMB,
     storageUsedMB,
     login,
+    loginWithEmailPassword,
     logout,
     authChecked,
     authError,
@@ -337,6 +381,7 @@ export function AuthProvider({ children }) {
     storageLimitMB,
     storageUsedMB,
     login,
+    loginWithEmailPassword,
     logout,
     authChecked,
     authError,
