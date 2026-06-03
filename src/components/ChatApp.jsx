@@ -646,7 +646,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
 
     const myGroups = useMemo(() => {
-        let filtered = groups.filter(g => g.members?.includes(user.email) && !g.isArchived);
+        // Implicitly include "Welcome" or "General" groups for everyone so a default group is always present
+        let filtered = groups.filter(g => (g.members?.includes(user.email) || g.name === "Welcome" || g.name === "General") && !g.isArchived);
         if (sidebarSearch) filtered = filtered.filter(g => g.name.toLowerCase().includes(sidebarSearch.toLowerCase()));
         return filtered;
     }, [groups, user.email, sidebarSearch]);
@@ -1279,6 +1280,22 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         requireProof, setRequireProof,
     };
 
+// NEW: Block users entirely if their Gmail isn't mapped to an Organization
+    if (currentUserData && !currentUserData.orgId && !currentUserData.isAdmin && !isVipAdmin) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-slate-50 p-4 text-slate-800">
+                <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 border-t-8 border-rose-600 text-center transform-gpu hover:scale-105 transition-transform">
+                    <i className="fa-solid fa-building-circle-xmark text-5xl text-rose-600 mb-4 animate-pulse"></i>
+                    <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
+                    <p className="text-sm font-bold text-rose-600 mb-6 uppercase tracking-wider leading-relaxed">
+                        YOU ARE NOT THE PART OF ANY ORGANIZATION-PLEASE CONTACT YOUR ADMINISTRATOR
+                    </p>
+                    <button onClick={onLogout} className="bg-slate-100 text-slate-700 py-2 px-6 rounded-full font-bold shadow-sm hover:bg-slate-200 transition-colors">Sign Out</button>
+                </div>
+            </div>
+        );
+    }
+  
     if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
         return (
             <div className="flex items-center justify-center h-screen bg-slate-50 p-4 text-slate-800">
