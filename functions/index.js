@@ -245,6 +245,8 @@ const toCreateUserHttpsError = (error) => {
   const code = error?.code;
   const message = String(error?.message || '').toLowerCase();
 
+  if (error instanceof HttpsError) return error;
+
   if (code === 'auth/email-already-exists') {
     return new HttpsError('already-exists', 'A user with this email already exists.');
   }
@@ -261,70 +263,98 @@ const toCreateUserHttpsError = (error) => {
     return new HttpsError('invalid-argument', 'Password is invalid or too weak.');
   }
 
-  return new HttpsError('internal', error?.message || 'Failed to create user.');
+  return new HttpsError('internal', 'Failed to create user.');
 };
-
 
 exports.createUser = onCall(async (request) => {
   await assertPermission(request, 'Users', 'create');
-  const {
-    email,
-    password,
-    displayName = null,
-    disabled = false,
-    emailVerified = false,
-    orgId = DEFAULT_ORG_ID,
-    role = 'member',
-    isPlatformOwner = false,
-    claims = {},
-  } = request.data || {};
 
-  if (!email) throw new HttpsError('invalid-argument', 'Email is required.');
-  if (!password) throw new HttpsError('invalid-argument', 'Password is required.');
+  const data = request.data || {};
+  const callerSnap = await db.collection('users').doc(request.auth.uid).get();
+  const caller = callerSnap.data() || {};
+  const callerOrgId = String(request.auth.token?.orgId || caller.orgId || '').trim();
+  const requestedOrgId = String(data.orgId || '').trim();
+  const isCallerPlatformOwner = !!request.auth.token?.isPlatformOwner || !!caller.isPlatformOwner;
+  const email = String(data.email || '').trim().toLowerCase();
+  const password = String(data.password || '').trim();
+  const name = String(data.name || data.displayName || '').trim();
+  const orgId = requestedOrgId || callerOrgId || DEFAULT_ORG_ID;
+  const isAdmin = !!data.isAdmin;
+  const canCreateGroups = !!data.canCreateGroups;
+  const role = isAdmin ? 'admin' : 'member';
+
+  if (!isCallerPlatformOwner && callerOrgId && orgId !== callerOrgId) {
+    throw new HttpsError('permission-denied', 'You can only create users in your organization.');
+  }
+
+  if (!email || !password || !name) {
+    throw new HttpsError('invalid-argument', 'Email, Name, and Password are required.');
+  }
+  if (password.length < 6) {
+    throw new HttpsError('invalid-argument', 'Password must be at least 6 characters.');
+  }
 
   let userRecord;
   try {
     userRecord = await admin.auth().createUser({
       email,
       password,
-      displayName: displayName || undefined,
-      disabled: !!disabled,
-      emailVerified: !!emailVerified,
+      displayName: name,
+      disabled: false,
+      emailVerified: false,
     });
+
+    await admin.auth().setCustomUserClaims(userRecord.uid, {
+      orgId,
+      role,
+      admin: isAdmin,
+      isPlatformOwner: false,
+    });
+
+    await db.collection('users').doc(userRecord.uid).set({
+      uid: userRecord.uid,
+      email,
+      name,
+      orgId,
+      role,
+      isAdmin,
+      canCreateGroups,
+      isApproved: true,
+      isPlatformOwner: false,
+      isArchived: false,
+      roles: [],
+      tempPasswordSet: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastActive: serverTimestamp(),
+      toolPreferences: {
+        reply: true,
+        react: true,
+        edit: true,
+        delete: true,
+        pin: true,
+        bookmark: true,
+        showWatermark: true,
+        soundProfile: 'classic',
+      },
+    });
+
+    await logAuditEvent('USER_CREATE', request.auth.uid, userRecord.uid, { email, orgId, role });
+
+    return { ok: true, uid: userRecord.uid };
   } catch (error) {
+    if (userRecord?.uid) {
+      try {
+        await admin.auth().deleteUser(userRecord.uid);
+      } catch (cleanupError) {
+        logger.error('Failed to clean up Auth user after createUser failure', {
+          uid: userRecord.uid,
+          error: cleanupError?.message,
+        });
+      }
+    }
     throw toCreateUserHttpsError(error);
   }
-
-  const customClaims = {
-    ...claims,
-    orgId,
-    role,
-    isPlatformOwner: !!isPlatformOwner,
-    admin: !!claims.admin || role === 'admin' || !!isPlatformOwner,
-  };
-  await admin.auth().setCustomUserClaims(userRecord.uid, customClaims);
-  await db.collection('users').doc(userRecord.uid).set({
-    email,
-    displayName,
-    orgId,
-    role,
-    isPlatformOwner: !!isPlatformOwner,
-    disabled: !!disabled,
-    emailVerified: !!emailVerified,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
-  await db.collection('organizations').doc(orgId).collection('audit_logs').add({
-    type: 'CREATE_USER',
-    adminId: request.auth.uid,
-    user: request.auth.uid,
-    target: userRecord.uid,
-    details: { email, orgId, role, isPlatformOwner: !!isPlatformOwner },
-    content: `CREATE_USER: ${userRecord.uid}`,
-    immutableId: `CREATE_USER_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    timestamp: serverTimestamp(),
-  });
-  return { ok: true, uid: userRecord.uid };
 });
 
 exports.forceLogoutSession = onCall(async (request) => {
@@ -419,52 +449,6 @@ exports.migrateToMultiTenant = onCall(async (request) => {
   });
 
   return { ok: true, orgId, migratedCollections, usersUpdated };
-});
-
-exports.createUser = onCall(async (request) => {
-  await assertPermission(request, 'Users', 'create');
-  const data = request.data || {};
-  const email = String(data.email || '').trim();
-  const name = String(data.name || '').trim();
-  const password = String(data.password || '').trim();
-  const orgId = String(data.orgId || DEFAULT_ORG_ID).trim() || DEFAULT_ORG_ID;
-  const isApproved = !!data.isApproved;
-
-  if (!email || !name) throw new HttpsError('invalid-argument', 'email and name are required.');
-  if (password && password.length < 6) throw new HttpsError('invalid-argument', 'Temporary password must be at least 6 characters.');
-
-  const authPayload = { email, displayName: name, disabled: false };
-  if (password) authPayload.password = password;
-
-  const userRecord = await admin.auth().createUser(authPayload);
-  await db.collection('users').doc(userRecord.uid).set({
-    uid: userRecord.uid,
-    email,
-    name,
-    orgId,
-    isApproved,
-    isAdmin: false,
-    canCreateGroups: false,
-    isArchived: false,
-    roles: [],
-    tempPasswordSet: !!password,
-    createdAt: serverTimestamp(),
-    lastActive: serverTimestamp(),
-    toolPreferences: {
-      reply: true,
-      react: true,
-      edit: true,
-      delete: true,
-      pin: true,
-      bookmark: true,
-      showWatermark: true,
-      soundProfile: 'classic',
-    },
-  }, { merge: true });
-
-  await logAuditEvent('CREATE_USER', request.auth.uid, userRecord.uid, { email, orgId, isApproved });
-
-  return { ok: true, uid: userRecord.uid, isApproved };
 });
 
 exports.setCustomClaims = onCall(async (request) => {

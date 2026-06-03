@@ -8,6 +8,7 @@ import {
   doc, updateDoc, setDoc, getDocs, where, deleteDoc
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAoOsog2NP6Pf8YNSxn0rRYK4MSLEVNNZc",
@@ -23,11 +24,13 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+const functions = getFunctions(app);
 
 export {
   onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
   setPersistence, inMemoryPersistence,
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, setDoc, getDocs, where, deleteDoc,
-  ref, uploadBytesResumable, getDownloadURL
+  ref, uploadBytesResumable, getDownloadURL,
+  functions
 };
