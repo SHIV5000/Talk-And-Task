@@ -10,6 +10,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { hasPermission } from '../../utils/rbac.js';
 import VersionManager from '../DeveloperConsole/Version/VersionManager.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 // Utility to strip HTML
 const stripHtml = (html) =>
@@ -92,6 +93,9 @@ export default function AdminPanel({
   setMaxFileSizeMb,
   featureFlags = {},
 }) {
+  const { appVersion: contextAppVersion } = useAuth();
+  const appVersion = contextAppVersion || '25.0';
+
   // ===== TABS =====
   const [activeTab, setActiveTab] = useState('overview');
   const hasFeature = useCallback((flag) => featureFlags?.[flag] !== false, [featureFlags]);
