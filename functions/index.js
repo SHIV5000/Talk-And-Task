@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
@@ -239,6 +240,98 @@ const assertPermission = async (request, area, action) => {
   if (permissions['*']?.[action] || permissions[area]?.[action]) return;
   throw new HttpsError('permission-denied', `Missing ${area}.${action} permission.`);
 };
+
+
+exports.createUser = onCall(async (request) => {
+  await assertPermission(request, 'Users', 'create');
+  const data = request.data || {};
+  const email = String(data.email || '').trim();
+  const name = String(data.name || data.displayName || '').trim();
+  const password = String(data.password || data.tempPassword || '').trim();
+  const orgId = data.orgId || request.auth.token?.orgId || DEFAULT_ORG_ID;
+  const role = data.role || (data.isAdmin ? 'admin' : 'member');
+  const isAdmin = role === 'admin' || !!data.isAdmin;
+  const isPlatformOwner = !!data.isPlatformOwner;
+
+  if (!email) throw new HttpsError('invalid-argument', 'email is required.');
+  if (!name) throw new HttpsError('invalid-argument', 'name is required.');
+  if (!password) throw new HttpsError('invalid-argument', 'password is required.');
+
+  let userRecord;
+  try {
+    userRecord = await admin.auth().createUser({
+      email,
+      password,
+      displayName: name,
+      disabled: !!data.disabled,
+      emailVerified: !!data.emailVerified,
+    });
+
+    const customClaims = {
+      orgId,
+      role,
+      isPlatformOwner,
+      admin: isAdmin || isPlatformOwner,
+    };
+    await admin.auth().setCustomUserClaims(userRecord.uid, customClaims);
+
+    await db.collection('users').doc(userRecord.uid).set({
+      uid: userRecord.uid,
+      email,
+      name,
+      orgId,
+      role,
+      isAdmin: isAdmin || isPlatformOwner,
+      isPlatformOwner,
+      isApproved: data.isApproved !== false,
+      canCreateGroups: !!data.canCreateGroups,
+      isArchived: false,
+      roles: Array.isArray(data.roles) ? data.roles : [],
+      tempPasswordSet: true,
+      createdAt: serverTimestamp(),
+      createdBy: request.auth.uid,
+      updatedAt: serverTimestamp(),
+      toolPreferences: {
+        reply: true,
+        react: true,
+        edit: true,
+        delete: true,
+        pin: true,
+        bookmark: true,
+        showWatermark: true,
+        soundProfile: 'classic',
+      },
+    });
+
+    await logAuditEvent('CREATE_USER', request.auth.uid, userRecord.uid, {
+      email,
+      orgId,
+      role,
+      isPlatformOwner,
+    });
+
+    return { ok: true, uid: userRecord.uid };
+  } catch (error) {
+    if (userRecord?.uid) {
+      try {
+        await admin.auth().deleteUser(userRecord.uid);
+        logger.info('Cleaned up Auth user after createUser failure.', {
+          uid: userRecord.uid,
+          cleanupSucceeded: true,
+          originalError: error.message,
+        });
+      } catch (cleanupError) {
+        logger.error('Failed to clean up Auth user after createUser failure.', {
+          uid: userRecord.uid,
+          cleanupSucceeded: false,
+          cleanupError: cleanupError.message,
+          originalError: error.message,
+        });
+      }
+    }
+    throw error;
+  }
+});
 
 exports.forceLogoutSession = onCall(async (request) => {
   await assertPermission(request, 'Users', 'update');
