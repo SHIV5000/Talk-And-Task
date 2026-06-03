@@ -7,6 +7,7 @@ import {
   deleteDoc, setDoc, onSnapshot, query, orderBy, getDocs, where,
 } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import 'jspdf-autotable';
 import { hasPermission } from '../../utils/rbac.js';
 import VersionManager from '../DeveloperConsole/Version/VersionManager.jsx';
@@ -535,33 +536,19 @@ export default function AdminPanel({
 
   const handleAddUser = async () => {
     if (!newUserEmail || !newUserName) return alert('Please enter email and name.');
-    
-    // Grab the active organization ID from the admin's profile
-    const currentOrgId = currentUserData?.orgId || '';
 
-    await addDoc(collection(db, 'users'), {
-      uid: `manual_${Date.now()}`,
-      email: newUserEmail,
-      name: newUserName,
-      orgId: currentOrgId, // <-- NEW: Maps the user to the active tenant
+    const createUser = httpsCallable(getFunctions(), 'createUser');
+
+    const payload = {
+      email: newUserEmail.trim(),
+      name: newUserName.trim(),
+      orgId: currentUserData?.orgId || '',
       isApproved: newUserApprove,
-      isAdmin: false,
-      canCreateGroups: false,
-      isArchived: false,
-      roles: [],
-      tempPasswordSet: !!newUserTempPassword,
-      lastActive: serverTimestamp(),
-      toolPreferences: {
-        reply: true,
-        react: true,
-        edit: true,
-        delete: true,
-        pin: true,
-        bookmark: true,
-        showWatermark: true,
-        soundProfile: 'classic',
-      },
-    });
+    };
+    if (newUserTempPassword.trim()) payload.password = newUserTempPassword.trim();
+
+    await createUser(payload);
+
     setNewUserEmail('');
     setNewUserName('');
     setNewUserTempPassword('');
@@ -910,7 +897,7 @@ export default function AdminPanel({
                 <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-end">
                   <div><label className="text-xs font-bold text-slate-500 block mb-1">Email</label><input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="user@example.com" /></div>
                   <div><label className="text-xs font-bold text-slate-500 block mb-1">Name</label><input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Full Name" /></div>
-                  <div><label className="text-xs font-bold text-slate-500 block mb-1">Temporary Password</label><input type="text" value={newUserTempPassword} onChange={(e) => setNewUserTempPassword(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Set in Auth console" /></div>
+                  <div><label className="text-xs font-bold text-slate-500 block mb-1">Temporary Password</label><input type="text" value={newUserTempPassword} onChange={(e) => setNewUserTempPassword(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Optional password" /></div>
                   <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newUserApprove} onChange={(e) => setNewUserApprove(e.target.checked)} className="w-4 h-4 accent-indigo-600" /> Approve immediately</label>
                   <button onClick={handleAddUser} className="bg-teal-500 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-teal-600">Save</button>
                   <button onClick={() => setShowAddUser(false)} className="bg-slate-200 text-slate-600 px-5 py-2 rounded-lg text-sm font-bold hover:bg-slate-300">Cancel</button>
