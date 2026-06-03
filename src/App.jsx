@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ChatApp from './components/ChatApp.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+// Firebase auth/data subscriptions are centralized in AuthContext to avoid duplicate SDK imports in the app shell.
 import { notifyRuntimeEvent } from './utils/runtimeEventNotifier.js';
 
 const deploymentInfo = {
