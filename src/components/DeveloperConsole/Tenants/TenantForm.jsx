@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import TenantFeatureOverrides from './TenantFeatureOverrides.jsx';
 
+const slugifyOrgId = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .slice(0, 48);
+
 const EMPTY_FORM = {
   orgName: '',
   orgId: '',
@@ -71,10 +78,12 @@ export default function TenantForm({
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    const orgName = form.orgName.trim();
+    const orgId = form.orgId.trim() || slugifyOrgId(orgName);
     onSubmit?.({
       ...form,
-      orgName: form.orgName.trim(),
-      orgId: form.orgId.trim(),
+      orgName,
+      orgId,
       adminName: form.adminName.trim(),
       adminEmail: form.adminEmail.trim(),
       storageLimitOverride: toNumberOrNull(form.storageLimitOverride),
@@ -91,7 +100,7 @@ export default function TenantForm({
           <p className="mt-1 text-sm text-slate-500">
             {mode === 'edit'
               ? 'Change package assignment and tenant-level overrides.'
-              : 'Create a tenant organization through the onboardTenant callable.'}
+              : 'Create a tenant organization. If the backend callable is unavailable, the console saves directly to Firestore.'}
           </p>
         </div>
         {onCancel && (
@@ -122,11 +131,11 @@ export default function TenantForm({
           Organization ID
           <input
             type="text"
-            required={mode === 'create'}
+            required={false}
             value={form.orgId}
             disabled={isSaving || mode === 'edit'}
             onChange={(event) => updateField('orgId', event.target.value)}
-            placeholder="tenant-slug"
+            placeholder="Auto-generated from organization name if blank"
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:bg-slate-100"
           />
         </label>
@@ -214,7 +223,7 @@ export default function TenantForm({
         )}
         <button
           type="submit"
-          disabled={isSaving || !form.orgName.trim() || (mode === 'create' && !form.orgId.trim())}
+          disabled={isSaving || !form.orgName.trim()}
           className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSaving ? 'Saving…' : submitLabel}

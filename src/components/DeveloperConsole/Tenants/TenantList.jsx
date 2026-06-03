@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   onSnapshot,
@@ -14,6 +16,57 @@ import TenantDetail from './TenantDetail.jsx';
 import TenantForm from './TenantForm.jsx';
 
 const DETAILS_DOC_FALLBACK_ID = 'details';
+
+const normalizeOrgId = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .slice(0, 48);
+
+const createTenantDirectly = async (payload) => {
+  const orgId = normalizeOrgId(payload.orgId || payload.orgName);
+  if (!orgId) throw new Error('Organization ID could not be generated. Enter an organization name.');
+
+  const now = serverTimestamp();
+  const tenantPayload = withoutUndefined({
+    orgName: payload.orgName,
+    name: payload.orgName,
+    status: 'trial',
+    packageId: payload.subscriptionPackageId || '',
+    subscriptionPackageId: payload.subscriptionPackageId || '',
+    firstAdminEmail: payload.adminEmail || '',
+    adminEmail: payload.adminEmail || '',
+    adminName: payload.adminName || '',
+    featureFlagsOverride: payload.featureFlagsOverride || {},
+    storageLimitOverride: payload.storageLimitOverride,
+    maxUsersOverride: payload.maxUsersOverride,
+    storageUsedMB: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await setDoc(doc(db, 'organizations', orgId), tenantPayload, { merge: true });
+  await setDoc(doc(db, 'organizations', orgId, 'org_details', DETAILS_DOC_FALLBACK_ID), tenantPayload, { merge: true });
+
+  if (payload.adminEmail) {
+    await addDoc(collection(db, 'tenantInvitations'), {
+      orgId,
+      email: payload.adminEmail,
+      name: payload.adminName || '',
+      role: 'admin',
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return orgId;
+};
+
+const withoutUndefined = (record) => Object.fromEntries(
+  Object.entries(record).filter(([, value]) => value !== undefined),
+);
 
 const normalizeString = (value = '') => String(value).trim().toLowerCase();
 
@@ -162,13 +215,21 @@ export default function TenantList() {
     setIsSaving(true);
     setError('');
     try {
-      const onboardTenant = httpsCallable(getFunctions(), 'onboardTenant');
-      await onboardTenant(payload);
+      let createdOrgId = payload.orgId;
+      try {
+        const onboardTenant = httpsCallable(getFunctions(), 'onboardTenant');
+        const result = await onboardTenant(payload);
+        createdOrgId = result?.data?.orgId || payload.orgId;
+      } catch (callableError) {
+        createdOrgId = await createTenantDirectly(payload);
+        setError(`Backend onboardTenant was unavailable, so the tenant was saved directly to Firestore. ${callableError.message}`);
+      }
+
       setShowOnboardForm(false);
       await loadTenants();
-      setSelectedTenantId(payload.orgId);
-    } catch (callableError) {
-      setError(`Failed to onboard tenant: ${callableError.message}`);
+      setSelectedTenantId(createdOrgId);
+    } catch (saveError) {
+      setError(`Failed to onboard tenant: ${saveError.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -180,6 +241,7 @@ export default function TenantList() {
     try {
       const detailsDocRef = doc(db, 'organizations', tenant.id, 'org_details', tenant.detailsDocId || DETAILS_DOC_FALLBACK_ID);
       const savePayload = buildSavePayload(payload);
+      await setDoc(doc(db, 'organizations', tenant.id), savePayload, { merge: true });
       await setDoc(detailsDocRef, savePayload, { merge: true });
       refreshSelectedTenant(tenant.id, { ...savePayload, updatedAt: new Date() });
     } catch (saveError) {
@@ -195,10 +257,16 @@ export default function TenantList() {
     setActionTenantId(tenant.id);
     setError('');
     try {
-      const suspendTenant = httpsCallable(getFunctions(), 'suspendTenant');
-      await suspendTenant({ orgId: tenant.id });
+      try {
+        const suspendTenant = httpsCallable(getFunctions(), 'suspendTenant');
+        await suspendTenant({ orgId: tenant.id });
+      } catch (callableError) {
+        setError(`Backend suspendTenant was unavailable, so the tenant was suspended directly in Firestore. ${callableError.message}`);
+      }
       const detailsDocRef = doc(db, 'organizations', tenant.id, 'org_details', tenant.detailsDocId || DETAILS_DOC_FALLBACK_ID);
-      await updateDoc(detailsDocRef, { status: 'suspended', isSuspended: true, updatedAt: serverTimestamp() }).catch(() => {});
+      const suspendPayload = { status: 'suspended', isSuspended: true, updatedAt: serverTimestamp() };
+      await updateDoc(doc(db, 'organizations', tenant.id), suspendPayload).catch(() => setDoc(doc(db, 'organizations', tenant.id), suspendPayload, { merge: true }));
+      await updateDoc(detailsDocRef, suspendPayload).catch(() => setDoc(detailsDocRef, suspendPayload, { merge: true }));
       refreshSelectedTenant(tenant.id, { status: 'suspended', isSuspended: true, updatedAt: new Date() });
     } catch (callableError) {
       setError(`Failed to suspend tenant: ${callableError.message}`);
@@ -212,8 +280,14 @@ export default function TenantList() {
     setActionTenantId(tenant.id);
     setError('');
     try {
-      const deleteTenant = httpsCallable(getFunctions(), 'deleteTenant');
-      await deleteTenant({ orgId: tenant.id });
+      try {
+        const deleteTenant = httpsCallable(getFunctions(), 'deleteTenant');
+        await deleteTenant({ orgId: tenant.id });
+      } catch (callableError) {
+        await deleteDoc(doc(db, 'organizations', tenant.id, 'org_details', tenant.detailsDocId || DETAILS_DOC_FALLBACK_ID)).catch(() => {});
+        await deleteDoc(doc(db, 'organizations', tenant.id));
+        setError(`Backend deleteTenant was unavailable, so the tenant root/details records were deleted directly. ${callableError.message}`);
+      }
       setTenants((currentTenants) => currentTenants.filter((item) => item.id !== tenant.id));
       setSelectedTenantId('');
     } catch (callableError) {
