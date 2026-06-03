@@ -7,7 +7,7 @@ import { getEffectiveStorageLimitMB, toNumberOrNull } from '../utils/storageLimi
 
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
 
-export default function useChatEngine({ user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData }) {
+export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB }) {
     const [messages, setMessages] = useState([]);
     const [typingStatus, setTypingStatus] = useState([]);
     const [offlineDrafts, setOfflineDrafts] = useState([]);
@@ -34,6 +34,9 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         return () => unsubscribe();
     }, [currentUserData?.orgId, currentUserData?.organizationId, currentUserData?.tenantId, currentUserData?.org_details]);
 
+    const orgCollection = useCallback((collectionName) => collection(db, "organizations", orgId, collectionName), [orgId]);
+    const orgDoc = useCallback((collectionName, id) => doc(db, "organizations", orgId, collectionName, id), [orgId]);
+
     const playAlertSound = useCallback((type = 'incoming') => {
         try {
             const incoming = 'https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FINCOMING-MESSAGE-TASK-CREATE-UPDATE.mp3?alt=media&token=a3ac611f-1dc1-4973-83fe-c122b02396d2';
@@ -46,7 +49,9 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
 
     // ================== MESSAGE LISTENER ==================
     useEffect(() => {
-        const q = query(collection(db, "messages"), orderBy("timestamp", "asc"), limitToLast(300));
+        if (!orgId || !user?.uid) return;
+
+        const q = query(orgCollection("messages"), orderBy("timestamp", "asc"), limitToLast(300));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             let loadedMessages = snapshot.docs.map(docSnapshot => {
                 const data = docSnapshot.data();
@@ -69,30 +74,30 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
             prevMessagesCountRef.current = loadedMessages.length;
         });
 
-        const unsubTyping = onSnapshot(collection(db, "typing"), (snapshot) => {
+        const unsubTyping = onSnapshot(orgCollection("typing"), (snapshot) => {
             const typingData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             const currentTyping = typingData.filter(t => t.groupId === activeGroup?.id && t.name && Date.now() - t.timestamp < 3000);
             setTypingStatus(currentTyping);
         });
 
         return () => { unsubscribe(); unsubTyping(); };
-    }, [user.uid, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast]);
+    }, [orgId, user?.uid, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
 
     // ================== READ RECEIPTS ==================
     useEffect(() => {
-        if (!activeGroup?.id || !user.email) return;
+        if (!orgId || !activeGroup?.id || !user.email) return;
         const unseenMsgs = messages.filter(m => m.groupId === activeGroup.id && !m.isMine && !(m.seenBy || []).includes(user.email));
         if (unseenMsgs.length === 0) return;
         const batchUpdate = async () => {
             for (const msg of unseenMsgs) {
                 try {
                     const updatedSeenBy = [...(msg.seenBy || []), user.email];
-                    await updateDoc(doc(db, "messages", msg.id), { seenBy: updatedSeenBy, deliveredTo: [...new Set([...(msg.deliveredTo || []), user.email])] });
+                    await updateDoc(orgDoc("messages", msg.id), { seenBy: updatedSeenBy, deliveredTo: [...new Set([...(msg.deliveredTo || []), user.email])] });
                 } catch (e) {}
             }
         };
         batchUpdate();
-    }, [activeGroup?.id, messages, user.email]);
+    }, [orgId, activeGroup?.id, messages, user.email, orgDoc]);
 
     // ================== OFFLINE DB ENGINE ==================
     const openDraftDB = () => new Promise((resolve, reject) => {
@@ -120,7 +125,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
             req.onsuccess = async () => {
                 for (const draft of req.result || []) {
                     try {
-                        await addDoc(collection(db, "messages"), { text: `[Recovered Draft] ${draft.text}`, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, hasReminder: false, isPrivateMention: false, allowedUsers: [], seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: draft.groupId, reactions: {} });
+                        await addDoc(orgCollection("messages"), { text: `[Recovered Draft] ${draft.text}`, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, hasReminder: false, isPrivateMention: false, allowedUsers: [], seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: draft.groupId, reactions: {} });
                         await deleteOfflineDraft(draft.id);
                     } catch(e) {}
                 }
@@ -140,16 +145,16 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
     // ================== FIREBASE API ACTIONS ==================
     const logImmutableAction = async (actionType, content, target = "") => {
         if(!activeGroup) return;
-        try { await addDoc(collection(db, "audit_logs"), { type: actionType, user: user.email, content, target, groupId: activeGroup.id, groupName: activeGroup.name, timestamp: serverTimestamp() }); } catch(e) {}
+        try { await addDoc(orgCollection("audit_logs"), { type: actionType, user: user.email, content, target, groupId: activeGroup.id, groupName: activeGroup.name, timestamp: serverTimestamp() }); } catch(e) {}
     };
 
     const triggerTypingEvent = (userName) => {
         if(!activeGroup) return;
-        try { setDoc(doc(db, "typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
+        try { setDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
     };
 
     const sendMessageToDB = async (messageText, replyingTo, attachments = [], uploadProgressCb = null) => {
-        try { deleteDoc(doc(db, "typing", `${activeGroup.id}_${user.uid}`)); } catch(e) {}
+        try { deleteDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`)); } catch(e) {}
 
         const mentions = [];
         dbUsers.forEach(u => { if (messageText.toLowerCase().includes(`@${(u.name || "").toLowerCase()}`)) mentions.push(u.email); });
@@ -165,7 +170,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         const hasTextMessage = !!(messageText || '').replace(/<br\s*\/?>/gi, '').trim();
         let groupMsgRef = null;
         if (hasTextMessage) {
-            groupMsgRef = await addDoc(collection(db, "messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, isPrivateMention: false, allowedUsers: [], mentionEmails: uniqueMentions, seenBy: [user.email], groupId: activeGroup.id, reactions: {}, ...(replyData || {}) });
+            groupMsgRef = await addDoc(orgCollection("messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, isPrivateMention: false, allowedUsers: [], mentionEmails: uniqueMentions, seenBy: [user.email], groupId: activeGroup.id, reactions: {}, ...(replyData || {}) });
             logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, uniqueMentions.length ? `Mentions: ${uniqueMentions.join(', ')}` : "Public");
         }
 
@@ -182,7 +187,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
             uniqueMentions.forEach(async (mentionEmail) => {
                 if (mentionEmail === user.email) return;
                 const recipient = dbUsers.find(u => u.email === mentionEmail);
-                if (recipient) await addDoc(collection(db, "notifications"), { userId: recipient.uid, type: "mention", text: `Mentioned you in ${activeGroup.name}`, messageId: groupMsgRef.id, groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                if (recipient) await addDoc(orgCollection("notifications"), { userId: recipient.uid, type: "mention", text: `Mentioned you in ${activeGroup.name}`, messageId: groupMsgRef.id, groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
             });
         }
     };
@@ -196,8 +201,8 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         if (isAdding) usersForEmoji = [...usersForEmoji, user.email]; else usersForEmoji = usersForEmoji.filter(e => e !== user.email);
         if (usersForEmoji.length === 0) delete updatedReactions[emoji]; else updatedReactions[emoji] = usersForEmoji;
         try {
-            await updateDoc(doc(db, "messages", msgId), { reactions: updatedReactions });
-            if (isAdding && msg.senderUid !== user.uid) await addDoc(collection(db, "notifications"), { userId: msg.senderUid, type: "reaction", text: `${(user.email||"").split('@')[0]} reacted ${emoji}.`, messageId: msgId, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
+            await updateDoc(orgDoc("messages", msgId), { reactions: updatedReactions });
+            if (isAdding && msg.senderUid !== user.uid) await addDoc(orgCollection("notifications"), { userId: msg.senderUid, type: "reaction", text: `${(user.email||"").split('@')[0]} reacted ${emoji}.`, messageId: msgId, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
         } catch (err) {}
     };
 
@@ -234,7 +239,7 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 const replyData = replyingTo ? { replyToId: replyingTo.id, originalText: replyingTo.text || replyingTo.fileName || 'Attachment', originalSender: (replyingTo.sender||'').split('@')[0] } : {};
-                await addDoc(collection(db, "messages"), {
+                await addDoc(orgCollection("messages"), {
                     text: safeCaption.trim(),
                     senderUid: user.uid,
                     senderEmail: user.email,
@@ -256,25 +261,25 @@ export default function useChatEngine({ user, activeGroup, dbUsers, groups, tool
         const scheduledDate = new Date(dt);
         const payload = { text, senderEmail: user.email, senderUid: user.uid, groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp() };
         if (isTask && taskData) { payload.taskDeadline = taskData.deadline; payload.taskAssignees = taskData.assignees; }
-        await addDoc(collection(db, "scheduled_messages"), payload);
+        await addDoc(orgCollection("scheduled_messages"), payload);
     };
 
     const editMessageDB = async (msgId, originalText, newText) => {
-        await updateDoc(doc(db, "messages", msgId), { text: newText, isEdited: true });
+        await updateDoc(orgDoc("messages", msgId), { text: newText, isEdited: true });
         logImmutableAction("MESSAGE_EDIT", `Original: "${originalText}" | Edited: "${newText}"`, `Message ID: ${msgId}`);
     };
 
     const deleteMessageDB = async (msg) => {
-        await deleteDoc(doc(db, "messages", msg.id));
+        await deleteDoc(orgDoc("messages", msg.id));
         logImmutableAction("MESSAGE_DELETE", `Deleted content: "${msg.text || msg.fileName}"`, `Message ID: ${msg.id}`);
     };
 
-    const togglePinDB = async (msgId, isPinned) => updateDoc(doc(db, "messages", msgId), { isPinned: !isPinned });
+    const togglePinDB = async (msgId, isPinned) => updateDoc(orgDoc("messages", msgId), { isPinned: !isPinned });
     
     const toggleBookmarkDB = async (msgId, bookmarkedBy) => {
         let bookmarks = bookmarkedBy || [];
         if (bookmarks.includes(user.email)) bookmarks = bookmarks.filter(e => e !== user.email); else bookmarks.push(user.email);
-        await updateDoc(doc(db, "messages", msgId), { bookmarkedBy: bookmarks });
+        await updateDoc(orgDoc("messages", msgId), { bookmarkedBy: bookmarks });
     };
 
     return {
