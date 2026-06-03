@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import StorageDashboard from '../DeveloperConsole/Storage/StorageDashboard.jsx';
-import { db } from '../../firebase.js';
+import { db, functions } from '../../firebase.js';
 import {
   collection, addDoc, serverTimestamp, updateDoc, doc,
   deleteDoc, setDoc, onSnapshot, query, orderBy, getDocs, where,
 } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import 'jspdf-autotable';
 import { hasPermission } from '../../utils/rbac.js';
 import VersionManager from '../DeveloperConsole/Version/VersionManager.jsx';
@@ -124,7 +124,6 @@ export default function AdminPanel({
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
-  const [newUserApprove, setNewUserApprove] = useState(true);
   const [newUserTempPassword, setNewUserTempPassword] = useState('');
   const [selectedUsers, setSelectedUsers] = useState(new Set());
 
@@ -535,24 +534,35 @@ export default function AdminPanel({
   };
 
   const handleAddUser = async () => {
-    if (!newUserEmail || !newUserName) return alert('Please enter email and name.');
+    const email = newUserEmail.trim();
+    const name = newUserName.trim();
+    const password = newUserTempPassword.trim();
 
-    const createUser = httpsCallable(getFunctions(), 'createUser');
+    if (!email || !name) return alert('Please enter email and name.');
+    if (!password) return alert('Please provide a temporary password for the new user.');
+    if (password.length < 6) return alert('Password must be at least 6 characters.');
 
-    const payload = {
-      email: newUserEmail.trim(),
-      name: newUserName.trim(),
-      orgId: currentUserData?.orgId || '',
-      isApproved: newUserApprove,
-    };
-    if (newUserTempPassword.trim()) payload.password = newUserTempPassword.trim();
+    const currentOrgId = currentUserData?.orgId || '';
 
-    await createUser(payload);
+    try {
+      const createUserBackend = httpsCallable(functions, 'createUser');
+      await createUserBackend({
+        email,
+        name,
+        password,
+        orgId: currentOrgId,
+        isAdmin: false,
+        canCreateGroups: false,
+      });
 
-    setNewUserEmail('');
-    setNewUserName('');
-    setNewUserTempPassword('');
-    setShowAddUser(false);
+      setNewUserEmail('');
+      setNewUserName('');
+      setNewUserTempPassword('');
+      setShowAddUser(false);
+      alert('User successfully created and ready for login!');
+    } catch (error) {
+      alert(`Failed to create user: ${error.message}`);
+    }
   };
 
   // --- Broadcast ---
@@ -897,8 +907,7 @@ export default function AdminPanel({
                 <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-end">
                   <div><label className="text-xs font-bold text-slate-500 block mb-1">Email</label><input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="user@example.com" /></div>
                   <div><label className="text-xs font-bold text-slate-500 block mb-1">Name</label><input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Full Name" /></div>
-                  <div><label className="text-xs font-bold text-slate-500 block mb-1">Temporary Password</label><input type="text" value={newUserTempPassword} onChange={(e) => setNewUserTempPassword(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Optional password" /></div>
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newUserApprove} onChange={(e) => setNewUserApprove(e.target.checked)} className="w-4 h-4 accent-indigo-600" /> Approve immediately</label>
+                  <div><label className="text-xs font-bold text-slate-500 block mb-1">Temporary Password</label><input type="password" value={newUserTempPassword} onChange={(e) => setNewUserTempPassword(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="At least 6 characters" /></div>
                   <button onClick={handleAddUser} className="bg-teal-500 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-teal-600">Save</button>
                   <button onClick={() => setShowAddUser(false)} className="bg-slate-200 text-slate-600 px-5 py-2 rounded-lg text-sm font-bold hover:bg-slate-300">Cancel</button>
                 </div>
