@@ -610,7 +610,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     } = useChatEngine({
         orgId,
-        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData: effectiveCurrentUserData, shouldLoadData: shouldLoadChatData
+        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData: effectiveCurrentUserData
     });
 
 
@@ -1448,25 +1448,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         requireProof, setRequireProof,
     };
 
-    if (isWorkspaceLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center h-screen w-full bg-slate-50 fixed inset-0 z-50">
-          <div className="relative mb-8">
-            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 animate-pulse flex items-center justify-center shadow-2xl">
-              <i className="fa-solid fa-list-check text-4xl text-white drop-shadow-lg"></i>
-            </div>
-            <div className="absolute -inset-3 border-4 border-indigo-500/20 border-t-indigo-600 rounded-full animate-spin"></div>
-          </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-3 tracking-tight">Talk & Task</h2>
-          <div className="w-56 h-2 bg-slate-200 rounded-full overflow-hidden mb-6">
-            <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-teal-500 animate-loading-bar rounded-full"></div>
-          </div>
-          <div className="text-slate-500 text-sm font-medium italic">{currentTip}</div>
-        </div>
-      );
-    }
-
-    // Block users only after workspace/user data hydration completes, preventing a transient Access Denied flash.
+// NEW: Block users entirely if their Gmail isn't mapped to an Organization
     if (currentUserData && !currentUserData.orgId && !effectiveCurrentUserData.isAdmin && !effectiveIsVipAdmin) {
         return (
             <div className="flex items-center justify-center h-screen bg-slate-50 p-4 text-slate-800">

@@ -8,7 +8,7 @@ import { getEffectiveStorageLimitMB, toNumberOrNull } from '../utils/storageLimi
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 
-export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData, shouldLoadData = true }) {
+export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData }) {
     const [messages, setMessages] = useState([]);
     const [typingStatus, setTypingStatus] = useState([]);
     const [offlineDrafts, setOfflineDrafts] = useState([]);
@@ -112,7 +112,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         });
 
         return () => { unsubNonTasks(); unsubTasks(); unsubTyping(); };
-    }, [shouldLoadData, orgId, user?.uid, user?.email, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
+    }, [orgId, user?.uid, user?.email, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
 
     // ================== READ RECEIPTS ==================
     useEffect(() => {
