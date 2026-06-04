@@ -9,7 +9,7 @@ import { buildPrivateSupportReplyPayload, buildPublicMessagePayload } from '../u
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 
-export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData }) {
+export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData, shouldLoadChatData = true }) {
     const [messages, setMessages] = useState([]);
     const [typingStatus, setTypingStatus] = useState([]);
     const [offlineDrafts, setOfflineDrafts] = useState([]);
@@ -71,7 +71,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 
     // ================== MESSAGE LISTENER ==================
     useEffect(() => {
-        if (!shouldLoadData || !orgId || !user?.uid) return;
+        if (!shouldLoadChatData || !orgId || !user?.uid) return;
 
         const normalizeMessage = (docSnapshot) => {
             const data = docSnapshot.data();
@@ -113,7 +113,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         });
 
         return () => { unsubNonTasks(); unsubTasks(); unsubTyping(); };
-    }, [orgId, user?.uid, user?.email, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
+    }, [shouldLoadChatData, orgId, user?.uid, user?.email, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
 
     // ================== READ RECEIPTS ==================
     useEffect(() => {
