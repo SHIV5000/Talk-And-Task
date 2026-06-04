@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 // Utils & Firebase Core
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
+import { buildPrivateSupportReplyPayload, buildPublicMessagePayload, buildTaskMessagePayload } from '../utils/messagePayload.js';
 import { compressImage } from '../utils/imageUtils.js';
 import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
@@ -777,22 +778,18 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                     const scheduledMs = data.scheduledAt?.toMillis?.() || new Date(data.scheduledFor).getTime();
                     if (scheduledMs <= now.getTime()) {
                         const isExplicitlyPrivate = data.isPrivateForward === true || (Array.isArray(data.allowedUsers) && data.allowedUsers.length > 0);
-                        const payload = {
+                        const payloadBuilder = data.isTask ? buildTaskMessagePayload : (isExplicitlyPrivate ? buildPrivateSupportReplyPayload : buildPublicMessagePayload);
+                        const payload = payloadBuilder({
                             text: data.text,
-                            groupId: data.groupId,
-                            ...(data.groupName ? { groupName: data.groupName } : {}),
-                            sender: currentUserData?.name || user.email.split('@')[0],
-                            senderEmail: user.email,
-                            senderUid: user.uid,
+                            group: { id: data.groupId, name: data.groupName || 'Scheduled' },
+                            user: { uid: user.uid, email: user.email, name: currentUserData?.name || user.email.split('@')[0] },
                             timestamp: serverTimestamp(),
                             dateString: new Date().toISOString().split('T')[0],
                             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            isTask: data.isTask || false,
-                            taskData: data.taskData || null,
-                            seenBy: [user.email],
+                            ...(data.isTask ? { taskData: data.taskData || {} } : {}),
                             isPrivateForward: isExplicitlyPrivate,
                             allowedUsers: isExplicitlyPrivate ? (data.allowedUsers || []) : []
-                        };
+                        });
                         await addDoc(collection(db, "organizations", orgId, "messages"), payload);
                         await updateDoc(doc(db, "organizations", orgId, "scheduled_messages", document.id), { status: "sent", sentAt: serverTimestamp(), retryCount: data.retryCount || 0 });
                         playMelody('messageSent');
@@ -1165,11 +1162,16 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 deletedAt: null
             };
 
-            await setDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), {
-                isTask: true,
+            await setDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), buildTaskMessagePayload({
                 text: sanitizedTaskTitle,
-                taskData: taskData
-            }, { merge: true });
+                group: { id: selectedMessage.groupId, name: selectedMessage.groupName || activeGroup?.name || 'Task' },
+                user: { uid: selectedMessage.senderUid || user.uid, email: selectedMessage.senderEmail || user.email, name: selectedMessage.senderName || selectedMessage.sender },
+                taskData,
+                allowedUsers: selectedMessage.allowedUsers || [],
+                isPrivateForward: selectedMessage.isPrivateForward === true,
+                seenBy: selectedMessage.seenBy || [user.email],
+                reactions: selectedMessage.reactions || {},
+            }), { merge: true });
 
             finalAssignees.forEach(email => {
                 if (email !== user.email) {

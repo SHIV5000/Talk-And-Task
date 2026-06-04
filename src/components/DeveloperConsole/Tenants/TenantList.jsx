@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../../../firebase.js';
+import { buildPublicMessagePayload } from '../../../utils/messagePayload.js';
 import TenantDetail from './TenantDetail.jsx';
 import TenantForm from './TenantForm.jsx';
 
@@ -76,19 +77,13 @@ const createTenantDirectly = async (payload) => {
     profilePicUrl: null
   });
 
-  await addDoc(collection(db, 'organizations', orgId, 'messages'), {
+  await addDoc(collection(db, 'organizations', orgId, 'messages'), buildPublicMessagePayload({
     text: "👋 <strong>Welcome to Talk & Task!</strong><br><br>This is your default workspace. You can invite your team, share files, and convert any message here into a trackable task.",
-    senderUid: "system",
-    senderEmail: "Developer Console",
-    groupId: defaultGroupRef.id,
-    groupName: "Welcome",
+    user: { uid: "system", email: "Developer Console" },
+    group: { id: defaultGroupRef.id, name: "Welcome" },
     timestamp: now,
-    isTask: false,
     seenBy: payload.adminEmail ? [payload.adminEmail] : [],
-    reactions: {},
-    isPrivateForward: false,
-    allowedUsers: []
-  });
+  }));
 
   await setDoc(doc(db, 'organizations', orgId, 'groups', SUPPORT_GROUP_ID), {
     name: "SUPPORT",
