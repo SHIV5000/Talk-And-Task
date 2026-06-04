@@ -613,7 +613,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     } = useChatEngine({
         orgId,
-        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData: effectiveCurrentUserData
+        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData: effectiveCurrentUserData, shouldLoadChatData
     });
 
 
