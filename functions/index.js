@@ -68,6 +68,34 @@ const assertPlatformOwner = async (request) => {
   throw new HttpsError('permission-denied', 'Platform owner access is required.');
 };
 
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+const assertGlobalSupportDispatchAccess = async (request) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+  const tokenEmail = normalizeEmail(request.auth.token?.email);
+  if (tokenEmail === GLOBAL_SUPPORT_ADMIN_EMAIL) return { email: tokenEmail, isGlobalSupportAdmin: true };
+  if (request.auth.token?.isPlatformOwner || request.auth.token?.platformOwner) {
+    return { email: tokenEmail, isPlatformOwner: true };
+  }
+
+  const userSnap = await db.collection('users').doc(request.auth.uid).get();
+  const user = userSnap.data() || {};
+  const userEmail = normalizeEmail(user.email || tokenEmail);
+  if (userEmail === GLOBAL_SUPPORT_ADMIN_EMAIL) return { email: userEmail, isGlobalSupportAdmin: true };
+  if (user.isPlatformOwner) return { email: userEmail, isPlatformOwner: true };
+
+  throw new HttpsError('permission-denied', 'Global support dispatch is restricted to platform owners.');
+};
+
+const withoutUndefinedFields = (record) => Object.fromEntries(
+  Object.entries(record).filter(([, value]) => value !== undefined),
+);
+
+const orgIdsForUserRecord = (record = {}) => [record.orgId, record.organizationId, record.tenantId]
+  .map((value) => String(value || '').trim())
+  .filter(Boolean);
+
 const commitBatchIfNeeded = async (state, force = false) => {
   if (state.count > 0 && (force || state.count >= 450)) {
     await state.batch.commit();
@@ -686,6 +714,90 @@ exports.setCustomClaims = onCall(async (request) => {
     timestamp: serverTimestamp(),
   });
   return { ok: true, uid, claims: customClaims };
+});
+
+
+exports.globalSupportDispatch = onCall(async (request) => {
+  const caller = await assertGlobalSupportDispatchAccess(request);
+  const text = String(request.data?.message || request.data?.text || '').trim();
+  if (!text) throw new HttpsError('invalid-argument', 'message is required.');
+
+  const [organizationsSnap, usersSnap] = await Promise.all([
+    db.collection('organizations').get(),
+    db.collection('users').get(),
+  ]);
+
+  const tenantUserEmails = new Map();
+  usersSnap.docs.forEach((userDoc) => {
+    const user = userDoc.data() || {};
+    const email = normalizeEmail(user.email);
+    if (!email) return;
+    orgIdsForUserRecord(user).forEach((orgId) => {
+      if (!tenantUserEmails.has(orgId)) tenantUserEmails.set(orgId, new Set());
+      tenantUserEmails.get(orgId).add(email);
+    });
+  });
+
+  const failures = [];
+  const delivered = [];
+
+  for (const orgSnap of organizationsSnap.docs) {
+    const orgId = orgSnap.id;
+    try {
+      const supportGroupRef = orgSnap.ref.collection('groups').doc(SUPPORT_GROUP_ID);
+      const supportGroupSnap = await supportGroupRef.get();
+      const memberEmails = Array.from(tenantUserEmails.get(orgId) || []);
+      const batch = db.batch();
+      const groupPayload = withoutUndefinedFields({
+        name: 'SUPPORT',
+        admins: admin.firestore.FieldValue.arrayUnion(GLOBAL_SUPPORT_ADMIN_EMAIL),
+        createdBy: supportGroupSnap.exists ? undefined : GLOBAL_SUPPORT_ADMIN_EMAIL,
+        createdAt: supportGroupSnap.exists ? undefined : serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        isArchived: false,
+        isSupport: true,
+        universalRead: true,
+        profilePicUrl: null,
+        members: memberEmails.length > 0
+          ? admin.firestore.FieldValue.arrayUnion(...memberEmails)
+          : (supportGroupSnap.exists ? undefined : []),
+      });
+
+      batch.set(supportGroupRef, groupPayload, { merge: true });
+      batch.set(orgSnap.ref.collection('messages').doc(), {
+        text,
+        senderUid: 'global-dispatch',
+        senderEmail: GLOBAL_SUPPORT_ADMIN_EMAIL,
+        senderName: 'Developer HQ',
+        groupId: SUPPORT_GROUP_ID,
+        groupName: 'SUPPORT',
+        timestamp: serverTimestamp(),
+        isTask: false,
+        isSupportBroadcast: true,
+        isPrivateForward: false,
+        allowedUsers: [],
+        seenBy: [GLOBAL_SUPPORT_ADMIN_EMAIL],
+        reactions: {},
+        dispatchedByUid: request.auth.uid,
+        dispatchedByEmail: caller.email || null,
+      });
+
+      await batch.commit();
+      delivered.push({ orgId, memberEmailsAdded: memberEmails.length });
+    } catch (error) {
+      logger.error('Global support dispatch failed for tenant.', { orgId, error });
+      failures.push({ orgId, message: error.message || 'Unknown tenant dispatch failure.' });
+    }
+  }
+
+  return {
+    ok: failures.length === 0,
+    totalTenants: organizationsSnap.size,
+    deliveredCount: delivered.length,
+    failedCount: failures.length,
+    delivered,
+    failures,
+  };
 });
 
 exports.onboardTenant = onCall(async (request) => {

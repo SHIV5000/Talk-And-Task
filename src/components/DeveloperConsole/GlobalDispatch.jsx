@@ -1,18 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { db } from '../../firebase.js';
-import { buildPublicMessagePayload } from '../../utils/messagePayload.js';
+import { functions, httpsCallable } from '../../firebase.js';
 
 const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
-const SUPPORT_GROUP_ID = 'support';
-
 
 export default function GlobalDispatch() {
   const [message, setMessage] = useState('');
@@ -25,47 +14,31 @@ export default function GlobalDispatch() {
   const handleDispatch = async () => {
     if (!canSend) return;
     setIsSending(true);
-    setStatus('Preparing tenant list…');
+    setStatus('Sending through backend global support dispatcher…');
     setSentCount(0);
 
     try {
-      const tenantSnap = await getDocs(collection(db, 'organizations'));
-      const tenants = tenantSnap.docs.map((tenantDoc) => ({ id: tenantDoc.id, ...tenantDoc.data() }));
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const allUsers = usersSnap.docs.map((userDoc) => userDoc.data());
+      const globalSupportDispatch = httpsCallable(functions, 'globalSupportDispatch');
+      const result = await globalSupportDispatch({ message: message.trim() });
+      const dispatchResult = result.data || {};
+      const deliveredCount = Number(dispatchResult.deliveredCount || 0);
+      const failedCount = Number(dispatchResult.failedCount || 0);
+      const totalTenants = Number(dispatchResult.totalTenants || deliveredCount + failedCount);
 
-      for (const tenant of tenants) {
-        const tenantMembers = allUsers
-          .filter((userRecord) => userRecord.orgId === tenant.id || userRecord.organizationId === tenant.id || userRecord.tenantId === tenant.id)
-          .map((userRecord) => userRecord.email)
-          .filter(Boolean);
-
-        await setDoc(doc(db, 'organizations', tenant.id, 'groups', SUPPORT_GROUP_ID), {
-          name: 'SUPPORT',
-          members: [...new Set(tenantMembers)],
-          admins: [GLOBAL_SUPPORT_ADMIN_EMAIL],
-          createdBy: GLOBAL_SUPPORT_ADMIN_EMAIL,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          isArchived: false,
-          isSupport: true,
-          universalRead: true,
-          profilePicUrl: null,
-        }, { merge: true });
-
-        await addDoc(collection(db, 'organizations', tenant.id, 'messages'), buildPublicMessagePayload({
-          text: message.trim(),
-          user: { uid: 'global-dispatch', email: GLOBAL_SUPPORT_ADMIN_EMAIL, name: 'Developer HQ' },
-          group: { id: SUPPORT_GROUP_ID, name: 'SUPPORT' },
-          timestamp: serverTimestamp(),
-          isSupportBroadcast: true,
-        }));
-
-        setSentCount((count) => count + 1);
+      setSentCount(deliveredCount);
+      if (failedCount > 0) {
+        const failedTenants = (dispatchResult.failures || [])
+          .slice(0, 5)
+          .map((failure) => failure.orgId)
+          .filter(Boolean)
+          .join(', ');
+        setStatus(
+          `Global Dispatch delivered to ${deliveredCount}/${totalTenants} tenants; ${failedCount} failed${failedTenants ? ` (${failedTenants}${failedCount > 5 ? ', …' : ''})` : ''}.`,
+        );
+      } else {
+        setStatus(`Global Dispatch delivered to ${deliveredCount} tenant${deliveredCount === 1 ? '' : 's'}.`);
+        setMessage('');
       }
-
-      setStatus(`Global Dispatch delivered to ${tenants.length} tenant${tenants.length === 1 ? '' : 's'}.`);
-      setMessage('');
     } catch (dispatchError) {
       setStatus(`Dispatch failed: ${dispatchError.message}`);
     } finally {
@@ -87,7 +60,7 @@ export default function GlobalDispatch() {
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Broadcast composer</h2>
-            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Messages are written to each tenant's SUPPORT department.</p>
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Messages are written to each tenant's SUPPORT department by a backend callable function.</p>
           </div>
           {sentCount > 0 && (
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
