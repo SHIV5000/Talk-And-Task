@@ -440,16 +440,15 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     useEffect(() => {
         const root = document.documentElement;
-        const accent = currentUserData?.accentColor || profileForm.accentColor || 'indigo';
         const font = currentUserData?.themeFont || profileForm.themeFont || 'Inter';
         const mode = currentUserData?.displayMode || profileForm.displayMode || 'light';
         const scale = currentUserData?.fontScale || profileForm.fontScale || 'normal';
-        root.style.setProperty('--app-accent', THEME_ACCENTS[accent] || THEME_ACCENTS.indigo);
+        root.style.setProperty('--app-accent', THEME_ACCENTS.indigo);
         root.style.setProperty('--app-font-family', THEME_FONTS[font] || THEME_FONTS.Inter);
         root.style.setProperty('--app-font-size', FONT_SCALE[scale] || FONT_SCALE.normal);
         root.dataset.theme = mode;
         root.classList.toggle('dark', mode === 'dark' || !!toolPreferences?.darkMode);
-    }, [currentUserData?.accentColor, currentUserData?.themeFont, currentUserData?.displayMode, currentUserData?.fontScale, profileForm.accentColor, profileForm.themeFont, profileForm.displayMode, profileForm.fontScale, toolPreferences?.darkMode]);
+    }, [currentUserData?.themeFont, currentUserData?.displayMode, currentUserData?.fontScale, profileForm.themeFont, profileForm.displayMode, profileForm.fontScale, toolPreferences?.darkMode]);
 
     const {
         messages, typingStatus, isOnline, offlineDrafts,
@@ -1182,7 +1181,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             if (editingGroup) await updateDoc(doc(db, "groups", editingGroup.id), groupData);
             else await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
             setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
-        } catch (error) { alert("Failed to save group."); }
+        } catch (error) { alert("Failed to save department."); }
     };
 
     const onGroupUpdate = useCallback(async (updates) => {
@@ -1214,7 +1213,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         e.preventDefault();
         const file = profilePicInputRef.current?.files[0];
         try {
-            let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily, themeFont: profileForm.themeFont || 'Inter', accentColor: profileForm.accentColor || 'indigo', displayMode: profileForm.displayMode || 'light', fontScale: profileForm.fontScale || 'normal' };
+            let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily, themeFont: profileForm.themeFont || 'Inter', displayMode: profileForm.displayMode || 'light', fontScale: profileForm.fontScale || 'normal' };
             if (file) {
                 setProfileUploadProgress(10);
                 const uniqueFileName = `${user.uid}_${Date.now()}_avatar.webp`;
@@ -1231,7 +1230,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 });
             }
             await updateDoc(doc(db, "users", user.uid), updateData);
-            setProfileForm(prev => ({ ...prev, name: updateData.name, themeFont: updateData.themeFont, accentColor: updateData.accentColor, displayMode: updateData.displayMode, fontScale: updateData.fontScale }));
+            setProfileForm(prev => ({ ...prev, name: updateData.name, themeFont: updateData.themeFont, displayMode: updateData.displayMode, fontScale: updateData.fontScale }));
             setActiveModal(null); setProfileUploadProgress(0);
         } catch (error) { alert("Profile update failed."); setProfileUploadProgress(0); }
     };
@@ -1427,24 +1426,24 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                         <div className="hidden md:block app-resizer" onMouseDown={startResize('left')} title="Resize sidebar" />
 
                         {!featureFlags.chat ? (
-                            <FeatureLockedPanel title="Chat is disabled" message="Chat workspaces and direct messages are not enabled for your account." icon="fa-comments" />
+                            <FeatureLockedPanel title="Chat is disabled" message="Chat workspaces and staff member messaging are not enabled for your account." icon="fa-comments" />
                         ) : !activeGroup ? (
                             <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
                                 <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
                                     <i className="fa-solid fa-comments text-4xl"></i>
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Talk & Task</h2>
-                                <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
+                                <p className="text-slate-500 mb-8 max-w-md">Select a department or staff member from the sidebar to start collaborating, or create a new workspace.</p>
                                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                                     <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-all">
-                                        <i className="fa-solid fa-layer-group mr-2"></i> New Group (Group Name, Members)
+                                        <i className="fa-solid fa-layer-group mr-2"></i> New Department (Department Name, Members)
                                     </button>
                                 )}
                             </div>
                         ) : (
-                            <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0 chat-main-panel">
-                                <div className="bg-white flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
-                                    <button onClick={() => setActiveGroup(null)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0" title="All groups and DMs"><i className="fa-solid fa-arrow-left text-xl"></i></button>
+                            <div className="flex-1 flex flex-col relative h-full bg-slate-50 dark:bg-slate-950 overflow-hidden min-w-0 chat-main-panel">
+                                <div className="bg-white dark:bg-slate-900 flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 shrink-0 z-30 sticky top-0 border-b border-slate-200 dark:border-slate-700 safe-top">
+                                    <button onClick={() => setActiveGroup(null)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0" title="All departments and staff members"><i className="fa-solid fa-arrow-left text-xl"></i></button>
 
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
                                         {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
@@ -1581,11 +1580,11 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                   )}
                                 </div>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[170px] md:top-[122px] right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="fixed bottom-24 right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Bottom">
                                     <i className="fa-solid fa-arrow-down"></i>
                                 </button>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[96px] right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-36 right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Top">
                                     <i className="fa-solid fa-arrow-up"></i>
                                 </button>
 

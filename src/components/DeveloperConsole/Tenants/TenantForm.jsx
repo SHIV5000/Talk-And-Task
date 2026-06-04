@@ -178,7 +178,7 @@ export default function TenantForm({
         </label>
 
         <label className="block text-sm font-medium text-slate-700">
-          Storage limit override (bytes)
+          Storage Limit for Organization override (bytes)
           <input
             type="number"
             min="0"

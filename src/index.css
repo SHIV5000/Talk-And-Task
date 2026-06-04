@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .scrollbar-thin { scrollbar-width: thin; }
+  .scrollbar-thumb-gray-400 { scrollbar-color: #9ca3af transparent; }
+  .dark .dark\:scrollbar-thumb-gray-600 { scrollbar-color: #4b5563 transparent; }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thumb-gray-400::-webkit-scrollbar-thumb { background-color: #9ca3af; border-radius: 9999px; }
+  .dark .dark\:scrollbar-thumb-gray-600::-webkit-scrollbar-thumb { background-color: #4b5563; }
+}
+
 @keyframes slideInRight {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
@@ -90,6 +100,8 @@ body {
 }
 .emoji-picker-popup button { font-size: 22px; padding: 6px; border-radius: 8px; cursor: pointer; background: transparent; border: none; transition: background 0.15s; line-height: 1; }
 .emoji-picker-popup button:hover { background: #f1f5f9; }
+html[data-theme="dark"] .emoji-picker-popup { background: #0f172a; color: #e5e7eb; }
+html[data-theme="dark"] .emoji-picker-popup button:hover { background: #1e293b; }
 
 @media (max-width: 767px) {
     .mobile-sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; animation: fadeIn 0.2s ease-out; }
@@ -119,11 +131,6 @@ button.text-\[\#54656f\] {
 .chat-header-btn:hover,
 button:hover:where(.hover\:bg-black\/5) {
     background-color: rgba(79,70,229,0.08) !important;
-}
-
-/* Ensure send button when active is clearly visible */
-button:has(.fa-paper-plane) {
-    color: #4F46E5 !important;
 }
 
 /* Input area focus ring override */
@@ -185,12 +192,10 @@ aside .hover\:bg-white\/10:hover {
 
 .app-resizer { width: 3px; cursor: col-resize; background-color: #e2e8f0; flex-shrink: 0; }
 .app-resizer:hover { background-color: #cbd5e1; }
-.chat-main-panel button { background-color: #eef2ff; color: #3730a3; }
-.chat-main-panel button:hover { background-color: #e0e7ff; }
-
 .modern-date-input { width: 100%; height: 38px; padding: 0 10px; font-family: var(--app-font-family); font-size: 12px; font-weight: 600; color: #334155; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; outline: none; transition: all .2s ease; accent-color: var(--app-accent); }
 .modern-date-input:focus { border-color: var(--app-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent) 18%, transparent); }
 .modern-date-input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .85; filter: saturate(1.2); }
+html[data-theme="dark"] .modern-date-input { color: #e5e7eb; background: #020617; border-color: #334155; }
 .themed-surface { font-family: var(--app-font-family); }
 .input-toolbar button:hover { color: var(--app-accent); }
 html[data-theme="dark"] body, html[data-theme="dark"] .bg-slate-50 { background-color: #0f172a; }
