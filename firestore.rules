@@ -147,6 +147,16 @@ service cloud.firestore {
       }
     }
 
+    match /tenantInvitations/{invitationId} {
+      allow get, list: if isPlatformOwner() || (
+        signedIn() && (
+          resource.data.email == request.auth.token.email ||
+          resource.data.emailLower == request.auth.token.email
+        )
+      );
+      allow create, update, delete: if isPlatformOwner();
+    }
+
     match /users/{uid} {
       allow get: if isPlatformOwner() || (signedIn() && request.auth.uid == uid) || sameOrgProfile();
       allow list: if isPlatformOwner() || sameOrgProfile();

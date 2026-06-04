@@ -280,6 +280,164 @@ const toCreateUserHttpsError = (error) => {
   return new HttpsError('internal', 'Failed to create user.');
 };
 
+
+const defaultToolPreferences = () => ({
+  reply: true,
+  react: true,
+  edit: true,
+  delete: true,
+  pin: true,
+  bookmark: true,
+  showWatermark: true,
+  soundProfile: 'classic',
+});
+
+const publicUserProfile = (uid, profile) => {
+  const { createdAt, updatedAt, lastActive, lastLogin, lastLogout, ...safeProfile } = profile || {};
+  return { uid, ...safeProfile };
+};
+
+const findInvitationForEmail = async (email) => {
+  const rawEmail = String(email || '').trim();
+  const lowerEmail = rawEmail.toLowerCase();
+  if (!lowerEmail) return null;
+
+  const seen = new Set();
+  const candidates = [];
+  const invitationQueries = [
+    db.collection('tenantInvitations').where('emailLower', '==', lowerEmail).limit(1),
+    db.collection('tenantInvitations').where('email', '==', lowerEmail).limit(1),
+  ];
+  if (rawEmail && rawEmail !== lowerEmail) {
+    invitationQueries.push(db.collection('tenantInvitations').where('email', '==', rawEmail).limit(1));
+  }
+
+  for (const invitationQuery of invitationQueries) {
+    const snap = await invitationQuery.get();
+    snap.docs.forEach((docSnap) => {
+      if (!seen.has(docSnap.id)) {
+        seen.add(docSnap.id);
+        candidates.push({ id: docSnap.id, ...docSnap.data() });
+      }
+    });
+    if (candidates.length > 0) break;
+  }
+
+  return candidates.find((invitation) => {
+    const invitationEmail = String(invitation.emailLower || invitation.email || '').trim().toLowerCase();
+    const status = String(invitation.status || 'pending').toLowerCase();
+    return invitationEmail === lowerEmail && !['revoked', 'rejected', 'expired', 'disabled'].includes(status);
+  }) || null;
+};
+
+const setOnboardingClaims = async (uid, profile) => {
+  const orgId = profile.orgId || null;
+  const role = profile.role || (profile.isAdmin ? 'admin' : 'member');
+  const isPlatformOwner = !!profile.isPlatformOwner;
+  const existingUser = await admin.auth().getUser(uid);
+  const customClaims = {
+    ...(existingUser.customClaims || {}),
+    role,
+    isPlatformOwner,
+    platformOwner: isPlatformOwner,
+    admin: !!profile.isAdmin || isPlatformOwner || role === 'admin',
+  };
+  customClaims.orgId = orgId || null;
+  await admin.auth().setCustomUserClaims(uid, customClaims);
+  return customClaims;
+};
+
+exports.resolveAuthOnboarding = onCall(async (request) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+  const uid = request.auth.uid;
+  const email = String(request.auth.token?.email || '').trim();
+  const lowerEmail = email.toLowerCase();
+  if (!lowerEmail) throw new HttpsError('failed-precondition', 'Your sign-in provider did not include an email address.');
+
+  let invitation = null;
+  try {
+    invitation = await findInvitationForEmail(email);
+  } catch (error) {
+    logger.error('Failed to resolve tenant invitation during auth onboarding.', { uid, email: lowerEmail, error });
+    throw new HttpsError('internal', 'We could not verify your tenant invitation. Please try again or contact your workspace admin.');
+  }
+
+  const isPlatformOwnerEmail = lowerEmail === GLOBAL_SUPPORT_ADMIN_EMAIL;
+  const userRef = db.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  const existingProfile = userSnap.exists ? { uid, ...userSnap.data() } : null;
+  const bootstrapRef = db.collection('platform').doc('authBootstrap');
+  let isFirstUser = false;
+
+  if (!existingProfile) {
+    const bootstrapSnap = await bootstrapRef.get();
+    if (bootstrapSnap.data()?.hasBootstrappedUsers !== true) {
+      const firstUserProbe = await db.collection('users').limit(1).get();
+      isFirstUser = firstUserProbe.empty;
+    }
+  }
+
+  const invitationOrgId = invitation?.orgId || null;
+  const invitationRole = invitation?.role || null;
+  const requestedDisplayName = String(request.data?.displayName || '').trim();
+  const requestedPhotoURL = String(request.data?.photoURL || '').trim();
+  const orgId = isPlatformOwnerEmail
+    ? (existingProfile?.orgId || DEFAULT_ORG_ID)
+    : (existingProfile?.orgId || invitationOrgId || request.auth.token?.orgId || null);
+  const role = isPlatformOwnerEmail
+    ? 'admin'
+    : (existingProfile?.role || invitationRole || request.auth.token?.role || (isFirstUser ? 'admin' : 'member'));
+  const isAdmin = isPlatformOwnerEmail || isFirstUser || existingProfile?.isAdmin === true || invitationRole === 'admin';
+  const mergedProfile = {
+    ...(existingProfile || {}),
+    uid,
+    email: existingProfile?.email || email,
+    name: existingProfile?.name || requestedDisplayName || email.split('@')[0],
+    profilePicUrl: existingProfile?.profilePicUrl || requestedPhotoURL || null,
+    orgId,
+    role,
+    isApproved: isPlatformOwnerEmail || isFirstUser || !!invitationOrgId || existingProfile?.isApproved === true,
+    isAdmin,
+    canCreateGroups: existingProfile?.canCreateGroups === true || isFirstUser || isPlatformOwnerEmail || !!invitationOrgId,
+    isPlatformOwner: existingProfile?.isPlatformOwner === true || isPlatformOwnerEmail,
+    isArchived: existingProfile?.isArchived === true ? true : false,
+    toolPreferences: existingProfile?.toolPreferences || defaultToolPreferences(),
+  };
+
+  const writePayload = {
+    ...mergedProfile,
+    updatedAt: serverTimestamp(),
+    lastActive: serverTimestamp(),
+  };
+  if (!existingProfile) writePayload.createdAt = serverTimestamp();
+
+  await userRef.set(writePayload, { merge: true });
+  if (!existingProfile) {
+    const bootstrapPayload = {
+      hasBootstrappedUsers: true,
+      updatedAt: serverTimestamp(),
+    };
+    if (isFirstUser) {
+      bootstrapPayload.firstUserUid = uid;
+      bootstrapPayload.bootstrappedAt = serverTimestamp();
+    }
+    await bootstrapRef.set(bootstrapPayload, { merge: true });
+  }
+
+  const claims = await setOnboardingClaims(uid, mergedProfile);
+  return {
+    ok: true,
+    profile: publicUserProfile(uid, mergedProfile),
+    claims,
+    onboarding: {
+      invitationMatched: !!invitationOrgId,
+      firstUser: isFirstUser,
+      platformOwnerBypass: isPlatformOwnerEmail,
+    },
+  };
+});
+
 exports.createUser = onCall(async (request) => {
   await assertPermission(request, 'Users', 'create');
 
@@ -507,6 +665,7 @@ exports.setCustomClaims = onCall(async (request) => {
     orgId: resolvedOrgId,
     role: resolvedRole,
     isPlatformOwner: !!isPlatformOwner,
+    platformOwner: !!isPlatformOwner,
     admin: !!claims.admin || resolvedRole === 'admin' || !!isPlatformOwner,
   };
   await admin.auth().setCustomUserClaims(uid, customClaims);
