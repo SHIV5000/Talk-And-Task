@@ -32,7 +32,8 @@ const MessageBubble = React.memo(({
   handleTogglePin, handleDeleteMessage, chatInputRef, toolPreferences,
   setReplyingTo, setSelectedMessage, setIsEditingTaskTitle, setActiveModal, dbUsers,
   jumpToPrivateSource, handleAddInlineComment, customTags = [], setActiveReplies, setActiveTaskSidebar, isThreadView = false,
-  onOpenTask, taskSidebarMode = false, threadExpanded = false, onToggleThread, threadReplies = [], featureFlags = {}
+  onOpenTask, taskSidebarMode = false, threadExpanded = false, onToggleThread, threadReplies = [], featureFlags = {},
+  sendMessageToDB
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
@@ -317,42 +318,37 @@ const MessageBubble = React.memo(({
     setTimeout(() => el.focus(), 0);
   };
 
+  const buildInlineReplyTarget = () => ({
+    ...msg,
+    sender: msg.sender || msg.senderEmail,
+    text: msg.text || msg.fileName || 'Attachment',
+    allowedUsers: Array.isArray(msg.allowedUsers) ? msg.allowedUsers : []
+  });
+
   const handleReplyAttachmentUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || msg.isTask) return;
+    if (!sendMessageToDB) {
+      if (msgReplyFileInputRef.current) msgReplyFileInputRef.current.value = '';
+      return;
+    }
+
     setMsgReplyUploadProgress(1);
     try {
-      let processedFile = file;
-      let fileName = file.name;
-      if (file.type.startsWith('image/')) {
-        const blob = await new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
-            canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
-            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            canvas.toBlob(resolve, 'image/webp', 0.78);
-          };
-          img.src = URL.createObjectURL(file);
-        });
-        fileName = file.name.replace(/\.[^/.]+$/, '.webp');
-        processedFile = new File([blob], fileName, { type: 'image/webp' });
-      }
-      const uploadTask = uploadBytesResumable(ref(storage, `chat_uploads/${Date.now()}_${fileName}`), processedFile);
-      uploadTask.on('state_changed', snap => setMsgReplyUploadProgress((snap.bytesTransferred / (snap.totalBytes || 1)) * 100), () => setMsgReplyUploadProgress(0), async () => {
-        const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
-        await addDoc(collection(db, "organizations", orgId, "messages"), { text: '', senderUid: currentUserData?.uid || msg.senderUid, senderEmail: userEmail, groupId: msg.groupId, ...(msg.groupName ? { groupName: msg.groupName } : {}), fileUrl, fileName, fileType: processedFile.type, timestamp: serverTimestamp(), isTask: false, seenBy: [userEmail], reactions: {}, allowedUsers: [], isPrivateForward: false, replyToId: msg.id, originalText: msg.text || msg.fileName || 'Attachment', originalSender: senderName });
-        setMsgReplyUploadProgress(0);
-      });
-    } catch (_) { setMsgReplyUploadProgress(0); }
-    finally { if (msgReplyFileInputRef.current) msgReplyFileInputRef.current.value = ''; }
+      await sendMessageToDB('', buildInlineReplyTarget(), [file], setMsgReplyUploadProgress);
+      setMsgReplyUploadProgress(100);
+      setTimeout(() => setMsgReplyUploadProgress(0), 400);
+    } catch (_) {
+      setMsgReplyUploadProgress(0);
+    } finally {
+      if (msgReplyFileInputRef.current) msgReplyFileInputRef.current.value = '';
+    }
   };
 
   const sendInlineReply = async () => {
     const text = inlineReplyRef.current?.innerHTML || inlineReplyText;
-    if (!text.replace(/<[^>]*>/g, '').trim()) return;
-    await addDoc(collection(db, "organizations", orgId, "messages"), { text, senderUid: currentUserData?.uid || userEmail, senderEmail: userEmail, groupId: msg.groupId, ...(msg.groupName ? { groupName: msg.groupName } : {}), timestamp: serverTimestamp(), isTask: false, seenBy: [userEmail], reactions: {}, allowedUsers: [], isPrivateForward: false, replyToId: msg.id, originalText: msg.text || msg.fileName || 'Attachment', originalSender: senderName });
+    if (!text.replace(/<[^>]*>/g, '').trim() || !sendMessageToDB) return;
+    await sendMessageToDB(text, buildInlineReplyTarget());
     setInlineReplyText('');
     if (inlineReplyRef.current) inlineReplyRef.current.innerHTML = '';
     setInlineReplyOpen(false);

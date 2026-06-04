@@ -353,6 +353,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                     groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB}
                     customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal}
                     setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin}
+                    sendMessageToDB={sendMessageToDB}
                 />
 
                 <div className="flex items-center gap-3 my-4 opacity-80">
@@ -367,6 +368,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                         groups={groups} handleReaction={handleReactionIntercept} handleDeleteMessage={deleteMessageDB}
                         customTags={customTags} toolPreferences={toolPreferences} setActiveModal={setActiveModal}
                         setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={threadInputRef} isThreadView={true} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleToggleBookmark={handleToggleBookmark} handleTogglePin={handleTogglePin}
+                        sendMessageToDB={sendMessageToDB}
                     />
                 ))}
             </div>
@@ -1756,6 +1758,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                     handleAddInlineComment={handleAddInlineComment} jumpToPrivateSource={(msgId, groupId) => navigateToMessageFromNotification(msgId, groupId)}
                                     customTags={customTags} setActiveReplies={setActiveReplies}
                                     setActiveTaskSidebar={setActiveTaskSidebar}
+                                    sendMessageToDB={sendMessageToDB}
                                     featureFlags={featureFlags}
                                 />
 
