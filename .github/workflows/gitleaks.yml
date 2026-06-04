@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+# This tells the runner to use Node 24 for everything, silencing warnings
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
+
 jobs:
   scan:
     name: Run Gitleaks
@@ -12,9 +16,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # This ensures it scans your entire history, not just the latest commit
+          fetch-depth: 0
 
       - name: Run Gitleaks Action
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3 # Updated to v3!
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
