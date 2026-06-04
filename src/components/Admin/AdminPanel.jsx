@@ -104,6 +104,8 @@ export default function AdminPanel({
   const effectiveOrgId = orgId || currentUserData?.orgId || currentUserData?.organizationId || currentUserData?.tenantId || '';
   const orgCollection = useCallback((collectionName) => collection(db, 'organizations', effectiveOrgId, collectionName), [effectiveOrgId]);
   const orgDoc = useCallback((collectionName, documentId) => doc(db, 'organizations', effectiveOrgId, collectionName, documentId), [effectiveOrgId]);
+  const broadcastAnnouncementRef = useCallback(() => doc(db, 'organizations', effectiveOrgId, 'workspace', 'announcement'), [effectiveOrgId]);
+  const broadcastHistoryCollectionRef = useCallback(() => collection(db, 'organizations', effectiveOrgId, 'broadcasts'), [effectiveOrgId]);
   const ensureOrgContext = useCallback(() => {
     if (effectiveOrgId) return true;
     alert('Organization context is still loading. Please try again in a moment.');
@@ -251,8 +253,8 @@ export default function AdminPanel({
         acks.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
         setAllAcks(acks);
       });
-      // Past broadcasts stored in a subcollection for history
-      const q = query(orgCollection('broadcasts'), orderBy('timestamp', 'desc'));
+      // Past broadcasts are stored in the current organization's broadcast history collection.
+      const q = query(broadcastHistoryCollectionRef(), orderBy('timestamp', 'desc'));
       const unsubPast = onSnapshot(q, (snap) => {
         setPastBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       });
@@ -261,7 +263,7 @@ export default function AdminPanel({
         unsubPast();
       };
     }
-  }, [activeTab, effectiveOrgId, orgCollection]);
+  }, [activeTab, effectiveOrgId, broadcastHistoryCollectionRef, orgCollection]);
 
   // Derived broadcast data
   const uniqueBroadcastIds = useMemo(
@@ -652,16 +654,16 @@ export default function AdminPanel({
     if (!ensureOrgContext()) return;
     if (!broadcastMessage.trim()) return alert('Please enter a message.');
     setIsBroadcasting(true);
-    // Store in current announcement
-    await setDoc(orgDoc('workspace', 'announcement'), {
+    // Store the active announcement in the same org-scoped document read by useWorkspaceData.
+    await setDoc(broadcastAnnouncementRef(), {
       message: broadcastMessage.trim(),
       type: broadcastType,
       isActive: true,
       timestamp: serverTimestamp(),
       author: currentUserData?.name || 'Administrator',
     });
-    // Also store a copy in the broadcasts collection for history
-    await addDoc(orgCollection('broadcasts'), {
+    // Also store a copy in the organization's broadcasts collection for history.
+    await addDoc(broadcastHistoryCollectionRef(), {
       message: broadcastMessage.trim(),
       type: broadcastType,
       timestamp: serverTimestamp(),
@@ -674,7 +676,7 @@ export default function AdminPanel({
   const revokeBroadcast = async () => {
     if (!ensureOrgContext()) return;
     if (!window.confirm('Remove the active broadcast?')) return;
-    await updateDoc(orgDoc('workspace', 'announcement'), { isActive: false });
+    await updateDoc(broadcastAnnouncementRef(), { isActive: false });
     if (globalAnnouncement?.id) setSelectedBroadcastId(globalAnnouncement.id);
   };
 
