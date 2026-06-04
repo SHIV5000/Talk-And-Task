@@ -156,7 +156,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             req.onsuccess = async () => {
                 for (const draft of req.result || []) {
                     try {
-                        await addDoc(orgCollection("messages"), { text: `[Recovered Draft] ${draft.text}`, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, hasReminder: false, isPrivateMention: false, allowedUsers: [], seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: draft.groupId, reactions: {} });
+                        await addDoc(orgCollection("messages"), { text: `[Recovered Draft] ${draft.text}`, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, hasReminder: false, isPrivateMention: false, isPrivateForward: false, allowedUsers: [], seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: draft.groupId, ...(draft.groupName ? { groupName: draft.groupName } : {}), reactions: {} });
                         await deleteOfflineDraft(draft.id);
                     } catch(e) {}
                 }

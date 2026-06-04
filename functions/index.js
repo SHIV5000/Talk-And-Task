@@ -739,3 +739,72 @@ exports.updateStorageUsed = onCall(async (request) => {
   const updatedSnap = await orgRef.get();
   return { ok: true, orgId, storageUsedBytes: updatedSnap.data()?.storageUsedBytes || 0 };
 });
+
+exports.backfillPublicMessageVisibility = onCall(async (request) => {
+  await assertPlatformOwner(request);
+  const data = request.data || {};
+  const targetOrgId = data.orgId ? String(data.orgId) : null;
+  const dryRun = data.dryRun === true;
+  const batchState = dryRun ? null : { batch: db.batch(), count: 0 };
+  const stats = {
+    dryRun,
+    organizationsScanned: 0,
+    messagesScanned: 0,
+    messagesUpdated: 0,
+    skippedPrivate: 0,
+    skippedTasks: 0,
+  };
+
+  const orgDocs = targetOrgId
+    ? [await db.collection('organizations').doc(targetOrgId).get()]
+    : (await db.collection('organizations').get()).docs;
+
+  for (const orgSnap of orgDocs) {
+    if (!orgSnap.exists) continue;
+    stats.organizationsScanned += 1;
+    let lastMessageSnap = null;
+
+    while (true) {
+      let messagesQuery = orgSnap.ref
+        .collection('messages')
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(400);
+      if (lastMessageSnap) messagesQuery = messagesQuery.startAfter(lastMessageSnap);
+      const messagesSnap = await messagesQuery.get();
+      if (messagesSnap.empty) break;
+
+      for (const messageSnap of messagesSnap.docs) {
+        stats.messagesScanned += 1;
+        const message = messageSnap.data() || {};
+        const hasAllowedUsers = Object.prototype.hasOwnProperty.call(message, 'allowedUsers');
+        const hasPrivateAllowedUsers = Array.isArray(message.allowedUsers) && message.allowedUsers.length > 0;
+        const isTaskMessage = message.isTask === true || !!message.taskData;
+        const isPrivateMessage = message.isPrivateForward === true || message.isPrivateMention === true || hasPrivateAllowedUsers;
+
+        if (isTaskMessage) {
+          stats.skippedTasks += 1;
+          continue;
+        }
+        if (isPrivateMessage) {
+          stats.skippedPrivate += 1;
+          continue;
+        }
+        if (hasAllowedUsers && message.isPrivateForward === false) continue;
+
+        stats.messagesUpdated += 1;
+        if (!dryRun) {
+          await queueBatchUpdate(batchState, messageSnap.ref, {
+            allowedUsers: [],
+            isPrivateForward: false,
+          });
+        }
+      }
+
+      lastMessageSnap = messagesSnap.docs[messagesSnap.docs.length - 1];
+    }
+  }
+
+  if (!dryRun) await commitBatchIfNeeded(batchState, true);
+  logger.info('Public message visibility backfill completed.', stats);
+  return stats;
+});
