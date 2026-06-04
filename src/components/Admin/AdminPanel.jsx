@@ -101,6 +101,14 @@ export default function AdminPanel({
 }) {
   const { appVersion: contextAppVersion, orgId } = useAuth();
   const appVersion = contextAppVersion || '25.0';
+  const effectiveOrgId = orgId || currentUserData?.orgId || currentUserData?.organizationId || currentUserData?.tenantId || '';
+  const orgCollection = useCallback((collectionName) => collection(db, 'organizations', effectiveOrgId, collectionName), [effectiveOrgId]);
+  const orgDoc = useCallback((collectionName, documentId) => doc(db, 'organizations', effectiveOrgId, collectionName, documentId), [effectiveOrgId]);
+  const ensureOrgContext = useCallback(() => {
+    if (effectiveOrgId) return true;
+    alert('Organization context is still loading. Please try again in a moment.');
+    return false;
+  }, [effectiveOrgId]);
 
   // ===== TABS =====
   const [activeTab, setActiveTab] = useState('overview');
@@ -197,51 +205,54 @@ export default function AdminPanel({
   // ===== REAL-TIME LISTENERS =====
   // Organization doc
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'workspace', 'org_details'), (docSnap) => {
+    if (!effectiveOrgId) return undefined;
+    const unsub = onSnapshot(orgDoc('org_details', 'details'), (docSnap) => {
       if (docSnap.exists()) {
         setOrgDetails(docSnap.data());
         setIsOrgSaved(true); // assume saved if data exists
       }
     });
     return () => unsub();
-  }, []);
+  }, [effectiveOrgId, orgDoc]);
 
 
 
   useEffect(() => {
+    if (!effectiveOrgId) return undefined;
     const unsubs = [
-      onSnapshot(collection(db, 'sessions'), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0)))),
-      onSnapshot(collection(db, 'roles'), (snap) => {
+      onSnapshot(orgCollection('sessions'), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0)))),
+      onSnapshot(orgCollection('roles'), (snap) => {
         const stored = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         const merged = [...DEFAULT_ROLES.filter((role) => !stored.some((s) => s.id === role.id || s.name === role.name)), ...stored];
         setRoles(merged);
       }),
-      onSnapshot(collection(db, 'retentionPolicies'), (snap) => setRetentionPolicies(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(query(collection(db, 'retention_cleanup_logs'), orderBy('timestamp', 'desc')), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(query(collection(db, 'exports'), orderBy('timestamp', 'desc')), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(doc(db, 'settings', 'institution'), (snap) => {
+      onSnapshot(orgCollection('retentionPolicies'), (snap) => setRetentionPolicies(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(query(orgCollection('retention_cleanup_logs'), orderBy('timestamp', 'desc')), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(query(orgCollection('exports'), orderBy('timestamp', 'desc')), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(orgDoc('settings', 'institution'), (snap) => {
         if (snap.exists()) setAdminSettings((prev) => ({ ...prev, ...snap.data() }));
       }),
     ];
     return () => unsubs.forEach((unsub) => unsub());
-  }, []);
+  }, [effectiveOrgId, orgCollection, orgDoc]);
 
   useEffect(() => {
+    if (!effectiveOrgId) return;
     DEFAULT_ROLES.forEach((role) => {
-      setDoc(doc(db, 'roles', role.id), { ...role, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      setDoc(orgDoc('roles', role.id), { ...role, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
     });
-  }, []);
+  }, [effectiveOrgId, orgDoc]);
 
   // Broadcast acks (for live & historical)
   useEffect(() => {
-    if (activeTab === 'broadcast') {
-      const unsubAcks = onSnapshot(collection(db, 'broadcast_acks'), (snap) => {
+    if (activeTab === 'broadcast' && effectiveOrgId) {
+      const unsubAcks = onSnapshot(orgCollection('broadcast_acks'), (snap) => {
         const acks = snap.docs.map((d) => d.data());
         acks.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
         setAllAcks(acks);
       });
       // Past broadcasts stored in a subcollection for history
-      const q = query(collection(db, 'broadcasts'), orderBy('timestamp', 'desc'));
+      const q = query(orgCollection('broadcasts'), orderBy('timestamp', 'desc'));
       const unsubPast = onSnapshot(q, (snap) => {
         setPastBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       });
@@ -250,7 +261,7 @@ export default function AdminPanel({
         unsubPast();
       };
     }
-  }, [activeTab]);
+  }, [activeTab, effectiveOrgId, orgCollection]);
 
   // Derived broadcast data
   const uniqueBroadcastIds = useMemo(
@@ -379,7 +390,8 @@ export default function AdminPanel({
   // ===== FUNCTIONS =====
 
   const logAuditEvent = async (type, target = '', details = {}) => {
-    await addDoc(collection(db, 'audit_logs'), {
+    if (!effectiveOrgId) return;
+    await addDoc(orgCollection('audit_logs'), {
       type,
       user: currentUserData?.email || currentUserData?.uid || 'admin',
       adminId: currentUserData?.uid || currentUserData?.email || 'admin',
@@ -392,26 +404,29 @@ export default function AdminPanel({
   };
 
   const updateRolePermission = async (role, area, action, checked) => {
+    if (!ensureOrgContext()) return;
     const permissions = { ...(role.permissions || makePermissionGrid(false)) };
     permissions[area] = { ...(permissions[area] || {}), [action]: checked };
-    await setDoc(doc(db, 'roles', role.id), { ...role, permissions, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(orgDoc('roles', role.id), { ...role, permissions, updatedAt: serverTimestamp() }, { merge: true });
     await logAuditEvent('ROLE_UPDATE', role.id, { role: role.name, area, action, checked });
   };
 
   const createRole = async () => {
+    if (!ensureOrgContext()) return;
     const name = newRoleName.trim();
     if (!name) return alert('Enter a role name.');
     const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `role-${Date.now()}`;
-    await setDoc(doc(db, 'roles', id), { id, name, system: false, permissions: makePermissionGrid(false), createdAt: serverTimestamp() });
+    await setDoc(orgDoc('roles', id), { id, name, system: false, permissions: makePermissionGrid(false), createdAt: serverTimestamp() });
     await logAuditEvent('ROLE_CREATE', id, { name });
     setNewRoleName('');
     setSelectedRoleId(id);
   };
 
   const deleteRole = async (role) => {
+    if (!ensureOrgContext()) return;
     if (role.system || SYSTEM_ROLES.includes(role.name)) return alert('System roles cannot be deleted.');
     if (!window.confirm(`Delete role ${role.name}?`)) return;
-    await deleteDoc(doc(db, 'roles', role.id));
+    await deleteDoc(orgDoc('roles', role.id));
     await logAuditEvent('ROLE_DELETE', role.id, { name: role.name });
     setSelectedRoleId('super-admin');
   };
@@ -423,18 +438,21 @@ export default function AdminPanel({
   };
 
   const forceLogoutSession = async (session) => {
+    if (!ensureOrgContext()) return;
     if (!window.confirm(`Force logout ${session.email || session.uid}?`)) return;
-    await deleteDoc(doc(db, 'sessions', session.id));
+    await deleteDoc(orgDoc('sessions', session.id));
     await logAuditEvent('FORCE_LOGOUT', session.id, { affectedUid: session.uid, email: session.email, ip: session.ip });
   };
 
   const forceLogoutAll = async () => {
+    if (!ensureOrgContext()) return;
     if (!window.confirm('This will immediately sign out every user across all devices. Are you sure?')) return;
-    await Promise.all(sessions.map((session) => deleteDoc(doc(db, 'sessions', session.id))));
+    await Promise.all(sessions.map((session) => deleteDoc(orgDoc('sessions', session.id))));
     await logAuditEvent('FORCE_LOGOUT_ALL', 'all-sessions', { affectedUsers: sessions.map((s) => s.uid), count: sessions.length });
   };
 
   const saveRetentionPolicy = async () => {
+    if (!ensureOrgContext()) return;
     const payload = {
       ...newRetentionPolicy,
       ttlDays: Number(newRetentionPolicy.ttlDays),
@@ -442,22 +460,25 @@ export default function AdminPanel({
       updatedAt: serverTimestamp(),
       exemptAuditLogs: true,
     };
-    await addDoc(collection(db, 'retentionPolicies'), payload);
+    await addDoc(orgCollection('retentionPolicies'), payload);
     await logAuditEvent('RETENTION_POLICY_UPDATE', payload.category, payload);
   };
 
   const updateRetentionPolicy = async (policy, updates) => {
-    await updateDoc(doc(db, 'retentionPolicies', policy.id), { ...updates, updatedAt: serverTimestamp() });
+    if (!ensureOrgContext()) return;
+    await updateDoc(orgDoc('retentionPolicies', policy.id), { ...updates, updatedAt: serverTimestamp() });
     await logAuditEvent('RETENTION_POLICY_UPDATE', policy.id, updates);
   };
 
   const deleteRetentionPolicy = async (policy) => {
+    if (!ensureOrgContext()) return;
     if (!window.confirm(`Delete lifecycle rule for ${policy.category}?`)) return;
-    await deleteDoc(doc(db, 'retentionPolicies', policy.id));
+    await deleteDoc(orgDoc('retentionPolicies', policy.id));
     await logAuditEvent('RETENTION_POLICY_DELETE', policy.id, { category: policy.category, ttlDays: policy.ttlDays, action: policy.action });
   };
 
   const runCleanupNow = async (policy) => {
+    if (!ensureOrgContext()) return;
     const threshold = Date.now() - Number(policy.ttlDays || 30) * 24 * 60 * 60 * 1000;
     const category = policy.category || 'Chat Messages';
     const matchesCategory = (message) => {
@@ -468,26 +489,27 @@ export default function AdminPanel({
     const expiredMessages = (messages || [])
       .filter((message) => matchesCategory(message) && (message.timestamp?.toMillis?.() || Date.now()) < threshold)
       .slice(0, 500);
-    const runRef = await addDoc(collection(db, 'retention_cleanup_logs'), { ruleId: policy.id, ruleName: category, timestamp: serverTimestamp(), status: 'running', affected: 0 });
+    const runRef = await addDoc(orgCollection('retention_cleanup_logs'), { ruleId: policy.id, ruleName: category, timestamp: serverTimestamp(), status: 'running', affected: 0 });
     for (const message of expiredMessages) {
       if (policy.action === 'archive') {
         const archiveCollection = message.isTask ? 'archived_tasks' : 'archived_messages';
-        await setDoc(doc(db, archiveCollection, message.id), { ...message, archivedAt: serverTimestamp(), lifecycleRuleId: policy.id });
+        await setDoc(orgDoc(archiveCollection, message.id), { ...message, archivedAt: serverTimestamp(), lifecycleRuleId: policy.id });
       }
-      await deleteDoc(doc(db, "organizations", orgId, "messages", message.id));
+      await deleteDoc(orgDoc('messages', message.id));
     }
-    await updateDoc(doc(db, 'retention_cleanup_logs', runRef.id), { status: 'completed', affected: expiredMessages.length });
+    await updateDoc(orgDoc('retention_cleanup_logs', runRef.id), { status: 'completed', affected: expiredMessages.length });
     await logAuditEvent('RETENTION_RUN', policy.id, { affected: expiredMessages.length, action: policy.action, ttlDays: policy.ttlDays, category });
   };
 
   const exportFullDatabase = async () => {
+    if (!ensureOrgContext()) return;
     const payload = {
       exportedAt: new Date().toISOString(),
       requestedBy: currentUserData?.email || 'admin',
       collections: { users: dbUsers, groups, messages, auditLogs: filteredAuditLogs, settings: adminSettings },
     };
     const fileName = `talk-task-export-${Date.now()}.json`;
-    await addDoc(collection(db, 'exports'), { fileName, size: JSON.stringify(payload).length, timestamp: serverTimestamp(), status: 'ready', downloadUrl: 'Generated in browser download' });
+    await addDoc(orgCollection('exports'), { fileName, size: JSON.stringify(payload).length, timestamp: serverTimestamp(), status: 'ready', downloadUrl: 'Generated in browser download' });
     await logAuditEvent('BACKUP_EXPORT', fileName, { collections: Object.keys(payload.collections) });
     downloadTextFile(fileName, JSON.stringify(payload, null, 2));
   };
@@ -514,18 +536,20 @@ export default function AdminPanel({
   };
 
   const executeHardDelete = async () => {
+    if (!ensureOrgContext()) return;
     if (!selectedDsarUser) return alert('Select a user first.');
     const code = `DELETE ${selectedDsarUser.email}`;
     if (window.prompt(`This permanently anonymises personal data for ${selectedDsarUser.name || selectedDsarUser.email}. Type: ${code}`) !== code) return;
     await updateDoc(doc(db, 'users', selectedDsarUser.uid), { name: 'Deleted User', emailHash: btoa(selectedDsarUser.email || selectedDsarUser.uid), email: '', isArchived: true, profilePicUrl: null });
-    await Promise.all(messages.filter((m) => m.senderUid === selectedDsarUser.uid || m.senderEmail === selectedDsarUser.email).map((m) => updateDoc(doc(db, "organizations", orgId, "messages", m.id), { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: m.isTask ? m.text : '[deleted]' }).catch(() => {})));
-    await Promise.all(sessions.filter((s) => s.uid === selectedDsarUser.uid).map((s) => deleteDoc(doc(db, 'sessions', s.id))));
+    await Promise.all(messages.filter((m) => m.senderUid === selectedDsarUser.uid || m.senderEmail === selectedDsarUser.email).map((m) => updateDoc(orgDoc('messages', m.id), { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: m.isTask ? m.text : '[deleted]' }).catch(() => {})));
+    await Promise.all(sessions.filter((s) => s.uid === selectedDsarUser.uid).map((s) => deleteDoc(orgDoc('sessions', s.id))));
     await logAuditEvent('DSAR_DELETE', selectedDsarUser.uid, { confirmationCode: code });
   };
 
   const saveInstitutionSettings = async () => {
+    if (!ensureOrgContext()) return;
     const payload = { ...adminSettings, fileUploadSizeMb: Number(adminSettings.fileUploadSizeMb || maxFileSizeMb || 5), activeUsersCount: dbUsers.length, updatedAt: serverTimestamp() };
-    await setDoc(doc(db, 'settings', 'institution'), payload, { merge: true });
+    await setDoc(orgDoc('settings', 'institution'), payload, { merge: true });
     if (setMaxFileSizeMb) setMaxFileSizeMb(payload.fileUploadSizeMb);
     localStorage.setItem('maxFileSizeMb', String(payload.fileUploadSizeMb));
     await logAuditEvent('SETTINGS_UPDATE', 'institution', payload);
@@ -548,21 +572,23 @@ export default function AdminPanel({
   };
 
   const saveTaskEdit = async (taskId) => {
+    if (!ensureOrgContext()) return;
     const updates = {};
     updates.text = editTaskTitle;
     updates['taskData.status'] = editTaskStatus;
     updates['taskData.priority'] = editTaskPriority;
     updates['taskData.deadline'] = editTaskDeadline;
     updates['taskData.assignees'] = editTaskAssignees;
-    await updateDoc(doc(db, "organizations", orgId, "messages", taskId), updates);
+    await updateDoc(orgDoc('messages', taskId), updates);
     setEditingTaskId(null);
   };
 
   const cancelEdit = () => setEditingTaskId(null);
 
   const handleDeleteTask = async (taskId) => {
+    if (!ensureOrgContext()) return;
     if (!window.confirm('Delete this task permanently?')) return;
-    await deleteDoc(doc(db, "organizations", orgId, "messages", taskId));
+    await deleteDoc(orgDoc('messages', taskId));
   };
 
   // --- People (Users) ---
@@ -589,6 +615,7 @@ export default function AdminPanel({
   };
 
   const handleAddUser = async () => {
+    if (!ensureOrgContext()) return;
     const email = newUserEmail.trim();
     const name = newUserName.trim();
     const password = newUserTempPassword.trim();
@@ -597,7 +624,7 @@ export default function AdminPanel({
     if (!password) return alert('Please provide a temporary password for the new user.');
     if (password.length < 6) return alert('Password must be at least 6 characters.');
 
-    const currentOrgId = currentUserData?.orgId || '';
+    const currentOrgId = effectiveOrgId;
 
     try {
       const createUserBackend = httpsCallable(functions, 'createUser');
@@ -622,10 +649,11 @@ export default function AdminPanel({
 
   // --- Broadcast ---
   const publishBroadcast = async () => {
+    if (!ensureOrgContext()) return;
     if (!broadcastMessage.trim()) return alert('Please enter a message.');
     setIsBroadcasting(true);
     // Store in current announcement
-    await setDoc(doc(db, 'workspace', 'announcement'), {
+    await setDoc(orgDoc('workspace', 'announcement'), {
       message: broadcastMessage.trim(),
       type: broadcastType,
       isActive: true,
@@ -633,7 +661,7 @@ export default function AdminPanel({
       author: currentUserData?.name || 'Administrator',
     });
     // Also store a copy in the broadcasts collection for history
-    await addDoc(collection(db, 'broadcasts'), {
+    await addDoc(orgCollection('broadcasts'), {
       message: broadcastMessage.trim(),
       type: broadcastType,
       timestamp: serverTimestamp(),
@@ -644,18 +672,20 @@ export default function AdminPanel({
   };
 
   const revokeBroadcast = async () => {
+    if (!ensureOrgContext()) return;
     if (!window.confirm('Remove the active broadcast?')) return;
-    await updateDoc(doc(db, 'workspace', 'announcement'), { isActive: false });
+    await updateDoc(orgDoc('workspace', 'announcement'), { isActive: false });
     if (globalAnnouncement?.id) setSelectedBroadcastId(globalAnnouncement.id);
   };
 
   // --- Tags ---
   const handleAddTag = async () => {
+    if (!ensureOrgContext()) return;
     if (!newTagLabel.trim() || !newTagLabel.startsWith('#'))
       return alert("Tag label must begin with '#'");
     const theme = tagThemes[newTagTheme];
     try {
-      await addDoc(collection(db, 'organizations', orgId, 'workspace_tags'), {
+      await addDoc(orgCollection('workspace_tags'), {
         label: newTagLabel.trim(),
         bgClass: theme.bg,
         textClass: theme.text,
@@ -675,9 +705,10 @@ export default function AdminPanel({
   };
 
   const saveTagEdit = async () => {
+    if (!ensureOrgContext()) return;
     if (!editTagLabel.trim() || !editTagLabel.startsWith('#')) return alert("Label must start with #");
     const theme = tagThemes[editTagTheme];
-    await updateDoc(doc(db, 'organizations', orgId, 'workspace_tags', editingTagId), {
+    await updateDoc(orgDoc('workspace_tags', editingTagId), {
       label: editTagLabel.trim(),
       bgClass: theme.bg,
       textClass: theme.text,
@@ -688,8 +719,9 @@ export default function AdminPanel({
 
   // --- Organization ---
   const saveOrgDetails = async () => {
+    if (!ensureOrgContext()) return;
     try {
-      await setDoc(doc(db, 'workspace', 'org_details'), orgDetails, { merge: true });
+      await setDoc(orgDoc('org_details', 'details'), orgDetails, { merge: true });
       setIsOrgSaved(true);
       alert('Organization details saved successfully!');
     } catch (e) {
@@ -1073,7 +1105,7 @@ export default function AdminPanel({
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); }} className="text-indigo-600 hover:text-indigo-800 mr-2" title="Edit"><i className="fa-solid fa-pencil"></i></button>
-                          <button onClick={async () => { if (!window.confirm('Delete this department?')) return; await deleteDoc(doc(db, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
+                          <button onClick={async () => { if (!ensureOrgContext()) return; if (!window.confirm('Delete this department?')) return; await deleteDoc(orgDoc('groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
                         </td>
                       </tr>
                     ))}
@@ -1432,7 +1464,7 @@ export default function AdminPanel({
                               <td className="px-4 py-3 text-xs text-slate-500 capitalize">{tag.themeName}</td>
                               <td className="px-4 py-3 text-right">
                                 <button onClick={() => startEditTag(tag)} className="text-indigo-600 hover:text-indigo-800 mr-2" title="Edit"><i className="fa-solid fa-pencil"></i></button>
-                                <button onClick={() => { if (window.confirm(`Delete ${tag.label}?`)) deleteDoc(doc(db, 'organizations', orgId, 'workspace_tags', tag.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
+                                <button onClick={() => { if (!ensureOrgContext()) return; if (window.confirm(`Delete ${tag.label}?`)) deleteDoc(orgDoc('workspace_tags', tag.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
                               </td>
                             </tr>
                           )
