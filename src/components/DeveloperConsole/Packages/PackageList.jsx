@@ -67,15 +67,6 @@ const getPackageUsage = async (packageRecord) => {
     if (match) return { inUse: true, orgPath: match.ref.path, orgData: match.data() };
   }
 
-  const workspaceDetails = await getDocs(query(collection(db, 'workspace'), limit(20)));
-  const workspaceMatch = workspaceDetails.docs.find((workspaceDoc) => (
-    workspaceDoc.id === 'org_details' && orgUsesPackage(workspaceDoc.data(), packageRecord)
-  ));
-
-  if (workspaceMatch) {
-    return { inUse: true, orgPath: workspaceMatch.ref.path, orgData: workspaceMatch.data() };
-  }
-
   return { inUse: false, orgPath: null, orgData: null };
 };
 
