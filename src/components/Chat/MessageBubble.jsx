@@ -342,7 +342,7 @@ const MessageBubble = React.memo(({
       const uploadTask = uploadBytesResumable(ref(storage, `chat_uploads/${Date.now()}_${fileName}`), processedFile);
       uploadTask.on('state_changed', snap => setMsgReplyUploadProgress((snap.bytesTransferred / (snap.totalBytes || 1)) * 100), () => setMsgReplyUploadProgress(0), async () => {
         const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
-        await addDoc(collection(db, "organizations", orgId, "messages"), { text: '', senderUid: currentUserData?.uid || msg.senderUid, senderEmail: userEmail, groupId: msg.groupId, fileUrl, fileName, fileType: processedFile.type, timestamp: serverTimestamp(), isTask: false, seenBy: [userEmail], reactions: {}, replyToId: msg.id, originalText: msg.text || msg.fileName || 'Attachment', originalSender: senderName });
+        await addDoc(collection(db, "organizations", orgId, "messages"), { text: '', senderUid: currentUserData?.uid || msg.senderUid, senderEmail: userEmail, groupId: msg.groupId, ...(msg.groupName ? { groupName: msg.groupName } : {}), fileUrl, fileName, fileType: processedFile.type, timestamp: serverTimestamp(), isTask: false, seenBy: [userEmail], reactions: {}, allowedUsers: [], isPrivateForward: false, replyToId: msg.id, originalText: msg.text || msg.fileName || 'Attachment', originalSender: senderName });
         setMsgReplyUploadProgress(0);
       });
     } catch (_) { setMsgReplyUploadProgress(0); }
@@ -352,7 +352,7 @@ const MessageBubble = React.memo(({
   const sendInlineReply = async () => {
     const text = inlineReplyRef.current?.innerHTML || inlineReplyText;
     if (!text.replace(/<[^>]*>/g, '').trim()) return;
-    await addDoc(collection(db, "organizations", orgId, "messages"), { text, senderUid: currentUserData?.uid || userEmail, senderEmail: userEmail, groupId: msg.groupId, timestamp: serverTimestamp(), isTask: false, seenBy: [userEmail], reactions: {}, replyToId: msg.id, originalText: msg.text || msg.fileName || 'Attachment', originalSender: senderName });
+    await addDoc(collection(db, "organizations", orgId, "messages"), { text, senderUid: currentUserData?.uid || userEmail, senderEmail: userEmail, groupId: msg.groupId, ...(msg.groupName ? { groupName: msg.groupName } : {}), timestamp: serverTimestamp(), isTask: false, seenBy: [userEmail], reactions: {}, allowedUsers: [], isPrivateForward: false, replyToId: msg.id, originalText: msg.text || msg.fileName || 'Attachment', originalSender: senderName });
     setInlineReplyText('');
     if (inlineReplyRef.current) inlineReplyRef.current.innerHTML = '';
     setInlineReplyOpen(false);

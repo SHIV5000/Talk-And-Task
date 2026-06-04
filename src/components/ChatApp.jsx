@@ -774,9 +774,11 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                     const data = document.data();
                     const scheduledMs = data.scheduledAt?.toMillis?.() || new Date(data.scheduledFor).getTime();
                     if (scheduledMs <= now.getTime()) {
+                        const isExplicitlyPrivate = data.isPrivateForward === true || (Array.isArray(data.allowedUsers) && data.allowedUsers.length > 0);
                         const payload = {
                             text: data.text,
                             groupId: data.groupId,
+                            ...(data.groupName ? { groupName: data.groupName } : {}),
                             sender: currentUserData?.name || user.email.split('@')[0],
                             senderEmail: user.email,
                             senderUid: user.uid,
@@ -785,7 +787,9 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                             isTask: data.isTask || false,
                             taskData: data.taskData || null,
-                            seenBy: [user.email]
+                            seenBy: [user.email],
+                            isPrivateForward: isExplicitlyPrivate,
+                            allowedUsers: isExplicitlyPrivate ? (data.allowedUsers || []) : []
                         };
                         await addDoc(collection(db, "organizations", orgId, "messages"), payload);
                         await updateDoc(doc(db, "organizations", orgId, "scheduled_messages", document.id), { status: "sent", sentAt: serverTimestamp(), retryCount: data.retryCount || 0 });
