@@ -116,7 +116,7 @@ export default function LeftSidebar({
             <i className="fa-solid fa-search text-sm mr-2 opacity-70"></i>
             <input
               type="text"
-              placeholder="Search groups & people..."
+              placeholder="Search deapartments & staff..."
               value={sidebarSearch}
               onChange={e => setSidebarSearch(e.target.value)}
               className="bg-transparent outline-none flex-1 text-sm placeholder-white/50"
