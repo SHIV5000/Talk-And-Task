@@ -664,10 +664,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [globalAnnouncement?.isActive, globalAnnouncement?.id, dismissedBroadcastId, playMelody]);
 
     const handleAckBroadcast = async () => {
-        if (!globalAnnouncement) return;
+        if (!globalAnnouncement || !orgId) return;
         setDismissedBroadcastId(globalAnnouncement.id);
         try {
-            await addDoc(collection(db, "broadcast_acks"), {
+            await addDoc(collection(db, "organizations", orgId, "broadcast_acks"), {
                 broadcastId: globalAnnouncement.id,
                 userEmail: user.email,
                 userName: currentUserData?.name || user.email.split('@')[0],
