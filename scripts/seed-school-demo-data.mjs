@@ -4,6 +4,7 @@ import { db, collection, doc, getDocs, query, where, setDoc, serverTimestamp } f
 const SEED_BATCH = 'school-demo-v1';
 const APPLY = process.argv.includes('--apply') || process.argv.includes('--yes');
 const MOCK_USERS = process.argv.includes('--mock-users');
+const ORG_ID = process.env.SCHOOL_DEMO_ORG_ID || process.argv.find((arg) => arg.startsWith('--org-id='))?.split('=')[1];
 const now = new Date();
 
 const groupIds = {
@@ -218,7 +219,14 @@ function audit(id, actor, type, content, groupKey, target = '') {
   };
 }
 
-async function readUsers() {
+function requireOrgId() {
+  if (!ORG_ID) {
+    throw new Error('Missing organization id. Set SCHOOL_DEMO_ORG_ID or pass --org-id=<orgId> so demo data is written under organizations/{orgId}/...');
+  }
+  return ORG_ID;
+}
+
+async function readUsers(orgId) {
   if (MOCK_USERS) {
     return [
       ['u-principal', 'principal.demo@school.test', 'Dr. Meera Principal', true],
@@ -239,20 +247,22 @@ async function readUsers() {
   const timeout = new Promise((_, reject) => {
     setTimeout(() => reject(new Error('Timed out while reading existing users from Firestore. Check network/proxy access and Firestore rules.')), 15000);
   });
-  const snap = await Promise.race([getDocs(collection(db, 'users')), timeout]);
+  const snap = await Promise.race([getDocs(query(collection(db, 'users'), where('orgId', '==', orgId))), timeout]);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-async function writeDocument(item) {
-  await setDoc(doc(db, item.collection, item.id), item.data, { merge: true });
+async function writeDocument(orgId, item) {
+  await setDoc(doc(db, 'organizations', orgId, item.collection, item.id), item.data, { merge: true });
 }
 
 async function main() {
   console.log(`School demo seed batch: ${SEED_BATCH}`);
   console.log(APPLY ? 'Mode: APPLY (Firestore writes enabled)' : 'Mode: DRY RUN (no writes). Re-run with --apply to seed Firestore.');
   if (MOCK_USERS) console.log('Using mock users for local script validation only. Omit --mock-users to use existing Firestore users.');
+  const orgId = requireOrgId();
+  console.log(`Organization scope: organizations/${orgId}`);
 
-  const users = await readUsers();
+  const users = await readUsers(orgId);
   const r = rolePicker(users);
   const groupMembers = {
     leadership: userEmails(r.principal, r.academicCoordinator, r.examCoordinator, r.seniorTeacher, r.seniorTeacher2, r.primaryCoordinator, r.eventCoordinator),
@@ -493,8 +503,8 @@ async function main() {
   }
 
   for (const item of allWrites) {
-    await writeDocument(item);
-    console.log(`✓ ${item.collection}/${item.id}`);
+    await writeDocument(orgId, item);
+    console.log(`✓ organizations/${orgId}/${item.collection}/${item.id}`);
   }
 
   console.log(`Done. Seeded ${allWrites.length} Firestore documents for ${SEED_BATCH}.`);

@@ -147,6 +147,42 @@ service cloud.firestore {
       }
     }
 
+
+    // Legacy root app-data collections were migrated to organizations/{orgId}/...
+    // Keep explicit deny rules so accidental root access is not hidden by the
+    // catch-all deny at the end of this ruleset.
+    match /workspace/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /groups/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /messages/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /broadcasts/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /audit_logs/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /notifications/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /reminders/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /workspace_tags/{document=**} {
+      allow read, write: if false;
+    }
+
     match /tenantInvitations/{invitationId} {
       allow get, list: if isPlatformOwner() || (
         signedIn() && (
