@@ -11,8 +11,8 @@ permissions:
 jobs:
   auto-approve-and-merge:
     runs-on: ubuntu-latest
-    # IMPORTANT: Replace 'codex-bot' with the exact GitHub username Codex uses
-    if: github.actor == 'codex-bot' 
+    # NEW LOGIC: Executes if YOU open it AND the branch contains 'codex'
+    if: github.actor == 'SHIV5000' && contains(github.head_ref, 'codex')
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
