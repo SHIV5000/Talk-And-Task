@@ -116,6 +116,8 @@ const getUserOrgId = (user) => {
   return record.orgId || record.organizationId || record.tenantId || '';
 };
 
+const getUserLastActiveMs = (user) => user?.lastActive?.toMillis?.() || user?.lastLogin?.toMillis?.() || (user?.lastActive ? new Date(user.lastActive).getTime() : 0);
+
 const getStorageUsed = (tenant) => {
   const record = tenant || {};
   return record.storageUsedBytes || record.storageUsed || record.storageBytes || 0;
@@ -206,14 +208,22 @@ export default function TenantList() {
   const usersByOrg = useMemo(() => users.reduce((acc, user) => {
     const orgId = getUserOrgId(user);
     if (!orgId) return acc;
-    acc[orgId] = (acc[orgId] || 0) + 1;
+    if (!acc[orgId]) acc[orgId] = { count: 0, emails: [], live: [] };
+    acc[orgId].count += 1;
+    if (user.email) acc[orgId].emails.push(user.email);
+    if (getUserLastActiveMs(user) && Date.now() - getUserLastActiveMs(user) <= 5 * 60 * 1000) acc[orgId].live.push(user.email || user.uid);
     return acc;
   }, {}), [users]);
 
-  const hydratedTenants = useMemo(() => tenants.map((tenant) => ({
-    ...tenant,
-    userCount: usersByOrg[tenant.id] || usersByOrg[tenant.orgId] || 0,
-  })), [tenants, usersByOrg]);
+  const hydratedTenants = useMemo(() => tenants.map((tenant) => {
+    const orgUsers = usersByOrg[tenant.id] || usersByOrg[tenant.orgId] || { count: 0, emails: [], live: [] };
+    return {
+      ...tenant,
+      userCount: orgUsers.count,
+      userEmails: [...new Set(orgUsers.emails)].sort((a, b) => a.localeCompare(b)),
+      liveUserEmails: [...new Set(orgUsers.live)].sort((a, b) => a.localeCompare(b)),
+    };
+  }), [tenants, usersByOrg]);
 
   const filteredTenants = useMemo(() => {
     const term = normalizeString(searchTerm);
@@ -390,6 +400,7 @@ export default function TenantList() {
                     <div className="min-w-0">
                       <h3 className="truncate text-sm font-semibold text-slate-900">{tenant.orgName || tenant.name || tenant.id}</h3>
                       <p className="mt-1 truncate text-xs text-slate-500">{tenant.id}</p>
+                      <p className="mt-1 truncate text-xs font-semibold text-slate-600">Admin: {tenant.adminName || '—'} • {tenant.adminEmail || 'No admin email'}</p>
                     </div>
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${tenant.status === 'suspended' || tenant.isSuspended ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {tenant.status === 'suspended' || tenant.isSuspended ? 'Suspended' : 'Active'}
@@ -402,7 +413,7 @@ export default function TenantList() {
                     </div>
                     <div>
                       <span className="block text-slate-400">Users</span>
-                      <span className="font-semibold text-slate-700">{tenant.userCount}</span>
+                      <span className="font-semibold text-slate-700">{tenant.userCount} total</span>
                     </div>
                     <div>
                       <span className="block text-slate-400">Storage</span>

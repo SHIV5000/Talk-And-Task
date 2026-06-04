@@ -8,6 +8,10 @@ const FEATURE_FLAG_KEYS = [
   'apiAccess',
   'auditLogs',
   'prioritySupport',
+  'usersTab',
+  'departmentsTab',
+  'broadcasts',
+  'organizationSettings',
 ];
 
 export const FEATURE_FLAGS = Object.freeze({
@@ -20,6 +24,10 @@ export const FEATURE_FLAGS = Object.freeze({
   apiAccess: { key: 'apiAccess', label: 'API access' },
   auditLogs: { key: 'auditLogs', label: 'Audit logs' },
   prioritySupport: { key: 'prioritySupport', label: 'Priority support' },
+  usersTab: { key: 'usersTab', label: 'Admin users tab' },
+  departmentsTab: { key: 'departmentsTab', label: 'Admin departments tab' },
+  broadcasts: { key: 'broadcasts', label: 'Admin broadcast tab' },
+  organizationSettings: { key: 'organizationSettings', label: 'Admin organization tab' },
 });
 
 export const DEFAULT_FEATURE_FLAGS = Object.freeze({
@@ -32,6 +40,10 @@ export const DEFAULT_FEATURE_FLAGS = Object.freeze({
   apiAccess: false,
   auditLogs: false,
   prioritySupport: false,
+  usersTab: true,
+  departmentsTab: true,
+  broadcasts: true,
+  organizationSettings: true,
 });
 
 export const PACKAGE_STATUS_OPTIONS = Object.freeze([

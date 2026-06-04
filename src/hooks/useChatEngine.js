@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db, storage } from '../firebase.js';
-import { collection, addDoc, onSnapshot, query, orderBy, limitToLast, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../utils/imageUtils.js';
 import { getEffectiveStorageLimitMB, toNumberOrNull } from '../utils/storageLimits.js';
 
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
+const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 
-export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB }) {
+export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData, shouldLoadData = true }) {
     const [messages, setMessages] = useState([]);
     const [typingStatus, setTypingStatus] = useState([]);
     const [offlineDrafts, setOfflineDrafts] = useState([]);
@@ -49,22 +50,21 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 
     // ================== MESSAGE LISTENER ==================
     useEffect(() => {
-        if (!orgId || !user?.uid) return;
+        if (!shouldLoadData || !orgId || !user?.uid) return;
 
-        const q = query(orgCollection("messages"), orderBy("timestamp", "asc"), limitToLast(300));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            let loadedMessages = snapshot.docs.map(docSnapshot => {
-                const data = docSnapshot.data();
-                return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
-            });
-
-            loadedMessages.sort((a, b) => (a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER) - (b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER));
+        const normalizeMessage = (docSnapshot) => {
+            const data = docSnapshot.data();
+            return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
+        };
+        const mergeAndPublish = (nonTaskDocs = [], taskDocs = []) => {
+            const byId = new Map([...nonTaskDocs, ...taskDocs].map(docSnapshot => [docSnapshot.id, normalizeMessage(docSnapshot)]));
+            const loadedMessages = Array.from(byId.values()).sort((a, b) => (a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER) - (b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER));
             setMessages(loadedMessages);
 
             if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
                 const newMsg = loadedMessages[loadedMessages.length - 1];
                 if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
-                    playAlertSound(loadedMessages[loadedMessages.length - 1]?.isTask ? 'task' : 'incoming');
+                    playAlertSound(newMsg?.isTask ? 'task' : 'incoming');
                     addToast(`New message from ${(newMsg.sender || "").split('@')[0]}`, 'message');
                     if (document.hidden && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
                         navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `New Message from ${(newMsg.sender || "").split('@')[0]}`, body: newMsg.text || 'Sent an attachment' });
@@ -72,6 +72,17 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                 }
             }
             prevMessagesCountRef.current = loadedMessages.length;
+        };
+
+        let nonTaskDocs = [];
+        let taskDocs = [];
+        const unsubNonTasks = onSnapshot(query(orgCollection("messages"), where("isTask", "==", false)), (snapshot) => {
+            nonTaskDocs = snapshot.docs;
+            mergeAndPublish(nonTaskDocs, taskDocs);
+        });
+        const unsubTasks = onSnapshot(query(orgCollection("messages"), where("taskData.visibleTo", "array-contains", user.email)), (snapshot) => {
+            taskDocs = snapshot.docs;
+            mergeAndPublish(nonTaskDocs, taskDocs);
         });
 
         const unsubTyping = onSnapshot(orgCollection("typing"), (snapshot) => {
@@ -80,8 +91,8 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             setTypingStatus(currentTyping);
         });
 
-        return () => { unsubscribe(); unsubTyping(); };
-    }, [orgId, user?.uid, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
+        return () => { unsubNonTasks(); unsubTasks(); unsubTyping(); };
+    }, [shouldLoadData, orgId, user?.uid, user?.email, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
 
     // ================== READ RECEIPTS ==================
     useEffect(() => {
@@ -187,7 +198,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             uniqueMentions.forEach(async (mentionEmail) => {
                 if (mentionEmail === user.email) return;
                 const recipient = dbUsers.find(u => u.email === mentionEmail);
-                if (recipient) await addDoc(orgCollection("notifications"), { userId: recipient.uid, type: "mention", text: `Mentioned you in ${activeGroup.name}`, messageId: groupMsgRef.id, groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                if (recipient) await addDoc(orgCollection("notifications"), { userId: recipient.uid, type: "mention", text: `You have been mentioned by ${user.email.split('@')[0]} in ${activeGroup.name}.`, messageId: groupMsgRef.id, groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
             });
         }
     };
@@ -216,7 +227,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         const storageUsedMB = toNumberOrNull(orgStorageDetails.storageUsedMB) || 0;
         const effectiveStorageLimitMB = getEffectiveStorageLimitMB(orgStorageDetails);
         if (storageUsedMB >= effectiveStorageLimitMB) {
-            throw new Error(`Storage limit reached. Used ${storageUsedMB.toFixed(2)} MB of ${effectiveStorageLimitMB.toFixed(2)} MB.`);
+            throw new Error(`Storage Limit for Organization reached. Used ${storageUsedMB.toFixed(2)} MB of ${effectiveStorageLimitMB.toFixed(2)} MB.`);
         }
     }
 
@@ -274,7 +285,17 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         logImmutableAction("MESSAGE_DELETE", `Deleted content: "${msg.text || msg.fileName}"`, `Message ID: ${msg.id}`);
     };
 
-    const togglePinDB = async (msgId, isPinned) => updateDoc(orgDoc("messages", msgId), { isPinned: !isPinned });
+    const togglePinDB = async (msgId, isPinned) => {
+        const userEmail = (user?.email || '').toLowerCase();
+        const canManagePins =
+            userEmail === GLOBAL_SUPER_ADMIN_EMAIL ||
+            (activeGroup?.admins || []).map((email) => (email || '').toLowerCase()).includes(userEmail);
+        if (!canManagePins) {
+            addToast?.('Only admins can unpin', 'error');
+            return;
+        }
+        await updateDoc(orgDoc("messages", msgId), { isPinned: !isPinned });
+    };
     
     const toggleBookmarkDB = async (msgId, bookmarkedBy) => {
         let bookmarks = bookmarkedBy || [];

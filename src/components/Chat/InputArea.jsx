@@ -72,6 +72,14 @@ export default function InputArea({
     setEmojiPickerOpen(false);
   };
 
+  const clearComposer = () => {
+    if (chatInputRef.current) {
+      chatInputRef.current.innerHTML = '';
+    }
+    setInputText('');
+    setReplyingTo?.(null);
+  };
+
   return (
     <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-3 safe-bottom'} shrink-0 z-40 flex flex-col gap-2 w-full relative ${containerClassName}`}>
       <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }.mention-chip{display:inline-block;background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:0 6px;font-weight:800;}`}</style>
@@ -103,7 +111,7 @@ export default function InputArea({
       </div>
 
       {mentionQuery !== null && (
-        <div className="absolute bottom-[100%] left-4 bg-white shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto z-[130] py-2 mb-2 border border-slate-200 animate-in fade-in zoom-in-95">
+        <div className="absolute bottom-[100%] left-4 bg-white dark:bg-slate-900 shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 z-[130] py-2 mb-2 border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
           <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Peers</div>
           {dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).length > 0 ? (
             dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).map(u => (
@@ -111,33 +119,33 @@ export default function InputArea({
                 key={u.uid}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelectMention(u.name)}
-                className="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 text-sm transition-colors"
+                className="px-4 py-2.5 hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer flex items-center gap-3 text-sm transition-colors"
               >
                 <MemoizedAvatar uid={u.uid} url={u.profilePicUrl} name={u.name} sizeClass="w-8 h-8" />
-                <span className="font-medium text-slate-700">{u.name}</span>
+                <span className="font-medium text-slate-700 dark:text-slate-200">{u.name}</span>
               </div>
             ))
           ) : (
             <div className="px-4 py-2 text-xs text-slate-400 italic">No users found</div>
           )}
 
-          <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t mt-1 pt-2">Groups</div>
+          <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t mt-1 pt-2">DEPARTMENTS</div>
           {groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).length > 0 ? (
              groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).map(g => (
               <div
                 key={g.id}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelectMention(g.name, true)}
-                className="px-4 py-2.5 hover:bg-teal-50 cursor-pointer flex items-center gap-3 text-sm transition-colors"
+                className="px-4 py-2.5 hover:bg-teal-50 dark:hover:bg-slate-800 cursor-pointer flex items-center gap-3 text-sm transition-colors"
               >
                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
                   <i className="fa-solid fa-users text-xs"></i>
                 </div>
-                <span className="font-medium text-slate-700">{g.name}</span>
+                <span className="font-medium text-slate-700 dark:text-slate-200">{g.name}</span>
               </div>
             ))
           ) : (
-            <div className="px-4 py-2 text-xs text-slate-400 italic">No groups found</div>
+            <div className="px-4 py-2 text-xs text-slate-400 italic">No departments found</div>
           )}
         </div>
       )}
@@ -150,17 +158,17 @@ export default function InputArea({
       )}
 
       {showFileRename && pendingFiles.length > 0 && (
-        <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-bottom-2 z-20 space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-bottom-2 z-20 space-y-3">
           {pendingFiles.map((pf) => (
-            <div key={pf.id} className="flex items-start gap-3 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+            <div key={pf.id} className="flex items-start gap-3 border-b border-gray-100 dark:border-slate-700 pb-4 last:border-0 last:pb-0">
               <div className="mt-1 w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600"><i className="fa-solid fa-file-lines text-xl"></i></div>
               <div className="flex-1 space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <input type="text" value={pf.customName.replace(/\.[^/.]+$/, '').replace('__SECURE__', '')} onChange={(e) => { const newName = lockExtension(pf.file.name, e.target.value); setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, customName: newName } : f)); }} className="flex-1 text-sm font-bold text-slate-800 outline-none border-b border-transparent focus:border-indigo-500 bg-transparent py-0.5" placeholder="File name" />
+                  <input type="text" value={pf.customName.replace(/\.[^/.]+$/, '').replace('__SECURE__', '')} onChange={(e) => { const newName = lockExtension(pf.file.name, e.target.value); setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, customName: newName } : f)); }} className="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100 outline-none border-b border-transparent focus:border-indigo-500 bg-transparent py-0.5" placeholder="File name" />
                   <span className="text-sm font-bold text-slate-500">.{pf.file.name.split('.').pop()}</span>
                   <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{(pf.file.size / 1024 / 1024).toFixed(2)} MB</span>
                 </div>
-                <textarea rows={1} value={pf.caption} onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)); }} placeholder="Add a caption..." className="w-full text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"></textarea>
+                <textarea rows={1} value={pf.caption} onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)); }} placeholder="Add a caption..." className="w-full text-sm text-slate-800 dark:text-slate-100 outline-none bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"></textarea>
 
               </div>
               <button onClick={() => { setPendingFiles(prev => prev.filter(f => f.id !== pf.id)); if (pendingFiles.length === 1) setShowFileRename(false); }} className="text-slate-400 hover:text-rose-500 p-2"><i className="fa-solid fa-trash-can text-lg"></i></button>
@@ -186,7 +194,7 @@ export default function InputArea({
             <i className="fa-regular fa-face-smile text-xl"></i>
           </button>
           {emojiPickerOpen && (
-            <div className="emoji-picker-popup shadow-2xl border border-slate-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
+            <div className="emoji-picker-popup shadow-2xl border border-slate-100 dark:border-slate-700 rounded-2xl animate-in fade-in slide-in-from-bottom-2 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
               {EMOJI_LIST.map(emoji => (
                 <button key={emoji} onClick={() => insertEmoji(emoji)} className="hover:bg-slate-100 p-1.5 rounded-lg transition-colors">{emoji}</button>
               ))}
@@ -194,7 +202,7 @@ export default function InputArea({
           )}
         </div>
 
-        <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white resize-y min-h-[46px] max-h-[34vh]">
+        <div className="flex-1 max-w-full bg-slate-50 dark:bg-slate-900 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 dark:border-slate-700 focus-within:border-indigo-500 focus-within:bg-white dark:focus-within:bg-slate-950 resize-y overflow-y-auto min-h-[46px] max-h-[34vh]">
           <div
             contentEditable
             ref={chatInputRef}
@@ -205,8 +213,8 @@ export default function InputArea({
             onBlur={() => { if (activeGroup?.id && user?.uid) deleteDoc(doc(db, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words"
-            style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)' }}
+            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 dark:text-slate-100 py-3 px-4 w-full max-w-full resize-y overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words [overflow-wrap:break-word] [word-wrap:break-word]"
+            style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordWrap: 'break-word' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -229,13 +237,23 @@ export default function InputArea({
           </button>
         )}
 
-        <button
-          onClick={handleSendOfflineAware}
-          disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 min-w-[42px] w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-        >
-          <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={clearComposer}
+            disabled={!inputText.trim() || inputText === '<br>'}
+            className={`h-[42px] px-3 rounded-xl text-xs font-bold transition-colors ${inputText.trim() && inputText !== '<br>' ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700' : 'border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:border-slate-800 dark:bg-slate-900 dark:text-slate-600'}`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSendOfflineAware}
+            disabled={!inputText.trim() || inputText === '<br>'}
+            className={`min-w-[42px] h-[42px] px-3 flex justify-center items-center rounded-xl transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-600'}`}
+          >
+            <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
+          </button>
+        </div>
       </div>
     </div>
   );

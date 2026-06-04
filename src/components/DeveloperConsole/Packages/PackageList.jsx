@@ -20,9 +20,9 @@ import PackageForm from './PackageForm.jsx';
 const PACKAGE_COLLECTION = 'subscriptionPackages';
 const ORG_DETAILS_COLLECTION_GROUP = 'org_details';
 
-const formatCurrency = (value) => new Intl.NumberFormat(undefined, {
+const formatCurrency = (value) => new Intl.NumberFormat('en-IN', {
   style: 'currency',
-  currency: 'USD',
+  currency: 'INR',
   minimumFractionDigits: 2,
 }).format(Number(value || 0));
 
@@ -245,7 +245,7 @@ export default function PackageList() {
               <thead className="bg-slate-50 text-xs font-bold uppercase tracking-widest text-slate-500">
                 <tr>
                   <th className="px-5 py-3">Package</th>
-                  <th className="px-5 py-3">Price</th>
+                  <th className="px-5 py-3">Price (INR)</th>
                   <th className="px-5 py-3">Storage</th>
                   <th className="px-5 py-3">Users</th>
                   <th className="px-5 py-3">Flags</th>

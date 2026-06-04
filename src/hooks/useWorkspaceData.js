@@ -2,12 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { auth, db } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
+const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+const isGlobalSuperAdminEmail = (email) => (email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
+
 const buildFallbackUserData = (user) => ({
     uid: user?.uid || '',
     email: user?.email || '',
     name: user?.displayName || (user?.email || '').split('@')[0] || 'User',
     isApproved: true,
-    isAdmin: false,
+    isAdmin: isGlobalSuperAdminEmail(user?.email),
     canCreateGroups: false,
     toolPreferences: {},
 });
@@ -32,6 +35,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
 
     const verifyAdminStatus = useCallback(async () => {
         if (!auth.currentUser) return false;
+        if (isGlobalSuperAdminEmail(auth.currentUser.email)) return true;
         try {
             const idTokenResult = await auth.currentUser.getIdTokenResult();
             return !!idTokenResult.claims.admin;
@@ -106,7 +110,12 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
 
         const unsubCurrent = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
             if (docSnapshot.exists()) {
-                const data = { uid: user.uid, email: user.email, ...docSnapshot.data() }; 
+                const data = { uid: user.uid, email: user.email, ...docSnapshot.data() };
+                if (isGlobalSuperAdminEmail(user.email)) {
+                    data.isAdmin = true;
+                    data.isApproved = true;
+                    data.roles = Array.from(new Set([...(data.roles || []), 'Super Admin']));
+                }
                 setCurrentUserData(data);
                 if (!profileForm.name && data.name) {
                     setProfileForm({
