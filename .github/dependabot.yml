@@ -1,0 +1,7 @@
+version: 2
+updates:
+  - package-ecosystem: "npm" # Looks at package.json
+    directory: "/"
+    schedule:
+      interval: "daily" # Scans every single day
+    open-pull-requests-limit: 5 # Stops it from spamming you with too many PRs
