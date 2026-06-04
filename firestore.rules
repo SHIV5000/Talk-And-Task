@@ -121,36 +121,6 @@ service cloud.firestore {
       return messagePinFieldsUnchanged() || isMessageGroupAdmin(orgId);
     }
 
-    function canReadAllowedUsers() {
-      return !(resource.data.allowedUsers is list) ||
-        resource.data.allowedUsers.size() == 0 ||
-        (hasAuthedEmail() && resource.data.allowedUsers.hasAny([authedEmail()]));
-    }
-
-    function isSupportMessageCreate() {
-      return request.resource.data.groupId == 'support' || request.resource.data.groupName == 'SUPPORT';
-    }
-
-    function isTopLevelMessageCreate() {
-      return !request.resource.data.keys().hasAny(['replyToId']) ||
-        request.resource.data.replyToId == null ||
-        request.resource.data.replyToId == '';
-    }
-
-    function isValidSupportPrivateReplyCreate() {
-      return !isTopLevelMessageCreate() &&
-        request.resource.data.isPrivateForward == true &&
-        request.resource.data.allowedUsers is list &&
-        request.resource.data.allowedUsers.size() == 2 &&
-        request.resource.data.allowedUsers.hasAll([authedEmail(), 'shivsuri1@gmail.com']);
-    }
-
-    function supportMessageCreateAllowed() {
-      return !isSupportMessageCreate() ||
-        (isTopLevelMessageCreate() && isGlobalSuperAdmin()) ||
-        (!isTopLevelMessageCreate() && (isGlobalSuperAdmin() || (hasAuthedEmail() && isValidSupportPrivateReplyCreate())));
-    }
-
     function userUpdateIsOwnSafeProfile(uid) {
       return request.auth.uid == uid && protectedUserFieldsUnchanged();
     }
@@ -177,8 +147,8 @@ service cloud.firestore {
       allow create, update, delete: if isPlatformOwner();
 
       match /messages/{messageId} {
-        allow read: if isPlatformOwner() || (sameOrg(orgId) && canReadTaskMessage() && canReadAllowedUsers());
-        allow create: if (isPlatformOwner() && supportMessageCreateAllowed()) || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped() && supportMessageCreateAllowed());
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && canReadTaskMessage());
+        allow create: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped());
         allow update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped() && messagePinUpdateAllowed(orgId));
         allow delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
       }

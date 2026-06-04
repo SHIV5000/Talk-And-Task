@@ -76,16 +76,9 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             const data = docSnapshot.data();
             return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
         };
-        const canReadAllowedUsers = (message) => {
-            if (!Array.isArray(message.allowedUsers) || message.allowedUsers.length === 0) return true;
-            return message.allowedUsers.includes(user.email) || isGlobalSupportAdmin;
-        };
-
-        const mergeAndPublish = (publicNonTaskDocs = [], privateNonTaskDocs = [], taskDocs = []) => {
-            const byId = new Map([...publicNonTaskDocs, ...privateNonTaskDocs, ...taskDocs].map(docSnapshot => [docSnapshot.id, normalizeMessage(docSnapshot)]));
-            const loadedMessages = Array.from(byId.values())
-                .filter(canReadAllowedUsers)
-                .sort((a, b) => (a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER) - (b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER));
+        const mergeAndPublish = (nonTaskDocs = [], taskDocs = []) => {
+            const byId = new Map([...nonTaskDocs, ...taskDocs].map(docSnapshot => [docSnapshot.id, normalizeMessage(docSnapshot)]));
+            const loadedMessages = Array.from(byId.values()).sort((a, b) => (a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER) - (b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER));
             setMessages(loadedMessages);
 
             if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
@@ -101,20 +94,15 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             prevMessagesCountRef.current = loadedMessages.length;
         };
 
-        let publicNonTaskDocs = [];
-        let privateNonTaskDocs = [];
+        let nonTaskDocs = [];
         let taskDocs = [];
-        const unsubPublicNonTasks = onSnapshot(query(orgCollection("messages"), where("isTask", "==", false), where("allowedUsers", "==", [])), (snapshot) => {
-            publicNonTaskDocs = snapshot.docs;
-            mergeAndPublish(publicNonTaskDocs, privateNonTaskDocs, taskDocs);
-        });
-        const unsubPrivateNonTasks = onSnapshot(query(orgCollection("messages"), where("isTask", "==", false), where("allowedUsers", "array-contains", user.email)), (snapshot) => {
-            privateNonTaskDocs = snapshot.docs;
-            mergeAndPublish(publicNonTaskDocs, privateNonTaskDocs, taskDocs);
+        const unsubNonTasks = onSnapshot(query(orgCollection("messages"), where("isTask", "==", false)), (snapshot) => {
+            nonTaskDocs = snapshot.docs;
+            mergeAndPublish(nonTaskDocs, taskDocs);
         });
         const unsubTasks = onSnapshot(query(orgCollection("messages"), where("taskData.visibleTo", "array-contains", user.email)), (snapshot) => {
             taskDocs = snapshot.docs;
-            mergeAndPublish(publicNonTaskDocs, privateNonTaskDocs, taskDocs);
+            mergeAndPublish(nonTaskDocs, taskDocs);
         });
 
         const unsubTyping = onSnapshot(orgCollection("typing"), (snapshot) => {
@@ -123,7 +111,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             setTypingStatus(currentTyping);
         });
 
-        return () => { unsubPublicNonTasks(); unsubPrivateNonTasks(); unsubTasks(); unsubTyping(); };
+        return () => { unsubNonTasks(); unsubTasks(); unsubTyping(); };
     }, [shouldLoadData, orgId, user?.uid, user?.email, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
 
     // ================== READ RECEIPTS ==================

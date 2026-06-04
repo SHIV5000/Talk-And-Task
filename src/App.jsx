@@ -7,7 +7,6 @@ import PackageList from './components/DeveloperConsole/Packages/PackageList.jsx'
 import StorageDashboard from './components/DeveloperConsole/Storage/StorageDashboard.jsx';
 import TenantList from './components/DeveloperConsole/Tenants/TenantList.jsx';
 import LiveUsers from './components/DeveloperConsole/LiveUsers.jsx';
-import GlobalDispatch from './components/DeveloperConsole/GlobalDispatch.jsx';
 import VersionManager from './components/DeveloperConsole/Version/VersionManager.jsx';
 import { notifyRuntimeEvent } from './utils/runtimeEventNotifier.js';
 
@@ -42,7 +41,6 @@ function getDeveloperConsoleContent(pathname, appVersion) {
   if (pathname.startsWith('/developer-hq/tenants')) return <TenantList />;
   if (pathname.startsWith('/developer-hq/storage')) return <StorageDashboard />;
   if (pathname.startsWith('/developer-hq/live-users')) return <LiveUsers />;
-  if (pathname.startsWith('/developer-hq/global-dispatch')) return <GlobalDispatch />;
   if (pathname.startsWith('/developer-hq/version')) return <VersionManager currentVersion={appVersion} />;
   return null;
 }
