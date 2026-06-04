@@ -1079,3 +1079,30 @@ exports.backfillPublicMessageVisibility = onCall(async (request) => {
   logger.info('Public message visibility backfill completed.', stats);
   return stats;
 });
+
+exports.toggleUserArchiveStatus = onCall(async (request) => {
+  await assertPermission(request, 'Users', 'update');
+  const { uid, isArchived } = request.data || {};
+  if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
+
+  try {
+    // 1. Physically disable or enable the user in Firebase Auth
+    await admin.auth().updateUser(uid, { disabled: !!isArchived });
+
+    // 2. Update the user document in Firestore
+    await db.collection('users').doc(uid).set({
+      isArchived: !!isArchived,
+      archivedAt: isArchived ? serverTimestamp() : null,
+      archivedBy: isArchived ? request.auth.uid : null,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    // 3. Log the audit event
+    await logAuditEvent(isArchived ? 'USER_ARCHIVE' : 'USER_UNARCHIVE', request.auth.uid, uid, { isArchived });
+
+    return { ok: true, uid, isArchived: !!isArchived };
+  } catch (error) {
+    logger.error('Failed to toggle user archive status', { uid, error });
+    throw new HttpsError('internal', error.message || 'Failed to update user status.');
+  }
+});
