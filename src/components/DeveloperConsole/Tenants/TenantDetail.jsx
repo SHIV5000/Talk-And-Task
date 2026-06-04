@@ -148,7 +148,7 @@ export default function TenantDetail({
         <DetailItem label="Admin Email" value={tenant.adminEmail} />
         <DetailItem label="Total Users" value={tenant.userCount} />
         <DetailItem label="Storage used" value={formatBytes(tenant.storageUsedBytes || tenant.storageUsed || tenant.storageBytes)} />
-        <DetailItem label="Storage Limit for Organization" value={storageLimitValue} />
+        <DetailItem label="Storage Limit for Organization" value={storageLimit === null || storageLimit === undefined || storageLimit === '' ? 'Package default' : formatBytes(storageLimit)} />
         <DetailItem label="Max users" value={maxUsers === null || maxUsers === undefined || maxUsers === '' ? 'Package default' : maxUsers} />
         <DetailItem label="Monthly Cost (INR incl. 18% GST)" value={formatINR(monthlyCost.total)} />
         <DetailItem label="Created" value={formatDateTime(tenant.createdAt)} />
