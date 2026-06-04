@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { formatMessageText } from '../../utils/helpers.js';
+import { validateMessagePayload } from '../../utils/messagePayload.js';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import useUserDisplayName from '../../hooks/useUserDisplayName.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -318,12 +319,16 @@ const MessageBubble = React.memo(({
     setTimeout(() => el.focus(), 0);
   };
 
-  const buildInlineReplyTarget = () => ({
+  const buildInlineReplyTarget = () => validateMessagePayload({
     ...msg,
     sender: msg.sender || msg.senderEmail,
     text: msg.text || msg.fileName || 'Attachment',
-    allowedUsers: Array.isArray(msg.allowedUsers) ? msg.allowedUsers : []
-  });
+    allowedUsers: Array.isArray(msg.allowedUsers) ? msg.allowedUsers : [],
+    seenBy: Array.isArray(msg.seenBy) ? msg.seenBy : [],
+    reactions: msg.reactions || {},
+    isTask: msg.isTask === true,
+    isPrivateForward: msg.isPrivateForward === true,
+  }, 'inline reply source message');
 
   const handleReplyAttachmentUpload = async (e) => {
     const file = e.target.files?.[0];

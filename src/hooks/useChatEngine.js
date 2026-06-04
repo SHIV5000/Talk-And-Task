@@ -4,6 +4,7 @@ import { collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, upd
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../utils/imageUtils.js';
 import { getEffectiveStorageLimitMB, toNumberOrNull } from '../utils/storageLimits.js';
+import { buildPrivateSupportReplyPayload, buildPublicMessagePayload } from '../utils/messagePayload.js';
 
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
@@ -156,7 +157,20 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             req.onsuccess = async () => {
                 for (const draft of req.result || []) {
                     try {
-                        await addDoc(orgCollection("messages"), { text: `[Recovered Draft] ${draft.text}`, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, hasReminder: false, isPrivateMention: false, isPrivateForward: false, allowedUsers: [], seenBy: [user.email], deliveredTo: [user.email], isPinned: false, bookmarkedBy: [], fileUrl: null, fileName: null, fileType: null, groupId: draft.groupId, ...(draft.groupName ? { groupName: draft.groupName } : {}), reactions: {} });
+                        await addDoc(orgCollection("messages"), buildPublicMessagePayload({
+                            text: `[Recovered Draft] ${draft.text}`,
+                            user,
+                            group: { id: draft.groupId, name: draft.groupName || activeGroup?.name || 'Recovered Draft' },
+                            timestamp: serverTimestamp(),
+                            deliveredTo: [user.email],
+                            isPinned: false,
+                            bookmarkedBy: [],
+                            fileUrl: null,
+                            fileName: null,
+                            fileType: null,
+                            hasReminder: false,
+                            isPrivateMention: false,
+                        }));
                         await deleteOfflineDraft(draft.id);
                     } catch(e) {}
                 }
@@ -206,7 +220,17 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         const hasTextMessage = !!(messageText || '').replace(/<br\s*\/?>/gi, '').trim();
         let groupMsgRef = null;
         if (hasTextMessage) {
-            groupMsgRef = await addDoc(orgCollection("messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, isPrivateMention: false, allowedUsers: [], mentionEmails: uniqueMentions, seenBy: [user.email], groupId: activeGroup.id, groupName: activeGroup.name, reactions: {}, isPrivateForward: false, ...(replyData || {}), ...supportRouting });
+            const buildPayload = supportRouting.isPrivateForward ? buildPrivateSupportReplyPayload : buildPublicMessagePayload;
+            groupMsgRef = await addDoc(orgCollection("messages"), buildPayload({
+                text: messageText,
+                user,
+                group: activeGroup,
+                timestamp: serverTimestamp(),
+                isPrivateMention: false,
+                mentionEmails: uniqueMentions,
+                ...(replyData || {}),
+                ...(supportRouting.isPrivateForward ? { allowedUsers: supportRouting.allowedUsers || [] } : {}),
+            }));
             logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, supportRouting.isPrivateForward ? `Private SUPPORT: ${(supportRouting.allowedUsers || []).join(', ')}` : (uniqueMentions.length ? `Mentions: ${uniqueMentions.join(', ')}` : "Public"));
         }
 
@@ -281,23 +305,18 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                     resolve();
                     return;
                 }
-                await addDoc(orgCollection("messages"), {
+                const buildPayload = supportRouting.isPrivateForward ? buildPrivateSupportReplyPayload : buildPublicMessagePayload;
+                await addDoc(orgCollection("messages"), buildPayload({
                     text: safeCaption.trim(),
-                    senderUid: user.uid,
-                    senderEmail: user.email,
-                    groupId: activeGroup.id,
-                    groupName: activeGroup.name,
+                    user,
+                    group: activeGroup,
+                    timestamp: serverTimestamp(),
                     fileUrl: downloadURL,
                     fileName: customName,
                     fileType: processedFile.type,
-                    timestamp: serverTimestamp(),
-                    isTask: false,
-                    seenBy: [user.email],
-                    isPrivateForward: false,
-                    allowedUsers: [],
                     ...replyData,
-                    ...supportRouting
-                });
+                    ...(supportRouting.isPrivateForward ? { allowedUsers: supportRouting.allowedUsers || [] } : {}),
+                }));
                 resolve();
             }
         );
@@ -305,8 +324,8 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 };
     const scheduleMessageDB = async (text, dt, isTask, taskData) => {
         const scheduledDate = new Date(dt);
-        const payload = { text, senderEmail: user.email, senderUid: user.uid, groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp() };
-        if (isTask && taskData) { payload.taskDeadline = taskData.deadline; payload.taskAssignees = taskData.assignees; }
+        const payload = { text, senderEmail: user.email, senderUid: user.uid, groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp(), allowedUsers: [], isPrivateForward: false };
+        if (isTask && taskData) { payload.taskData = taskData; payload.taskDeadline = taskData.deadline; payload.taskAssignees = taskData.assignees; }
         await addDoc(orgCollection("scheduled_messages"), payload);
     };
 
