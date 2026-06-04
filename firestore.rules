@@ -6,8 +6,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isGlobalSuperAdmin() {
+      return signedIn() && request.auth.token.email == 'shivsuri1@gmail.com';
+    }
+
     function isPlatformOwner() {
-      return signedIn() && request.auth.token.platformOwner == true;
+      return signedIn() && (request.auth.token.platformOwner == true || isGlobalSuperAdmin());
     }
 
     function hasOrgClaim() {

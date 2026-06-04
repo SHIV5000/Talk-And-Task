@@ -9,6 +9,8 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
+const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+
 const TASK_DTF = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
 const formatTaskDateTime = (value) => { if (!value) return 'N/A'; const d = new Date(value); if (Number.isNaN(d.getTime())) return 'N/A'; return TASK_DTF.format(d).replace(',', '').replace(/ /g, '-').replace(/-(\d{2}:\d{2})-/, ' $1 '); };
 
@@ -102,9 +104,12 @@ const MessageBubble = React.memo(({
   const canUseWorkerControls = isAssignee && !isTaskCompleted && !ackRequiredLocked && !isTaskReadOnlyForMe;
   const statusBadgeText = isTransferredOutForMe ? 'Task Transferred' : isTransferredInForMe ? 'Transferred Task' : isAcceptedForMe ? 'Completed' : isNeedsReviewForMe ? 'Under Review by Me' : isRevokedForMe ? 'Revoked' : isSubmittedForReviewMe ? 'Sent for Review' : msg.taskData?.status;
   const statusBadgeClass = isTransferredOutForMe ? 'bg-[#800020]/10 text-[#800020] border-[#800020]/30' : isTransferredInForMe ? 'bg-purple-50 text-purple-700 border-purple-200' : isAcceptedForMe ? 'bg-teal-50 text-teal-700 border-teal-200' : isNeedsReviewForMe ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : isRevokedForMe ? 'bg-rose-50 text-rose-700 border-rose-200' : isSubmittedForReviewMe ? 'bg-amber-50 text-amber-700 border-amber-200' : msg.taskData?.status === 'Completed' ? 'bg-teal-50 text-teal-700 border-teal-200' : msg.taskData?.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200';
-  const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin;
+  const normalizedUserEmail = (userEmail || '').toLowerCase();
+  const isGlobalSuperAdmin = normalizedUserEmail === GLOBAL_SUPER_ADMIN_EMAIL;
+  const isGroupAdmin = (activeGroup?.admins || []).some((email) => (email || '').toLowerCase() === normalizedUserEmail);
+  const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin || isGlobalSuperAdmin;
   const canEditTask = (!isTaskCompleted || isSuperAdmin) && isCreator;
-  const canPinItem = currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(userEmail) || (msg.isTask && msg.senderEmail === userEmail);
+  const canPinItem = isGlobalSuperAdmin || isGroupAdmin;
   const bubbleWidthClass = isThreadView ? 'w-full max-w-full' : 'w-[80%] max-w-[80%]';
   const taskShellClass = msg.isTask ? 'border-2 border-indigo-100 border-l-[6px] rounded-2xl' : '';
   const taskVisibleTo = useMemo(() => [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...(msg.taskData?.assignees || [])].filter(Boolean))], [msg.senderEmail, msg.taskData?.masterReviewerEmail, msg.taskData?.assignees]);

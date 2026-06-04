@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
+const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+
 const DAY_FMT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
 const formatDayLabel = (value) => {
   if (!value) return '';
@@ -23,6 +25,11 @@ export default function ChatView({
   customTags, setActiveReplies, setActiveTaskSidebar, featureFlags = {}
 }) {
   const [expandedThreads, setExpandedThreads] = useState({});
+  const userEmail = (user?.email || '').toLowerCase();
+  const canManagePinnedMessages =
+    userEmail === GLOBAL_SUPER_ADMIN_EMAIL ||
+    (activeGroup?.admins || []).some((email) => (email || '').toLowerCase() === userEmail);
+  const pinnedTooltip = canManagePinnedMessages ? 'Unpin message' : 'Only admins can unpin';
 
   // Inject pinned banner glow CSS
   useEffect(() => {
@@ -131,6 +138,19 @@ export default function ChatView({
           >
             <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-300 font-medium mb-1">
               <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (canManagePinnedMessages) handleTogglePin?.(pinnedMessages[0]);
+                }}
+                disabled={!canManagePinnedMessages}
+                title={pinnedTooltip}
+                aria-label={pinnedTooltip}
+                className={`relative z-20 inline-flex h-6 w-6 items-center justify-center rounded-full border text-[10px] transition-colors ${canManagePinnedMessages ? 'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200 dark:hover:bg-rose-500/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-70 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500'}`}
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
             </div>
             <div className="text-sm text-slate-800 dark:text-slate-100 line-clamp-1 truncate font-medium">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
           </div>

@@ -28,6 +28,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 const formatNotificationTime = (value) => { const date = value?.toDate ? value.toDate() : value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return ''; const diff = Date.now() - date.getTime(); if (diff < 60000) return 'Just now'; if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`; return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 const getSnoozeDate = (mode) => { const date = new Date(); if (mode === '15m') date.setMinutes(date.getMinutes() + 15); else if (mode === '1h') date.setHours(date.getHours() + 1); else { date.setHours(17, 0, 0, 0); if (date <= new Date()) date.setDate(date.getDate() + 1); } return date; };
+const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
   teal: '#0f766e',
@@ -54,6 +55,10 @@ const DEFAULT_FEATURE_FLAGS = {
   apiAccess: true,
   auditLogs: true,
   prioritySupport: true,
+  usersTab: true,
+  departmentsTab: true,
+  broadcasts: true,
+  organizationSettings: true,
 };
 
 const normalizeFeatureFlags = (flags = {}) => ({
@@ -574,7 +579,17 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         globalAnnouncement
     } = useWorkspaceData(user, profileForm, setProfileForm, orgId);
 
+    const isGlobalSuperAdmin = (user?.email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
+    const effectiveIsVipAdmin = isVipAdmin || isGlobalSuperAdmin;
+    const effectiveCurrentUserData = useMemo(() => ({
+        ...(currentUserData || {}),
+        isAdmin: currentUserData?.isAdmin || isGlobalSuperAdmin,
+        isApproved: currentUserData?.isApproved !== false || isGlobalSuperAdmin,
+        roles: isGlobalSuperAdmin ? Array.from(new Set([...(currentUserData?.roles || []), 'Super Admin'])) : currentUserData?.roles,
+    }), [currentUserData, isGlobalSuperAdmin]);
+
     const featureFlags = useMemo(() => normalizeFeatureFlags(currentUserData?.featureFlags), [currentUserData?.featureFlags]);
+    const shouldLoadChatData = viewMode === 'chat' && !isWorkspaceLoading && featureFlags.chat !== false;
 
     useEffect(() => {
         const root = document.documentElement;
@@ -595,7 +610,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     } = useChatEngine({
         orgId,
-        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData
+        user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb: MAX_FILE_SIZE_MB, currentUserData: effectiveCurrentUserData
     });
 
 
@@ -784,8 +799,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [orgId, messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
 
     const myGroups = useMemo(() => {
-        // Implicitly include "Welcome" or "General" groups for everyone so a default group is always present
-        let filtered = groups.filter(g => (g.members?.includes(user.email) || g.name === "Welcome" || g.name === "General") && !g.isArchived);
+        // Implicitly include default departments and the tenant-wide SUPPORT department for every signed-in member.
+        let filtered = groups.filter(g => (g.members?.includes(user.email) || g.name === "Welcome" || g.name === "General" || g.name === "SUPPORT" || g.isSupport === true || g.id === "support") && !g.isArchived);
         if (sidebarSearch) filtered = filtered.filter(g => g.name.toLowerCase().includes(sidebarSearch.toLowerCase()));
         return filtered;
     }, [groups, user.email, sidebarSearch]);
@@ -1317,7 +1332,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         e.preventDefault();
         try {
             const finalMembers = [...new Set([...groupForm.members, ...(activeGroup?.admins || [])])];
-            await updateDoc(doc(db, "groups", activeGroup.id), { members: finalMembers });
+            await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), { members: finalMembers });
             setActiveModal(null);
             setActiveGroup(prev => ({...prev, members: finalMembers}));
         } catch (error) {
@@ -1331,8 +1346,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         try {
             const finalMembers = [...new Set([...groupForm.members, user.email])];
             const groupData = { name: groupForm.name, members: finalMembers, profilePicUrl: groupForm.profilePicUrl };
-            if (editingGroup) await updateDoc(doc(db, "groups", editingGroup.id), groupData);
-            else await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
+            if (editingGroup) await updateDoc(doc(db, "organizations", orgId, "groups", editingGroup.id), groupData);
+            else await addDoc(collection(db, "organizations", orgId, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
             setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
         } catch (error) { alert("Failed to save department."); }
     };
@@ -1347,7 +1362,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), groupFile);
             uploadTask.on('state_changed', null, null, async () => {
                 const url = await getDownloadURL(uploadTask.snapshot.ref);
-                await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
+                await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), { profilePicUrl: url });
                 setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
                 setActiveModal(null);
             });
@@ -1358,9 +1373,9 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         if (updates.members) { cleanUpdates.members = updates.members; cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a)); }
         if (Object.keys(cleanUpdates).length === 0) return;
         setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
-        await updateDoc(doc(db, "groups", activeGroup.id), cleanUpdates);
+        await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), cleanUpdates);
         setActiveModal(null);
-    }, [activeGroup, storage, db, setActiveModal]);
+    }, [activeGroup, orgId, storage, db, setActiveModal]);
 
     const handleProfileSubmit = async (e) => {
         e.preventDefault();
@@ -1414,7 +1429,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         setProfileUploadProgress, handleProfileSubmit, toolPreferences,
         setToolPreferences, user, groupForm, setGroupForm, editingGroup,
         handleGroupSubmit, groupPicInputRef, handleGroupPicUpload,
-        groupPicUploadProgress, dbUsers, activeGroup, isVipAdmin, customTags,
+        groupPicUploadProgress, dbUsers, activeGroup, isVipAdmin: effectiveIsVipAdmin, customTags,
         handleUpdateGroupMembers, onGroupUpdate, isEditingTaskTitle,
         setIsEditingTaskTitle, newTaskTitle, setNewTaskTitle, handleSaveTaskTitle,
         delegateAssignees, setDelegateAssignees, showDelegateDropdown,
@@ -1434,7 +1449,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     };
 
 // NEW: Block users entirely if their Gmail isn't mapped to an Organization
-    if (currentUserData && !currentUserData.orgId && !currentUserData.isAdmin && !isVipAdmin) {
+    if (currentUserData && !currentUserData.orgId && !effectiveCurrentUserData.isAdmin && !effectiveIsVipAdmin) {
         return (
             <div className="flex items-center justify-center h-screen bg-slate-50 p-4 text-slate-800">
                 <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 border-t-8 border-rose-600 text-center transform-gpu hover:scale-105 transition-transform">
@@ -1449,7 +1464,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         );
     }
   
-    if (currentUserData && currentUserData.isApproved !== true && !currentUserData.isAdmin && !isVipAdmin) {
+    if (currentUserData && currentUserData.isApproved !== true && !effectiveCurrentUserData.isAdmin && !effectiveIsVipAdmin) {
         return (
             <div className="flex items-center justify-center h-screen bg-slate-50 p-4 text-slate-800">
                 <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 border-t-8 border-indigo-600 text-center transform-gpu hover:scale-105 transition-transform">
@@ -1460,24 +1475,6 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 </div>
             </div>
         );
-    }
-
-    if (isWorkspaceLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center h-screen w-full bg-slate-50 fixed inset-0 z-50">
-          <div className="relative mb-8">
-            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 animate-pulse flex items-center justify-center shadow-2xl">
-              <i className="fa-solid fa-list-check text-4xl text-white drop-shadow-lg"></i>
-            </div>
-            <div className="absolute -inset-3 border-4 border-indigo-500/20 border-t-indigo-600 rounded-full animate-spin"></div>
-          </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-3 tracking-tight">Talk & Task</h2>
-          <div className="w-56 h-2 bg-slate-200 rounded-full overflow-hidden mb-6">
-            <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-teal-500 animate-loading-bar rounded-full"></div>
-          </div>
-          <div className="text-slate-500 text-sm font-medium italic">{currentTip}</div>
-        </div>
-      );
     }
 
     return (
@@ -1558,8 +1555,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                   handleGroupPicUpload={handleGroupPicUpload}
                   groupPicUploadProgress={groupPicUploadProgress}
                   globalAnnouncement={globalAnnouncement}
-                  currentUserData={currentUserData}
-                  isVipAdmin={isVipAdmin}
+                  currentUserData={effectiveCurrentUserData}
+                  isVipAdmin={effectiveIsVipAdmin}
                   maxFileSizeMb={MAX_FILE_SIZE_MB}
                   setMaxFileSizeMb={setMaxFileSizeMb}
                   featureFlags={featureFlags}
@@ -1569,10 +1566,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 ) : (
                     <div className="flex h-full w-full relative">
                         <LeftSidebar sidebarWidth={leftWidth}
-                            user={user} currentUserData={currentUserData} myGroups={myGroups} dmUsers={dmUsers} activeGroup={activeGroup} setActiveGroup={setActiveGroup}
+                            user={user} currentUserData={effectiveCurrentUserData} myGroups={myGroups} dmUsers={dmUsers} activeGroup={activeGroup} setActiveGroup={setActiveGroup}
                             setShowRightSidebar={setShowRightSidebar} setMobileSidebarOpen={setMobileSidebarOpen} getUnreadInfoForUser={getUnreadInfoForUser}
                             getUnreadInfoForGroup={getUnreadInfoForGroup} messages={messages} onLogout={onLogout} setActiveModal={setActiveModal} setGroupForm={setGroupForm} setEditingGroup={setEditingGroup}
-                            sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={isVipAdmin} setViewMode={setViewMode}
+                            sidebarSearch={sidebarSearch} setSidebarSearch={setSidebarSearch} mobileSidebarOpen={mobileSidebarOpen} isVipAdmin={effectiveIsVipAdmin} setViewMode={setViewMode}
                             isMobileHome={!activeGroup}
                             featureFlags={featureFlags}
                         />
@@ -1712,7 +1709,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                         )}
                                       </div>
 
-                                      {(currentUserData?.isAdmin || isVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
+                                      {(effectiveCurrentUserData?.isAdmin || effectiveIsVipAdmin) && <button onClick={handleWipeAllTasks} className="ml-2 bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-100 uppercase tracking-wider">Wipe DB</button>}
 
                                     </div>
                                 </div>
@@ -1742,8 +1739,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                 </button>
 
                                 <ChatView
-                                    messagesToRender={messagesToRender} messages={messages} activeGroup={activeGroup} user={user} currentUserData={currentUserData}
-                                    isVipAdmin={isVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo} setReplyingTo={setReplyingTo}
+                                    messagesToRender={messagesToRender} messages={messages} activeGroup={activeGroup} user={user} currentUserData={effectiveCurrentUserData}
+                                    isVipAdmin={effectiveIsVipAdmin} pinnedMessages={pinnedMessages} typingStatus={typingStatus} replyingTo={replyingTo} setReplyingTo={setReplyingTo}
                                     toolPreferences={toolPreferences} dbUsers={dbUsers} groups={groups} setActiveGroup={setActiveGroup} setShowRightSidebar={setShowRightSidebar}
                                     setMobileSidebarOpen={setMobileSidebarOpen} pendingScrollTarget={pendingScrollTarget} setPendingScrollTarget={setPendingScrollTarget}
                                     setActiveModal={setActiveModal} scrollToMessageDirect={scrollToMessageDirect} handleReaction={handleReactionIntercept}
@@ -1774,7 +1771,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                     }}
                                     setActiveModal={setActiveModal}
                                     setPendingScheduledText={setPendingScheduledText} offlineDrafts={offlineDrafts} user={user} dbUsers={dbUsers}
-                                    groups={groups} currentUserData={currentUserData} MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB} uploadProgress={uploadProgress} handleSendPendingFiles={handleSendPendingFiles}
+                                    groups={groups} currentUserData={effectiveCurrentUserData} MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB} uploadProgress={uploadProgress} handleSendPendingFiles={handleSendPendingFiles}
                                 />
                             </div>
                         )}
@@ -1784,7 +1781,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize task sidebar" />
                             <TaskSidebar
                                 activeTask={activeTaskSidebar} setActiveTask={setActiveTaskSidebar} messages={messages} user={user}
-                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleReactionIntercept={handleReactionIntercept}
+                                currentUserData={effectiveCurrentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={effectiveIsVipAdmin} handleReactionIntercept={handleReactionIntercept}
                                 deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} customTags={customTags}
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
@@ -1794,7 +1791,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                             <div className="hidden md:block app-resizer" onMouseDown={startResize('right')} title="Resize replies sidebar" />
                             <RepliesSidebar
                                 activeReplies={activeReplies} setActiveReplies={setActiveReplies} messages={messages} user={user}
-                                currentUserData={currentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={isVipAdmin} handleReactionIntercept={handleReactionIntercept}
+                                currentUserData={effectiveCurrentUserData} dbUsers={dbUsers} groups={groups} activeGroup={activeGroup} isVipAdmin={effectiveIsVipAdmin} handleReactionIntercept={handleReactionIntercept}
                                 deleteMessageDB={deleteMessageDB} setActiveModal={setActiveModal} sendMessageToDB={sendMessageToDB} handleToggleBookmark={(m) => toggleBookmarkDB(m.id, m.bookmarkedBy)} handleTogglePin={(m) => togglePinDB(m.id, m.isPinned)} customTags={customTags}
                                 toolPreferences={toolPreferences} setReplyingTo={setReplyingTo} setSelectedMessage={setSelectedMessage} chatInputRef={chatInputRef} sidebarWidth={rightWidth}
                             />
@@ -1806,7 +1803,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={currentUserData} appVersion={appVersion}
+                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={effectiveCurrentUserData} appVersion={appVersion}
                             />
                           </>
                         ) : null}
