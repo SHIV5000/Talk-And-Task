@@ -14,6 +14,13 @@ const formatTaskDateTime = (value) => { if (!value) return 'N/A'; const d = new 
 
 const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
+const normalizeBasicRichText = (value = '') => String(value)
+  .replace(/<\s*(b|strong)\s*>(.*?)<\s*\/\s*(b|strong)\s*>/gis, '*$2*')
+  .replace(/<\s*(i|em)\s*>(.*?)<\s*\/\s*(i|em)\s*>/gis, '_$2_')
+  .replace(/<\s*u\s*>(.*?)<\s*\/\s*u\s*>/gis, '$1');
+const renderBasicRichText = (value = '') => ({ __html: formatMessageText(normalizeBasicRichText(value)) });
+const plainTaskText = (value = '') => normalizeBasicRichText(value).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
+
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
   hasReplies, replyCount, isHighlighted, isUnreadHighlight,
@@ -75,7 +82,7 @@ const MessageBubble = React.memo(({
     .filter(u => !activeGroup?.members || activeGroup.members.includes(u.email))
     .sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''));
 
-  const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail) || currentUserData?.isAdmin || isVipAdmin);
+  const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail));
   const isAssignee = msg.isTask && msg.taskData?.assignees?.includes(userEmail);
   const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
   const assigneeStates = msg.taskData?.assigneeStates || {};
@@ -100,6 +107,7 @@ const MessageBubble = React.memo(({
   const canPinItem = currentUserData?.isAdmin || isVipAdmin || activeGroup?.admins?.includes(userEmail) || (msg.isTask && msg.senderEmail === userEmail);
   const bubbleWidthClass = isThreadView ? 'w-full max-w-full' : 'w-[80%] max-w-[80%]';
   const taskShellClass = msg.isTask ? 'border-2 border-indigo-100 border-l-[6px] rounded-2xl' : '';
+  const taskVisibleTo = useMemo(() => [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...(msg.taskData?.assignees || [])].filter(Boolean))], [msg.senderEmail, msg.taskData?.masterReviewerEmail, msg.taskData?.assignees]);
   const activeAssignees = (msg.taskData?.assignees || []).filter(e => !['revoked', 'transferred_out'].includes(assigneeStates[e]));
   const allAccepted = activeAssignees.length > 0 && activeAssignees.every(e => assigneeStates[e] === 'accepted_completed');
 
@@ -188,7 +196,7 @@ const MessageBubble = React.memo(({
 
   const handleInlineSaveTitle = async () => {
     if (!tempTitle.trim()) return setIsEditingTitle(false);
-    try { await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { text: tempTitle }); setIsEditingTitle(false); } catch(e) {}
+    try { await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { text: plainTaskText(tempTitle).trim() || "Task" }); setIsEditingTitle(false); } catch(e) {}
   };
 
   const submitInlineUpdate = async () => {
@@ -253,7 +261,7 @@ const MessageBubble = React.memo(({
       const nextAssignees = Array.from(new Set([...oldAssignees, ...delegateSelection]));
       const nextStates = { ...(msg.taskData?.assigneeStates || {}) };
       delegateSelection.forEach(e => { if (!nextStates[e] || ['revoked', 'transferred_out'].includes(nextStates[e])) nextStates[e] = 'assigned'; });
-      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.assignees": nextAssignees, "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
+      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.assignees": nextAssignees, "taskData.visibleTo": [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...nextAssignees].filter(Boolean))], "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
       for (const em of delegateSelection) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: "task", text: `Delegated task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       notifyTaskChange(`${getUserName(userEmail)} delegated task support to ${toNames}.`);
       logTaskAudit("worker_delegate");
@@ -432,7 +440,7 @@ const MessageBubble = React.memo(({
       const mergedAssignees = Array.from(new Set([...(msg.taskData?.assignees || []), ...state.transferTo]));
       const transferNames = state.transferTo.map(getUserName).join(', ');
       const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} transferred task from ${getUserName(assigneeEmail)} to ${transferNames}.`, by: userEmail, time: now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: transferNames, comment: state.transferComment.trim() }];
-      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { 'taskData.assignees': mergedAssignees, 'taskData.assigneeStates': nextStates, 'taskData.status': 'In Progress', 'taskData.trail': newTrail });
+      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { 'taskData.assignees': mergedAssignees, 'taskData.visibleTo': [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...mergedAssignees].filter(Boolean))], 'taskData.assigneeStates': nextStates, 'taskData.status': 'In Progress', 'taskData.trail': newTrail });
       for (const em of [assigneeEmail, ...state.transferTo]) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: 'task', text: em===assigneeEmail ? `Task transferred from you: "${msg.text}"` : `Transferred task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       closeReviewAction(assigneeEmail);
       playTaskSound();
@@ -494,7 +502,7 @@ const MessageBubble = React.memo(({
                         </div>
                         <div className={`text-[11px] font-bold flex items-center gap-3 flex-wrap shrink-0 ${isTaskCompleted ? 'text-slate-400' : 'text-slate-500'}`}>
                           <span><i className="fa-regular fa-calendar-check mr-1"></i>Due {formatTaskDateTime(msg.taskData.deadline)}</span>
-                          <span title="Visible only to the master reviewer and assigned workers"><i className="fa-solid fa-lock mr-1"></i>Concerned only</span>
+                          <span title="Visible only to you and assignees."><i className="fa-solid fa-lock mr-1"></i>Visible only to you and assignees</span>
                         </div>
                       </div>
                       
@@ -506,7 +514,7 @@ const MessageBubble = React.memo(({
                         </div>
                       ) : (
                         <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskCompleted ? 'text-slate-500' : 'text-slate-800'}`}>
-                          {msg.text}
+                          <span dangerouslySetInnerHTML={renderBasicRichText(msg.text)}></span>
                           {canEditTask && isTaskParticipant && <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer ml-2 opacity-0 group-hover/title:opacity-100 transition-opacity" onClick={(e)=>{e.stopPropagation(); setIsEditingTitle(true);}}></i>}
                         </p>
                       )}
@@ -543,12 +551,12 @@ const MessageBubble = React.memo(({
                     </div>
 
                     {canUseWorkerControls && (
-                        <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end">
+                        <div className="bg-slate-50 border-t border-slate-200 p-2 flex flex-wrap gap-2 items-center justify-end" onClick={(e) => e.stopPropagation()}>
                            <input type="file" ref={inlineFileInputRef} className="hidden" onChange={handleInlineFileUpload} />
                            {trailFileUploading && <div className="mr-2 min-w-[120px]"><div className="h-1.5 bg-slate-200 rounded"><div className="h-full bg-indigo-600 rounded" style={{ width: `${Math.round(trailUploadProgress)}%` }} /></div><span className="text-[10px] font-bold text-indigo-500">Uploading {Math.round(trailUploadProgress)}%</span></div>}
                            
                            {isDelegating ? (
-                              <div className="bg-white border-2 border-slate-300 rounded-lg p-2 shadow-sm w-full space-y-2">
+                              <div className="bg-white border-2 border-slate-300 rounded-lg p-2 shadow-sm w-full space-y-2" onClick={(e) => e.stopPropagation()}>
                                  <input value={delegateSearch} onChange={(e)=>setDelegateSearch(e.target.value)} placeholder="Search users to delegate..." className="w-full text-[11px] border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none" />
                                  <div className="max-h-32 overflow-y-auto grid grid-cols-1 gap-1">
                                    {sortedGroupUsers.filter(u => u.email !== userEmail && (u.name || u.email || '').toLowerCase().includes(delegateSearch.toLowerCase())).map(u => (
@@ -565,11 +573,11 @@ const MessageBubble = React.memo(({
                                  </div>
                               </div>
                            ) : isAddingUpdate ? (
-                              <div className="bg-white border-2 border-slate-300 rounded-xl p-2 shadow-sm w-full space-y-2">
+                              <div className="bg-white border-2 border-slate-300 rounded-xl p-2 shadow-sm w-full space-y-2" onClick={(e) => e.stopPropagation()}>
                                  <div className="flex gap-1 text-[10px] font-black text-slate-500">
                                    <button onClick={()=>applyInlineUpdateFormat('b')} className="px-2 py-1 rounded bg-slate-100">B</button><button onClick={()=>applyInlineUpdateFormat('i')} className="px-2 py-1 rounded bg-slate-100 italic">I</button><button onClick={()=>applyInlineUpdateFormat('u')} className="px-2 py-1 rounded bg-slate-100 underline">U</button><button onClick={()=>applyInlineUpdateFormat('emoji')} className="px-2 py-1 rounded bg-slate-100">🙂</button>
                                  </div>
-                                 <textarea ref={inlineUpdateRef} rows={2} value={inlineUpdateText} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type update — Enter posts, Shift+Enter adds new line" className="w-full text-[12px] p-1 outline-none font-medium text-slate-700 resize-none" autoFocus onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
+                                 <textarea ref={inlineUpdateRef} rows={2} value={inlineUpdateText} onClick={(e) => e.stopPropagation()} onChange={e=>setInlineUpdateText(e.target.value)} placeholder="Type update — Enter posts, Shift+Enter adds new line" className="w-full text-[12px] p-1 outline-none font-medium text-slate-700 resize-none" autoFocus onKeyDown={(e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitInlineUpdate(); } }} />
                                  <div className="flex justify-end gap-2"><button onClick={submitInlineUpdate} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-full font-bold hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-md transition-all">Post</button>
                                  <button onClick={()=>setIsAddingUpdate(false)} className="text-xs text-slate-500 hover:text-rose-500 px-2 font-bold transition-colors">Cancel</button></div>
                               </div>
@@ -730,7 +738,7 @@ const MessageBubble = React.memo(({
                                       <span className="text-[10px] font-bold text-slate-400">{t.time?.split(',')[0]}</span>
                                     </div>
                                     <div className="text-[13px] text-slate-600 leading-snug break-words">
-                                      <span className="font-semibold">{formatTrailAction(t)}</span>
+                                      <span className="font-semibold" dangerouslySetInnerHTML={renderBasicRichText(formatTrailAction(t))}></span>
                                       {t.fileUrl && (
                                           <div className="mt-2 flex items-center gap-2 p-1.5 border-2 border-slate-300 rounded-md bg-slate-50 cursor-pointer hover:bg-slate-100 relative" onClick={() => window.open(t.fileUrl, '_blank')}>
                                              <i className="fa-solid fa-file text-indigo-500 text-lg"></i>
@@ -807,6 +815,7 @@ const MessageBubble = React.memo(({
 
         <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-end justify-between gap-3 w-full">
             <div className="flex flex-wrap items-center gap-1.5 flex-1">
+                {msg.isTask && <span title="Visible only to you and assignees." className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-500"><i className="fa-solid fa-lock"></i>Private task</span>}
                 {Object.entries(msg.reactions || {}).map(([tagLabel, users]) => {
                     const isEmoji = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(tagLabel) || STANDARD_EMOJIS.includes(tagLabel);
                     const isMe = users.includes(userEmail);
@@ -844,7 +853,7 @@ const MessageBubble = React.memo(({
                         </button>
                         
                         {tagPickerOpen && (
-                            <div className="absolute bottom-full left-0 mb-1 z-[130] bg-white rounded-xl shadow-xl border-2 border-slate-300 p-3 w-56 max-h-72 overflow-y-auto custom-sidebar-scroll animate-in fade-in zoom-in-95" onClick={e=>e.stopPropagation()}>
+                            <div className="absolute bottom-full left-0 mb-1 z-[130] bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-300 dark:border-slate-700 p-3 w-56 max-h-72 overflow-y-auto custom-sidebar-scroll scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 animate-in fade-in zoom-in-95" onClick={e=>e.stopPropagation()}>
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1"><i className="fa-solid fa-bolt mr-1"></i> Frequent</div>
                                 <div className="flex flex-col gap-1.5 mb-3">
                                     {(toolPreferences?.quickTags || ['#Approved', '#Reviewing', '#ActionRequired', '#Noted']).map(tagLabel => {
@@ -913,10 +922,10 @@ const MessageBubble = React.memo(({
                       {replyCount > 0 && <button onClick={(e) => { e.stopPropagation(); onToggleThread?.(); }} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-lg transition-colors border border-indigo-200 shadow-sm w-fit group/threadbtn"><i className="fa-solid fa-comments group-hover/threadbtn:scale-110 transition-transform"></i> {threadExpanded ? 'Hide' : 'Show'} {replyCount} Replies</button>}
                       {msgReplyUploadProgress > 0 && <span className="text-[10px] font-bold text-indigo-500">Uploading {Math.round(msgReplyUploadProgress)}%</span>}
                     {inlineReplyOpen && (
-                      <div className="w-full mt-2 rounded-xl border border-slate-200 bg-white p-2 text-left">
-                        {replyFormatOpen && <div className="flex gap-1 mb-1"><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('bold');}} className="px-2 py-1 text-[10px] font-black bg-slate-100 rounded">B</button><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('italic');}} className="px-2 py-1 text-[10px] italic bg-slate-100 rounded">I</button><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('underline');}} className="px-2 py-1 text-[10px] underline bg-slate-100 rounded">U</button><button onMouseDown={(e)=>{e.preventDefault(); document.execCommand('insertText', false, '🙂');}} className="px-2 py-1 text-[10px] bg-slate-100 rounded">🙂</button></div>}
-                        <div ref={inlineReplyRef} contentEditable onMouseUp={()=>setReplyFormatOpen(!!window.getSelection()?.toString())} onKeyUp={()=>setReplyFormatOpen(!!window.getSelection()?.toString())} onInput={()=>setInlineReplyText(inlineReplyRef.current?.innerHTML || '')} onKeyDown={(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendInlineReply(); } }} className="min-h-[38px] max-h-40 overflow-y-auto resize-y outline-none text-[13px] text-slate-700 whitespace-pre-wrap break-words leading-relaxed" data-placeholder="Reply inline..." suppressContentEditableWarning />
-                        <div className="flex justify-end gap-2 mt-1"><button onClick={()=>setInlineReplyOpen(false)} className="text-[11px] font-bold text-slate-400">Cancel</button><button onClick={sendInlineReply} className="min-w-[58px] h-8 px-3 rounded-lg text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700">Send</button></div>
+                      <div className="w-full max-w-full mt-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-left">
+                        {replyFormatOpen && <div className="flex gap-1 mb-1"><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('bold');}} className="px-2 py-1 text-[10px] font-black bg-slate-100 dark:bg-slate-800 dark:text-slate-100 rounded">B</button><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('italic');}} className="px-2 py-1 text-[10px] italic bg-slate-100 dark:bg-slate-800 dark:text-slate-100 rounded">I</button><button onMouseDown={(e)=>{e.preventDefault(); applyReplyFormat('underline');}} className="px-2 py-1 text-[10px] underline bg-slate-100 dark:bg-slate-800 dark:text-slate-100 rounded">U</button><button onMouseDown={(e)=>{e.preventDefault(); document.execCommand('insertText', false, '🙂');}} className="px-2 py-1 text-[10px] bg-slate-100 dark:bg-slate-800 rounded">🙂</button></div>}
+                        <div ref={inlineReplyRef} contentEditable onMouseUp={()=>setReplyFormatOpen(!!window.getSelection()?.toString())} onKeyUp={()=>setReplyFormatOpen(!!window.getSelection()?.toString())} onInput={()=>setInlineReplyText(inlineReplyRef.current?.innerHTML || '')} onKeyDown={(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendInlineReply(); } }} className="min-h-[44px] max-h-40 max-w-full overflow-y-auto resize-y outline-none text-[13px] text-slate-700 dark:text-slate-100 whitespace-pre-wrap break-words [overflow-wrap:break-word] [word-wrap:break-word] leading-relaxed rounded-lg px-2 py-1" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordWrap: 'break-word' }} data-placeholder="Reply inline..." suppressContentEditableWarning />
+                        <div className="flex justify-end gap-2 mt-2"><button onClick={()=>setInlineReplyOpen(false)} className="min-w-[72px] h-8 px-3 rounded-lg border border-slate-300 bg-white text-[11px] font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 transition-colors">Cancel</button><button onClick={sendInlineReply} className="min-w-[72px] h-8 px-3 rounded-lg text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-colors">Send</button></div>
                       </div>
                     )}
                     </div>

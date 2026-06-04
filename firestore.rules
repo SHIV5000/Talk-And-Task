@@ -74,6 +74,33 @@ service cloud.firestore {
       return sameOrg(orgId) && orgExists(orgId) && !orgIsSuspended(orgId);
     }
 
+    function hasAuthedEmail() {
+      return signedIn() && request.auth.token.email is string;
+    }
+
+    function authedEmail() {
+      return request.auth.token.email;
+    }
+
+    function canReadTaskMessage() {
+      return resource.data.isTask != true ||
+        (hasAuthedEmail() && (
+          resource.data.senderEmail == authedEmail() ||
+          (resource.data.taskData.assignees is list && resource.data.taskData.assignees.hasAny([authedEmail()])) ||
+          (resource.data.taskData.visibleTo is list && resource.data.taskData.visibleTo.hasAny([authedEmail()]))
+        ));
+    }
+
+    function taskMessageWriteIsScoped() {
+      return request.resource.data.isTask != true ||
+        (
+          request.resource.data.taskData.assignees is list &&
+          request.resource.data.taskData.visibleTo is list &&
+          request.resource.data.taskData.visibleTo.hasAll([request.resource.data.senderEmail]) &&
+          request.resource.data.taskData.visibleTo.hasAll(request.resource.data.taskData.assignees)
+        );
+    }
+
     function userUpdateIsOwnSafeProfile(uid) {
       return request.auth.uid == uid && protectedUserFieldsUnchanged();
     }
@@ -98,6 +125,12 @@ service cloud.firestore {
     match /organizations/{orgId} {
       allow read: if isPlatformOwner() || sameOrg(orgId);
       allow create, update, delete: if isPlatformOwner();
+
+      match /messages/{messageId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && canReadTaskMessage());
+        allow create, update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped());
+        allow delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
+      }
 
       match /{collectionId}/{documentId} {
         allow read: if isPlatformOwner() || sameOrg(orgId);

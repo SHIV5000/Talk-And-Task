@@ -89,35 +89,171 @@ const universalTaskFilters = [
 
 // 👇 UPDATED: Slack Sidebar Input uses matching WYSIWYG Editor 👇
 
-const AdvancedSearchPage = ({ messages, dbUsers, onBack, onOpen }) => {
-  const [filters, setFilters] = useState({ from: '', to: '', text: '', date: '' });
-  const results = useMemo(() => {
-    const text = filters.text.trim().toLowerCase();
-    return messages.filter((m) => {
-      const senderName = (dbUsers.find(u => u.email === m.senderEmail)?.name || m.senderEmail || '').toLowerCase();
-      const assignees = (m.taskData?.assignees || []).join(' ').toLowerCase();
-      const haystack = `${stripHtml(m.text)} ${m.fileName || ''} ${Object.keys(m.reactions || {}).join(' ')} ${m.taskData?.deadline || ''} ${(m.taskData?.trail || []).map(t => `${t.action || ''} ${t.comment || ''} ${t.fileName || ''}`).join(' ')}`.toLowerCase();
-      if (filters.from && !senderName.includes(filters.from.toLowerCase()) && !(m.senderEmail || '').toLowerCase().includes(filters.from.toLowerCase())) return false;
-      if (filters.to && !assignees.includes(filters.to.toLowerCase()) && !(m.groupName || '').toLowerCase().includes(filters.to.toLowerCase())) return false;
-      if (filters.date && m.dateString !== filters.date && !(m.taskData?.deadline || '').startsWith(filters.date)) return false;
-      if (text && !haystack.includes(text)) return false;
-      return filters.from || filters.to || filters.date || text;
-    }).sort((a,b)=>(b.timestamp?.toMillis?.()||0)-(a.timestamp?.toMillis?.()||0)).slice(0,100);
-  }, [messages, dbUsers, filters]);
+const getMessageFileType = (message = {}) => {
+  const explicitType = (message.fileType || '').toLowerCase();
+  const fileName = (message.fileName || '').toLowerCase();
+  if (explicitType.includes('image') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileName)) return 'image';
+  if (explicitType.includes('pdf') || fileName.endsWith('.pdf')) return 'pdf';
+  if (explicitType.includes('sheet') || explicitType.includes('excel') || /\.(xls|xlsx|csv)$/i.test(fileName)) return 'spreadsheet';
+  if (explicitType.includes('word') || explicitType.includes('document') || /\.(doc|docx|txt|rtf)$/i.test(fileName)) return 'document';
+  if (message.fileUrl || message.fileName) return 'other';
+  return '';
+};
+
+const AdvancedSearchPage = ({ messages, dbUsers, groups = [], user, onBack, onOpen }) => {
+  const [filters, setFilters] = useState({ userEmails: [], keyword: '', dateFrom: '', dateTo: '', hasFile: false, fileType: '' });
+  const [results, setResults] = useState([]);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const getSourceLabel = useCallback((message) => {
+    const sourceGroup = groups.find(g => g.id === message.groupId);
+    if (sourceGroup?.name) return sourceGroup.name;
+    const dmPeerUid = (message.groupId || '').split('_').find(id => id && id !== user?.uid);
+    const dmPeer = dbUsers.find(u => u.uid === dmPeerUid || u.email === dmPeerUid);
+    return dmPeer ? `DM: ${dmPeer.name || dmPeer.email}` : 'Unknown source';
+  }, [dbUsers, groups, user?.uid]);
+
+  const canReadMessage = useCallback((message) => {
+    if (!message || message.taskData?.isDeleted) return false;
+    if (message.isPrivateMention && !message.allowedUsers?.includes(user?.email) && message.senderEmail !== user?.email) return false;
+    if (message.isTask) {
+      const reviewer = message.taskData?.masterReviewerEmail || message.senderEmail;
+      if (reviewer !== user?.email && !(message.taskData?.assignees || []).includes(user?.email)) return false;
+    }
+    const sourceGroup = groups.find(g => g.id === message.groupId);
+    if (sourceGroup) return sourceGroup.members?.includes(user?.email) || sourceGroup.name === 'Welcome' || sourceGroup.name === 'General';
+    return (message.groupId || '').split('_').includes(user?.uid) || message.senderEmail === user?.email;
+  }, [groups, user?.email, user?.uid]);
+
+  const runSearch = () => {
+    const keyword = filters.keyword.trim().toLowerCase();
+    const fromMs = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00`).getTime() : null;
+    const toMs = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59`).getTime() : null;
+    const selectedUsers = new Set(filters.userEmails);
+
+    const nextResults = messages
+      .filter(canReadMessage)
+      .filter((message) => {
+        if (selectedUsers.size > 0 && !selectedUsers.has(message.senderEmail)) return false;
+
+        const messageDate = message.timestamp?.toDate ? message.timestamp.toDate() : message.dateString ? new Date(`${message.dateString}T12:00:00`) : null;
+        const messageMs = messageDate && !Number.isNaN(messageDate.getTime()) ? messageDate.getTime() : null;
+        if (fromMs !== null && (messageMs === null || messageMs < fromMs)) return false;
+        if (toMs !== null && (messageMs === null || messageMs > toMs)) return false;
+
+        if (filters.hasFile && !message.fileUrl && !message.fileName) return false;
+        if (filters.hasFile && filters.fileType && getMessageFileType(message) !== filters.fileType) return false;
+
+        const trailText = (message.taskData?.trail || []).map(t => `${t.action || ''} ${t.comment || ''} ${t.fileName || ''}`).join(' ');
+        const haystack = `${stripHtml(message.text)} ${message.fileName || ''} ${message.senderEmail || ''} ${getSourceLabel(message)} ${Object.keys(message.reactions || {}).join(' ')} ${message.taskData?.deadline || ''} ${message.taskData?.priority || ''} ${message.taskData?.status || ''} ${trailText}`.toLowerCase();
+        return !keyword || haystack.includes(keyword);
+      })
+      .sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0))
+      .slice(0, 150);
+
+    setResults(nextResults);
+    setHasSearched(true);
+  };
+
+  const updateUsers = (event) => {
+    setFilters(prev => ({ ...prev, userEmails: Array.from(event.target.selectedOptions).map(option => option.value) }));
+  };
+
+  const clearSearch = () => {
+    setFilters({ userEmails: [], keyword: '', dateFrom: '', dateTo: '', hasFile: false, fileType: '' });
+    setResults([]);
+    setHasSearched(false);
+  };
+
   return (
-    <div className="flex-1 h-full bg-slate-50 text-slate-800 overflow-y-auto p-6" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
-      <div className="max-w-5xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between"><h2 className="font-black text-slate-800">Advanced Search</h2><button onClick={onBack} className="text-sm font-bold text-indigo-600">Back</button></div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-slate-50">
-          {['from','to','text'].map(k => <input key={k} value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})} placeholder={k === 'text' ? 'String / tag / due / update' : k.toUpperCase()} className="modern-date-input" />)}
-          <input type="date" value={filters.date} onChange={e=>setFilters({...filters,date:e.target.value})} className="modern-date-input" />
+    <div className="flex-1 h-full bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 overflow-y-auto p-4 md:p-6" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
+      <div className="max-w-6xl mx-auto space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-600 dark:text-indigo-300">Advanced Search</p>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white">Find messages, tasks, and files</h2>
+          </div>
+          <button onClick={onBack} className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/20 transition-all hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400">
+            <i className="fa-solid fa-arrow-left mr-2"></i>Back to main page
+          </button>
         </div>
-        <div className="divide-y divide-slate-100">
-          {results.map(r => <button key={r.id} onClick={() => onOpen(r.id, r.groupId, r.replyToId)} className="w-full text-left p-4 hover:bg-indigo-50 transition-colors">
-            <div className="text-xs font-black text-indigo-600">{dbUsers.find(u=>u.email===r.senderEmail)?.name || r.senderEmail} • {r.dateString}</div>
-            <div className="text-sm text-slate-700 line-clamp-2">{stripHtml(r.text) || r.fileName || 'Task/Update'}</div>
-          </button>)}
-          {results.length === 0 && <div className="p-8 text-center text-sm text-slate-400 font-bold">Enter search filters to show results.</div>}
+
+        <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-6">
+            <label className="xl:col-span-2">
+              <span className="mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Users</span>
+              <select multiple value={filters.userEmails} onChange={updateUsers} className="h-32 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
+                {dbUsers.map(u => <option key={u.uid || u.email} value={u.email}>{u.name || u.email}</option>)}
+              </select>
+              <span className="mt-1 block text-[10px] font-semibold text-slate-400">Hold Ctrl/Cmd to combine users.</span>
+            </label>
+
+            <label className="xl:col-span-2">
+              <span className="mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Keyword</span>
+              <input value={filters.keyword} onChange={e => setFilters(prev => ({ ...prev, keyword: e.target.value }))} placeholder="Message, task, file, tag..." className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" />
+            </label>
+
+            <label>
+              <span className="mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Date From</span>
+              <input type="date" value={filters.dateFrom} onChange={e => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))} className="modern-date-input dark:bg-slate-950 dark:text-slate-100 dark:border-slate-700" />
+            </label>
+
+            <label>
+              <span className="mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Date To</span>
+              <input type="date" value={filters.dateTo} onChange={e => setFilters(prev => ({ ...prev, dateTo: e.target.value }))} className="modern-date-input dark:bg-slate-950 dark:text-slate-100 dark:border-slate-700" />
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/60 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="flex min-h-[44px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                <input type="checkbox" checked={filters.hasFile} onChange={e => setFilters(prev => ({ ...prev, hasFile: e.target.checked, fileType: e.target.checked ? prev.fileType : '' }))} className="h-4 w-4 accent-indigo-600" />
+                Has File
+              </label>
+              <label>
+                <span className="mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">File Type</span>
+                <select value={filters.fileType} disabled={!filters.hasFile} onChange={e => setFilters(prev => ({ ...prev, fileType: e.target.value }))} className="h-11 min-w-44 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                  <option value="">Any file</option>
+                  <option value="image">Image</option>
+                  <option value="pdf">PDF</option>
+                  <option value="document">Document</option>
+                  <option value="spreadsheet">Spreadsheet</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={clearSearch} className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">Clear</button>
+              <button onClick={runSearch} className="rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/20 transition-all hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400">
+                <i className="fa-solid fa-magnifying-glass mr-2"></i>Search
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-700">
+            <h3 className="font-black text-slate-800 dark:text-slate-100">Search Results</h3>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500 dark:bg-slate-800 dark:text-slate-300">{hasSearched ? `${results.length} found` : 'Not searched yet'}</span>
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {hasSearched && results.map(result => {
+              const sender = dbUsers.find(u => u.email === result.senderEmail);
+              const timestamp = result.timestamp?.toDate ? result.timestamp.toDate().toLocaleString() : result.dateString || 'Unknown time';
+              return (
+                <button key={result.id} onClick={() => onOpen(result.id, result.groupId, result.replyToId)} className="w-full p-4 text-left transition-colors hover:bg-yellow-50 dark:hover:bg-yellow-500/10">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-black uppercase tracking-widest">
+                    <span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">Source: {getSourceLabel(result)}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">User: {sender?.name || result.senderEmail || 'Unknown'}</span>
+                    <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">Timestamp: {timestamp}</span>
+                  </div>
+                  <div className="text-sm font-semibold leading-relaxed text-slate-700 dark:text-slate-200 line-clamp-2">{stripHtml(result.text) || result.fileName || 'Task/Update'}</div>
+                </button>
+              );
+            })}
+            {!hasSearched && <div className="p-10 text-center text-sm font-bold text-slate-400">Set filters, then press Search to execute.</div>}
+            {hasSearched && results.length === 0 && <div className="p-10 text-center text-sm font-bold text-slate-400">No results matched the selected filters.</div>}
+          </div>
         </div>
       </div>
     </div>
@@ -317,6 +453,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [maxFileSizeMb, setMaxFileSizeMb] = useState(() => Number(localStorage.getItem("maxFileSizeMb") || 5));
     const [viewMode, setViewMode] = useState("chat");
     const [showNotifications, setShowNotifications] = useState(false);
+    const [alertPulseActive, setAlertPulseActive] = useState(false);
+    const lastNotificationTotalRef = useRef(0);
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
     const MAX_FILE_SIZE_MB = maxFileSizeMb || 5;
@@ -440,16 +578,15 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     useEffect(() => {
         const root = document.documentElement;
-        const accent = currentUserData?.accentColor || profileForm.accentColor || 'indigo';
         const font = currentUserData?.themeFont || profileForm.themeFont || 'Inter';
         const mode = currentUserData?.displayMode || profileForm.displayMode || 'light';
         const scale = currentUserData?.fontScale || profileForm.fontScale || 'normal';
-        root.style.setProperty('--app-accent', THEME_ACCENTS[accent] || THEME_ACCENTS.indigo);
+        root.style.setProperty('--app-accent', THEME_ACCENTS.indigo);
         root.style.setProperty('--app-font-family', THEME_FONTS[font] || THEME_FONTS.Inter);
         root.style.setProperty('--app-font-size', FONT_SCALE[scale] || FONT_SCALE.normal);
         root.dataset.theme = mode;
         root.classList.toggle('dark', mode === 'dark' || !!toolPreferences?.darkMode);
-    }, [currentUserData?.accentColor, currentUserData?.themeFont, currentUserData?.displayMode, currentUserData?.fontScale, profileForm.accentColor, profileForm.themeFont, profileForm.displayMode, profileForm.fontScale, toolPreferences?.darkMode]);
+    }, [currentUserData?.themeFont, currentUserData?.displayMode, currentUserData?.fontScale, profileForm.themeFont, profileForm.displayMode, profileForm.fontScale, toolPreferences?.darkMode]);
 
     const {
         messages, typingStatus, isOnline, offlineDrafts,
@@ -663,6 +800,16 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     const totalNotifications = genericNotifications.length + activeActionableTasks.length;
 
+    useEffect(() => {
+        if (totalNotifications > lastNotificationTotalRef.current) {
+            setAlertPulseActive(true);
+            const timer = setTimeout(() => setAlertPulseActive(false), 3500);
+            lastNotificationTotalRef.current = totalNotifications;
+            return () => clearTimeout(timer);
+        }
+        lastNotificationTotalRef.current = totalNotifications;
+    }, [totalNotifications]);
+
     const pinnedMessages = useMemo(() => activeGroup ? messages.filter(m => m.groupId === activeGroup.id && m.isPinned) : [], [messages, activeGroup]);
 
     const globalSearchResults = useMemo(() => {
@@ -671,6 +818,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
         const matchedMessages = messages.filter(m => {
             if (m.isPrivateMention && !m.allowedUsers?.includes(user.email) && m.senderEmail !== user.email) return false;
+            if (m.isTask) {
+                const reviewer = m.taskData?.masterReviewerEmail || m.senderEmail;
+                if (reviewer !== user.email && !(m.taskData?.assignees || []).includes(user.email)) return false;
+            }
 
             const strippedText = stripHtml(m.text).toLowerCase();
             const textMatch = strippedText.includes(q);
@@ -765,8 +916,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                         const el = document.getElementById(`msg-${msgId}`);
                         if (el) {
                             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            el.classList.add('ring-4', 'ring-indigo-400', 'bg-indigo-50', 'transition-all', 'duration-500');
-                            setTimeout(() => el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50'), 2000);
+                            el.classList.add('ring-4', 'ring-yellow-300', 'bg-yellow-100', 'dark:bg-yellow-500/20', 'transition-all', 'duration-500');
+                            setTimeout(() => el.classList.remove('ring-4', 'ring-yellow-300', 'bg-yellow-100', 'dark:bg-yellow-500/20'), 2000);
                         } else if (attempts < 30) {
                             attempts += 1;
                             setTimeout(scrollReplyIntoView, 150);
@@ -919,10 +1070,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     useEffect(() => {
         const migrateAssigneeStates = async () => {
-            const candidates = messages.filter(m => m.isTask && m.taskData?.assignees?.length && (!m.taskData?.assigneeStates || !m.taskData?.masterReviewerEmail));
+            const candidates = messages.filter(m => m.isTask && m.taskData?.assignees?.length && (!m.taskData?.assigneeStates || !m.taskData?.masterReviewerEmail || !m.taskData?.visibleTo));
             for (const m of candidates.slice(0, 20)) {
                 const states = Object.fromEntries((m.taskData.assignees || []).map(e => [e, 'assigned']));
-                await updateDoc(doc(db, "organizations", orgId, "messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "", "taskData.ackBy": m.taskData?.ackBy || {} }).catch(() => {});
+                await updateDoc(doc(db, "organizations", orgId, "messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "", "taskData.visibleTo": m.taskData?.visibleTo || [...new Set([m.senderEmail, m.taskData?.masterReviewerEmail, ...(m.taskData?.assignees || [])].filter(Boolean))], "taskData.ackBy": m.taskData?.ackBy || {} }).catch(() => {});
             }
         };
         migrateAssigneeStates();
@@ -988,6 +1139,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 escalated: false,
                 assigneeStates: Object.fromEntries(finalAssignees.map(e => [e, "assigned"])),
                 masterReviewerEmail: user.email,
+                visibleTo: [...new Set([user.email, ...finalAssignees])],
                 isDeleted: false,
                 deletedAt: null
             };
@@ -1182,7 +1334,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             if (editingGroup) await updateDoc(doc(db, "groups", editingGroup.id), groupData);
             else await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
             setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
-        } catch (error) { alert("Failed to save group."); }
+        } catch (error) { alert("Failed to save department."); }
     };
 
     const onGroupUpdate = useCallback(async (updates) => {
@@ -1214,7 +1366,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         e.preventDefault();
         const file = profilePicInputRef.current?.files[0];
         try {
-            let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily, themeFont: profileForm.themeFont || 'Inter', accentColor: profileForm.accentColor || 'indigo', displayMode: profileForm.displayMode || 'light', fontScale: profileForm.fontScale || 'normal' };
+            let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily, themeFont: profileForm.themeFont || 'Inter', displayMode: profileForm.displayMode || 'light', fontScale: profileForm.fontScale || 'normal' };
             if (file) {
                 setProfileUploadProgress(10);
                 const uniqueFileName = `${user.uid}_${Date.now()}_avatar.webp`;
@@ -1231,7 +1383,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 });
             }
             await updateDoc(doc(db, "users", user.uid), updateData);
-            setProfileForm(prev => ({ ...prev, name: updateData.name, themeFont: updateData.themeFont, accentColor: updateData.accentColor, displayMode: updateData.displayMode, fontScale: updateData.fontScale }));
+            setProfileForm(prev => ({ ...prev, name: updateData.name, themeFont: updateData.themeFont, displayMode: updateData.displayMode, fontScale: updateData.fontScale }));
             setActiveModal(null); setProfileUploadProgress(0);
         } catch (error) { alert("Profile update failed."); setProfileUploadProgress(0); }
     };
@@ -1356,19 +1508,19 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
             <div className="flex-1 flex overflow-hidden relative">
                 {activeReminderAlert && (
-                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-blue-600 text-white rounded-3xl shadow-2xl z-[100] border border-blue-700 p-6 animate-in slide-in-from-top-10 duration-700">
+                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm rounded-3xl border border-indigo-200 bg-white text-slate-800 shadow-2xl z-[100] p-6 animate-in slide-in-from-top-10 duration-700 dark:border-indigo-500/30 dark:bg-slate-900 dark:text-slate-100">
                         <div className="flex items-center gap-4 mb-4">
                             <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-inner relative">
                                 <span className="absolute inset-0 rounded-full bg-indigo-400 opacity-20 animate-ping"></span>
                                 <i className="fa-solid fa-bell text-xl relative z-10 animate-bounce"></i>
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-white leading-tight">Reminder</h3>
-                                <span className="text-xs font-bold text-blue-100 uppercase tracking-widest">Time's Up!</span>
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Reminder</h3>
+                                <span className="text-xs font-bold text-indigo-500 dark:text-indigo-300 uppercase tracking-widest">Time's Up!</span>
                             </div>
                         </div>
-                        <div className="bg-blue-700 p-4 rounded-2xl border border-blue-400 shadow-inner mb-6">
-                            <p className="text-white font-medium text-sm break-words whitespace-normal">"{activeReminderAlert.messageText}"</p>
+                        <div className="bg-indigo-50 dark:bg-slate-950 p-4 rounded-2xl border border-indigo-100 dark:border-slate-700 shadow-inner mb-6">
+                            <p className="text-slate-700 dark:text-slate-200 font-medium text-sm break-words whitespace-normal">"{activeReminderAlert.messageText}"</p>
                         </div>
                         <div className="flex gap-3">
                             <button onClick={() => { setActiveModal('reminder'); setReminderDateTime(''); setActiveReminderAlert(null); }} className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-50 shadow-sm transition-all">Snooze</button>
@@ -1413,7 +1565,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                   featureFlags={featureFlags}
                 />
                 ) : viewMode === "advanced" ? (
-                    featureFlags.chat ? <AdvancedSearchPage messages={messages} dbUsers={dbUsers} onBack={() => setViewMode('chat')} onOpen={(id, groupId, replyToId) => { setViewMode('chat'); navigateToMessageFromNotification(id, groupId, replyToId); }} /> : <FeatureLockedPanel title="Chat is disabled" message="Message search is unavailable because chat is not enabled for your account." icon="fa-comments" />
+                    featureFlags.chat ? <AdvancedSearchPage messages={messages} dbUsers={dbUsers} groups={groups} user={user} onBack={() => setViewMode('chat')} onOpen={(id, groupId, replyToId) => { setViewMode('chat'); navigateToMessageFromNotification(id, groupId, replyToId); }} /> : <FeatureLockedPanel title="Chat is disabled" message="Message search is unavailable because chat is not enabled for your account." icon="fa-comments" />
                 ) : (
                     <div className="flex h-full w-full relative">
                         <LeftSidebar sidebarWidth={leftWidth}
@@ -1427,24 +1579,24 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                         <div className="hidden md:block app-resizer" onMouseDown={startResize('left')} title="Resize sidebar" />
 
                         {!featureFlags.chat ? (
-                            <FeatureLockedPanel title="Chat is disabled" message="Chat workspaces and direct messages are not enabled for your account." icon="fa-comments" />
+                            <FeatureLockedPanel title="Chat is disabled" message="Chat workspaces and staff member messaging are not enabled for your account." icon="fa-comments" />
                         ) : !activeGroup ? (
                             <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-slate-100 text-center p-8 relative">
                                 <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 text-indigo-500 ring-4 ring-white border border-slate-100">
                                     <i className="fa-solid fa-comments text-4xl"></i>
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Talk & Task</h2>
-                                <p className="text-slate-500 mb-8 max-w-md">Select a department or direct message from the sidebar to start collaborating, or create a new workspace.</p>
+                                <p className="text-slate-500 mb-8 max-w-md">Select a department or staff member from the sidebar to start collaborating, or create a new workspace.</p>
                                 {(currentUserData?.isAdmin || isVipAdmin || currentUserData?.canCreateGroups) && (
                                     <button onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} className="w-full max-w-xs bg-indigo-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-all">
-                                        <i className="fa-solid fa-layer-group mr-2"></i> New Group (Group Name, Members)
+                                        <i className="fa-solid fa-layer-group mr-2"></i> New Department (Department Name, Members)
                                     </button>
                                 )}
                             </div>
                         ) : (
-                            <div className="flex-1 flex flex-col relative h-full bg-slate-50 overflow-hidden min-w-0 chat-main-panel">
-                                <div className="bg-white flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 shrink-0 z-30 sticky top-0 border-b border-slate-200 safe-top">
-                                    <button onClick={() => setActiveGroup(null)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0" title="All groups and DMs"><i className="fa-solid fa-arrow-left text-xl"></i></button>
+                            <div className="flex-1 flex flex-col relative h-full bg-slate-50 dark:bg-slate-950 overflow-hidden min-w-0 chat-main-panel">
+                                <div className="bg-white dark:bg-slate-900 flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 shrink-0 z-30 sticky top-0 border-b border-slate-200 dark:border-slate-700 safe-top">
+                                    <button onClick={() => setActiveGroup(null)} className="md:hidden w-10 h-10 rounded-full hover:bg-indigo-50 flex items-center justify-center text-indigo-600 mr-1 shrink-0" title="All departments and staff members"><i className="fa-solid fa-arrow-left text-xl"></i></button>
 
                                     <div className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" onClick={()=>{ if(!activeGroup.isDM) { setGroupForm({ name: activeGroup.name || '', members: activeGroup.members || [], admins: activeGroup.admins || [], profilePicUrl: activeGroup.profilePicUrl || null }); setActiveModal('group_settings'); } }}>
                                         {activeGroup.isDM ? <MemoizedAvatar uid={activeGroup.id} url={null} name={activeGroup.name} sizeClass="w-10 h-10" /> : activeGroup.profilePicUrl ? <MemoizedAvatar uid={activeGroup.id} url={activeGroup.profilePicUrl} name={activeGroup.name} sizeClass="w-10 h-10" /> : <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm"><i className="fa-solid fa-users"></i></div>}
@@ -1525,32 +1677,32 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                       </button>
 
                                       <div className="relative">
-                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-500 hover:bg-indigo-50'} text-[19px] relative`}>
+                                        <button onClick={() => setShowNotifications(!showNotifications)} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors ${showNotifications ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300' : totalNotifications > 0 ? 'text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10' : 'text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'} ${alertPulseActive ? 'animate-pulse ring-2 ring-rose-300 bg-rose-50 dark:bg-rose-500/10' : ''} text-[19px] relative`}>
                                           <i className="fa-solid fa-bell"></i>
-                                          {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
+                                          {totalNotifications > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white dark:border-slate-900"></span>}
                                         </button>
 
                                         {showNotifications && (
-                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200">
-                                            <div className="p-3 bg-white flex justify-between items-center border-b border-slate-200">
-                                              <span className="text-[13px] font-black text-slate-800 uppercase tracking-wide">Alerts</span>
+                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200 dark:border-slate-700">
+                                            <div className="p-3 bg-white dark:bg-slate-900 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
+                                              <span className="text-[13px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Alerts</span>
                                               <button onClick={() => genericNotifications.map(n => deleteDoc(doc(db, "organizations", orgId, "notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
                                             </div>
-                                            <div className="max-h-[70vh] overflow-y-auto bg-white divide-y divide-slate-100">
+                                            <div className="max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
                                               {totalNotifications === 0 ? <div className="p-5 text-center text-[13px] font-medium text-slate-400">No new activity</div> : (
                                                 <>
                                                   {[...activeActionableTasks].sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(task => (
-                                                    <div key={task.id} onClick={() => { setShowNotifications(false); navigateToMessageFromNotification(task.id, task.groupId); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700">
+                                                    <div key={task.id} onClick={() => { setShowNotifications(false); navigateToMessageFromNotification(task.id, task.groupId); }} className="p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-[12px] text-slate-700 dark:text-slate-200">
                                                       <div className="font-black text-rose-600">Pending Task</div>
                                                       <div className="line-clamp-2">{stripHtml(task.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(task.timestamp)}</div>
                                                       <button onClick={(e)=>{ e.stopPropagation(); updateDoc(doc(db, "organizations", orgId, "messages", task.id), { 'taskData.dismissedBy': [...(task.taskData?.dismissedBy || []), user.uid] }); }} className="mt-1 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                     </div>
                                                   ))}
                                                   {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => (
-                                                    <div key={n.id} onClick={() => { setShowNotifications(false); if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="p-3 cursor-pointer hover:bg-slate-50 text-[12px] text-slate-700 relative pr-12">
+                                                    <div key={n.id} onClick={() => { setShowNotifications(false); if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-[12px] text-slate-700 dark:text-slate-200 relative pr-12">
                                                       <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "organizations", orgId, "notifications", n.id)); }} className="absolute top-2 right-3 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                       <div className="font-black text-indigo-600">{n.type === 'reply' ? 'Reply' : n.type === 'message' ? 'Message' : n.type === 'mention' ? 'Mention' : n.type === 'reminder' ? 'Reminder' : n.type === 'task' ? 'Task' : 'Alert'}</div>
-                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; updateDoc(doc(db, "organizations", orgId, "notifications", n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
+                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; updateDoc(doc(db, "organizations", orgId, "notifications", n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 bg-white dark:bg-slate-950 dark:text-slate-100"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
                                                     </div>
                                                   ))}
                                                 </>
@@ -1581,11 +1733,11 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                   )}
                                 </div>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="absolute top-[170px] md:top-[122px] right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Bottom">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="fixed bottom-24 right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Bottom">
                                     <i className="fa-solid fa-arrow-down"></i>
                                 </button>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="absolute bottom-[96px] right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 transition-all opacity-80 hover:opacity-100" title="Scroll to Top">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-36 right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Top">
                                     <i className="fa-solid fa-arrow-up"></i>
                                 </button>
 

@@ -18,7 +18,7 @@ const stripHtml = (html) =>
   html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 
-const SYSTEM_ROLES = ['Super Admin', 'Auditor', 'Group Moderator'];
+const SYSTEM_ROLES = ['Super Admin', 'Auditor', 'Department Moderator'];
 const PERMISSION_AREAS = ['Users', 'Tasks', 'Messages', 'Logs', 'Settings', 'Backups', 'Integrations', 'Compliance'];
 const PERMISSION_ACTIONS = ['read', 'create', 'update', 'delete'];
 
@@ -30,7 +30,7 @@ const makePermissionGrid = (enabled = false) => PERMISSION_AREAS.reduce((acc, ar
 const DEFAULT_ROLES = [
   { id: 'super-admin', name: 'Super Admin', system: true, permissions: makePermissionGrid(true) },
   { id: 'auditor', name: 'Auditor', system: true, permissions: { ...makePermissionGrid(false), Logs: { read: true, create: false, update: false, delete: false }, Compliance: { read: true, create: false, update: false, delete: false } } },
-  { id: 'group-moderator', name: 'Group Moderator', system: true, permissions: { ...makePermissionGrid(false), Users: { read: true, create: false, update: false, delete: false }, Tasks: { read: true, create: true, update: true, delete: false }, Messages: { read: true, create: true, update: true, delete: false } } },
+  { id: 'group-moderator', name: 'Department Moderator', system: true, permissions: { ...makePermissionGrid(false), Users: { read: true, create: false, update: false, delete: false }, Tasks: { read: true, create: true, update: true, delete: false }, Messages: { read: true, create: true, update: true, delete: false } } },
 ];
 
 const formatDateTime = (value) => {
@@ -120,7 +120,7 @@ export default function AdminPanel({
   // ----- Overview time range -----
   const [overviewTimeRange, setOverviewTimeRange] = useState('week');
 
-  // ----- People (Users + Groups) -----
+  // ----- People (Users + Departments) -----
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
@@ -936,7 +936,7 @@ export default function AdminPanel({
                       <th className="px-3 py-3">Roles</th>
                       <th className="px-3 py-3">Status</th>
                       <th className="px-2 py-3 text-center">Admin</th>
-                      <th className="px-2 py-3 text-center">Groups</th>
+                      <th className="px-2 py-3 text-center">DEPARTMENTS</th>
                       <th className="px-3 py-3 text-center">Last Login</th>
                       <th className="px-3 py-3 text-center">DSAR</th>
                     </tr>
@@ -961,16 +961,16 @@ export default function AdminPanel({
               </div>
             </div>}
 
-            {/* Groups Section - TABLE view */}
+            {/* Departments Section - TABLE view */}
             {activeTab === 'groups' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Groups</h2>
-                <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>New Group</button>
+                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>DEPARTMENTS</h2>
+                <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>New Department</button>
               </div>
               {(editingGroup || groupForm?.name || groupForm?.members?.length > 0) && (
                 <div className="p-5 border-b border-slate-200 bg-slate-50">
                   <form onSubmit={(e) => { e.preventDefault(); handleGroupSubmit(e); }} className="space-y-4 max-w-3xl">
-                    <div><label className="text-xs font-bold text-slate-500 block mb-1">Group Name</label><input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} className="w-full bg-white border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-indigo-500" required /></div>
+                    <div><label className="text-xs font-bold text-slate-500 block mb-1">Department Name</label><input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} className="w-full bg-white border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-indigo-500" required /></div>
                     <div><label className="text-xs font-bold text-slate-500 block mb-1">Avatar</label><input type="file" onChange={handleGroupPicUpload} className="text-sm" /> {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-indigo-600 ml-2">{Math.round(groupPicUploadProgress)}%</span>}</div>
                     <div>
                       <div className="flex justify-between items-center mb-2"><label className="text-xs font-bold text-slate-500">Members</label><div className="flex gap-2"><button type="button" onClick={() => setGroupForm({ ...groupForm, members: dbUsers.map((u) => u.email) })} className="text-xs text-indigo-600 font-bold hover:underline">Select All</button><button type="button" onClick={() => setGroupForm({ ...groupForm, members: [] })} className="text-xs text-rose-500 font-bold hover:underline">Clear</button></div></div>
@@ -986,17 +986,17 @@ export default function AdminPanel({
                     </div>
                     <div className="flex justify-end gap-3">
                       <button type="button" onClick={() => { setEditingGroup(null); setGroupForm({ name: '', members: [], profilePicUrl: null }); }} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50">Cancel</button>
-                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Save Group</button>
+                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Save Department</button>
                     </div>
                   </form>
                 </div>
               )}
-              {/* Groups Table */}
+              {/* Departments Table */}
               <div className="overflow-y-auto custom-sidebar-scroll flex-1">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0">
                     <tr>
-                      <th className="px-4 py-3">Group Name</th>
+                      <th className="px-4 py-3">Department Name</th>
                       <th className="px-4 py-3">Members</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
@@ -1016,7 +1016,7 @@ export default function AdminPanel({
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); }} className="text-indigo-600 hover:text-indigo-800 mr-2" title="Edit"><i className="fa-solid fa-pencil"></i></button>
-                          <button onClick={async () => { if (!window.confirm('Delete this group?')) return; await deleteDoc(doc(db, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
+                          <button onClick={async () => { if (!window.confirm('Delete this department?')) return; await deleteDoc(doc(db, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
                         </td>
                       </tr>
                     ))}
@@ -1040,7 +1040,7 @@ export default function AdminPanel({
                   <option value="Completed">Completed</option>
                 </select>
                 <select value={taskGroupFilter} onChange={(e) => setTaskGroupFilter(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold">
-                  <option value="">All Groups</option>
+                  <option value="">All Departments</option>
                   {groups.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
                 </select>
                 <input type="text" value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks..." className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold w-48" />
@@ -1057,7 +1057,7 @@ export default function AdminPanel({
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Assignees</th>
                       <th className="px-4 py-3">Due Date</th>
-                      <th className="px-4 py-3">Group</th>
+                      <th className="px-4 py-3">Department</th>
                       <th className="px-4 py-3">Actions</th>
                     </tr>
                   </thead>
