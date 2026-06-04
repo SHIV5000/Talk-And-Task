@@ -16,10 +16,10 @@ const buildFallbackUserData = (user) => ({
 });
 
 export default function useWorkspaceData(user, profileForm, setProfileForm, orgId) {
-    const [allUsers, setAllUsers] = useState([]); // Add this new state
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [currentUserData, setCurrentUserData] = useState(() => buildFallbackUserData(user));
     const [dbUsers, setDbUsers] = useState([]);
+    const [allUsers, setAllUsers] = useState([]); 
     const [groups, setGroups] = useState([]);
     const [activeReminders, setActiveReminders] = useState([]);
     const [genericNotifications, setGenericNotifications] = useState([]);
@@ -73,7 +73,6 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
             }
         });
 
-        // 👇 UPDATED: Now fetches the ID for Broadcast Acknowledgements 👇
         const unsubAnnouncement = onSnapshot(orgDoc("workspace", "announcement"), (docSnap) => {
             if (docSnap.exists()) {
                 setGlobalAnnouncement({ id: docSnap.id, ...docSnap.data() });
@@ -138,10 +137,11 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
         const unsubUsers = onSnapshot(query(collection(db, "users"), where("orgId", "==", orgId)), (snapshot) => {
             const fetchedUsers = snapshot.docs.map(document => document.data());
             fetchedUsers.sort((a, b) => (a.email || "").localeCompare(b.email || ""));
-            // Set all users for the Admin panel to view/unarchive
+            
+            // Set all users for Admin
             setAllUsers(fetchedUsers);
             
-            // Hide archived users from the rest of the application
+            // Hide archived users globally
             setDbUsers(fetchedUsers.filter(u => !u.isArchived));
         });
         
@@ -153,7 +153,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
     }, [orgId, user, currentUserData?.isAdmin, isVipAdmin, profileForm.name, setProfileForm, orgCollection]);
 
     return {
-        isVipAdmin, currentUserData, dbUsers, allUsers,groups,
+        isVipAdmin, currentUserData, dbUsers, allUsers, groups,
         activeReminders, genericNotifications, allAdminReminders,
         immutableAuditLogs, toolPreferences, setToolPreferences, customTags,
         globalAnnouncement 
