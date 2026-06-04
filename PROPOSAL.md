@@ -318,6 +318,78 @@ Repo-specific observations that affect execution:
 - Function scaling limits are configured in code.
 - Budget alerts and incident routing are clearly described for operators.
 
+## P3 — Future Enhancements (Not Blocking Launch)
+
+These improvements are recommended for long‑term scalability, UX polish, and cost optimisation. They can be scheduled after the app is live and stable.
+
+#### Task 16 — Move typing indicators from Firestore to Realtime Database
+
+**Why:** Firestore is not designed for high‑frequency ephemeral writes. Typing indicators generate excessive write operations and never get cleaned up.
+
+**Implementation proposal:**
+- Use Firebase Realtime Database (RTDB) with path: `typing/{orgId}/{chatId}/{userId}`.
+- Set value to `true` while typing, use `onDisconnect().remove()` to auto‑clean.
+- Listen to RTDB and display “User is typing…” in the chat UI.
+- Keep Firestore for all persistent data.
+
+**Definition of done:** Typing indicators work but do not appear in Firestore usage or billing.
+
+#### Task 17 — Partition PWA cache by `orgId`
+
+**Why:** The current service worker caches Firestore responses keyed only by URL. When a user switches organizations offline, stale data from the previous organization may appear.
+
+**Implementation proposal:**
+- In the service worker (`sw.js`), prepend `orgId` to the cache key: `${orgId}:${request.url}`.
+- When the user switches organizations, clear the active cache or re‑fetch data.
+- Ensure the service worker can access the current `orgId` (e.g., from a custom claim or IndexedDB).
+
+**Definition of done:** Offline data is correctly isolated per organization.
+
+#### Task 18 — Add scheduled message cancellation from client
+
+**Why:** Users should be able to cancel a pending scheduled message without developer intervention.
+
+**Implementation proposal:**
+- Extend the frontend UI to list pending scheduled messages for the current user.
+- Add a “Cancel” button that updates the Firestore document: `cancelled: true`.
+- Modify the scheduled‑message Cloud Function to skip delivery if `cancelled == true`.
+- Keep the original document for audit purposes (do not delete).
+
+**Definition of done:** Users can cancel any future message they scheduled.
+
+#### Task 19 — Automatic audit log deletion (TTL)
+
+**Why:** Audit logs grow indefinitely, increasing storage costs and query time.
+
+**Implementation proposal:**
+- Add a Cloud Function that runs monthly (e.g., on the 1st day).
+- Delete audit log documents older than 90 days (or a configurable retention period).
+- Optionally write a summary record of deleted counts to a separate “audit_log_archive” collection.
+
+**Definition of done:** Audit logs never exceed 90 days of history unless explicitly configured.
+
+#### Task 20 — Implement full denormalization backfill script
+
+**Why:** New messages will include denormalised fields (`senderName`, `senderAvatar`, etc.), but old messages lack them, causing inconsistent UI.
+
+**Implementation proposal:**
+- Write a one‑time Node.js script (or Cloud Function) that iterates over all `messages` collections.
+- For each message, look up the sender’s current name/avatar from the `users` collection (or a snapshot at that time).
+- Update the message document with the denormalised fields.
+- Run the script during a maintenance window.
+
+**Definition of done:** All existing messages have the same shape as new messages, eliminating extra reads.
+
+#### Task 21 — Document and automate Firestore backup restoration test
+
+**Why:** Backups exist (PITR, scheduled backups) but have never been tested for restore.
+
+**Implementation proposal:**
+- Write a runbook describing how to restore a Firestore database from a backup to a new project.
+- Perform a quarterly dry‑run restore to verify RTO (recovery time objective) and data integrity.
+
+**Definition of done:** Restore procedure is documented and has been tested successfully at least once.
+
 ## Recommended Commit Sequence For Final Execution
 
 1. `[P0-task1] harden firestore rules`
