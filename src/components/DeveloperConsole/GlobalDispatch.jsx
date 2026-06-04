@@ -8,6 +8,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import { db } from '../../firebase.js';
+import { buildPublicMessagePayload } from '../../utils/messagePayload.js';
 
 const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const SUPPORT_GROUP_ID = 'support';
@@ -52,21 +53,13 @@ export default function GlobalDispatch() {
           profilePicUrl: null,
         }, { merge: true });
 
-        await addDoc(collection(db, 'organizations', tenant.id, 'messages'), {
+        await addDoc(collection(db, 'organizations', tenant.id, 'messages'), buildPublicMessagePayload({
           text: message.trim(),
-          senderUid: 'global-dispatch',
-          senderEmail: GLOBAL_SUPPORT_ADMIN_EMAIL,
-          senderName: 'Developer HQ',
-          groupId: SUPPORT_GROUP_ID,
-          groupName: 'SUPPORT',
+          user: { uid: 'global-dispatch', email: GLOBAL_SUPPORT_ADMIN_EMAIL, name: 'Developer HQ' },
+          group: { id: SUPPORT_GROUP_ID, name: 'SUPPORT' },
           timestamp: serverTimestamp(),
-          isTask: false,
           isSupportBroadcast: true,
-          isPrivateForward: false,
-          allowedUsers: [],
-          seenBy: [GLOBAL_SUPPORT_ADMIN_EMAIL],
-          reactions: {},
-        });
+        }));
 
         setSentCount((count) => count + 1);
       }
