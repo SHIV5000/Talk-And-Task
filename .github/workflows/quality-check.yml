@@ -2,20 +2,17 @@ name: Comprehensive Quality Check
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]   # adjust as needed
   pull_request:
     branches: [ main, master ]
 
 jobs:
   quality-check:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: 'npm'
@@ -23,253 +20,25 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          # Install the tools needed for our all-in-one check script
-          npm install --save-dev \
-            linkinator \
-            stylelint \
-            stylelint-declaration-strict-value \
-            eslint \
-            eslint-plugin-i18next
+          # Tools required by check-quality.js
+          npm install --save-dev linkinator stylelint stylelint-declaration-strict-value eslint eslint-plugin-i18next
 
       - name: Build React app
         run: npm run build
 
-      - name: Create all-in-one quality check script
-        run: |
-          cat << 'SCRIPT_EOF' > check-quality.js
-          #!/usr/bin/env node
-          const { execSync } = require('child_process');
-          const { createServer } = require('http');
-          const { readFileSync, existsSync, writeFileSync } = require('fs');
-          const { join, resolve } = require('path');
-          const { LinkChecker } = require('linkinator');
-
-          // ----- CONFIGURATION -----
-          const BUILD_DIR = process.argv[2] || './build';
-          const CSS_FILE = 'src/index.css';             // your main CSS file with :root and .dark
-          const LIGHT_SELECTOR = ':root';
-          const DARK_SELECTOR = '.dark';                // or [data-theme="dark"]
-          const I18N_PLUGIN_RULE = 'i18next/no-literal-string'; // change for react-intl if needed
-          const REPORT_FILE = 'quality-report.txt';
-          // --------------------------
-
-          const report = [];
-          function addLine(line) { report.push(line); }
-
-          // --- 1. Broken Links ---
-          async function checkBrokenLinks() {
-            addLine('=== BROKEN LINKS ===');
-            const buildPath = resolve(BUILD_DIR);
-            if (!existsSync(buildPath)) {
-              addLine('❌ Build folder not found. Please run npm run build first.');
-              return;
-            }
-            const server = createServer((req, res) => {
-              const urlPath = req.url === '/' ? '/index.html' : req.url;
-              const filePath = join(buildPath, urlPath);
-              try {
-                const content = readFileSync(filePath);
-                res.writeHead(200);
-                res.end(content);
-              } catch (e) {
-                res.writeHead(404);
-                res.end('Not found');
-              }
-            });
-            await new Promise(resolve => server.listen(0, resolve));
-            const port = server.address().port;
-            const baseUrl = `http://localhost:${port}`;
-            try {
-              const checker = new LinkChecker();
-              const result = await checker.check({ path: baseUrl, recurse: true });
-              const broken = result.links.filter(link => link.state === 'BROKEN');
-              if (broken.length === 0) {
-                addLine('✅ No broken internal links found.');
-              } else {
-                addLine(`❌ ${broken.length} broken link(s) found:`);
-                broken.forEach(link => {
-                  addLine(`   - ${link.url} (status: ${link.status}) on page: ${link.parent || 'unknown'}`);
-                });
-              }
-            } catch (err) {
-              addLine('❌ Link check failed: ' + err.message);
-            } finally {
-              server.close();
-            }
-          }
-
-          // --- 2. Hardcoded colours (Stylelint) ---
-          function checkHardcodedColors() {
-            addLine('\n=== DARK MODE: HARDCODED COLOURS ===');
-            try {
-              const result = execSync(
-                'npx stylelint "src/**/*.css" "src/**/*.scss" --formatter json',
-                { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
-              );
-              const output = JSON.parse(result);
-              let violationsFound = false;
-              output.forEach(file => {
-                file.warnings.forEach(w => {
-                  violationsFound = true;
-                  addLine(`❌ Hardcoded colour in ${file.source}:${w.line} – ${w.text}`);
-                });
-              });
-              if (!violationsFound) {
-                addLine('✅ All colour properties use CSS variables (no hardcoded values).');
-              }
-            } catch (e) {
-              if (e.stdout) {
-                const output = JSON.parse(e.stdout);
-                let violationsFound = false;
-                output.forEach(file => {
-                  file.warnings.forEach(w => {
-                    violationsFound = true;
-                    addLine(`❌ Hardcoded colour in ${file.source}:${w.line} – ${w.text}`);
-                  });
-                });
-                if (!violationsFound) addLine('✅ All colour properties use CSS variables.');
-              } else {
-                addLine('❌ Could not run stylelint. Is it installed?');
-              }
-            }
-          }
-
-          // --- 3. Theme variable mapping ---
-          function checkThemeMapping() {
-            addLine('\n=== DARK MODE: THEME VARIABLE MAPPING ===');
-            const cssPath = resolve(CSS_FILE);
-            if (!existsSync(cssPath)) {
-              addLine(`❌ CSS file not found at ${CSS_FILE}. Skipping theme mapping.`);
-              return;
-            }
-            try {
-              const css = readFileSync(cssPath, 'utf8');
-              function extractVars(block) {
-                const varRegex = /--[\w-]+/g;
-                const matches = block.match(varRegex);
-                return new Set(matches || []);
-              }
-              function getBlock(selector) {
-                const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, 's');
-                const match = css.match(regex);
-                return match ? match[1] : '';
-              }
-              const lightBlock = getBlock(LIGHT_SELECTOR);
-              const darkBlock = getBlock(DARK_SELECTOR);
-              if (!lightBlock) {
-                addLine(`⚠️  No light theme block found with selector "${LIGHT_SELECTOR}".`);
-                return;
-              }
-              if (!darkBlock) {
-                addLine(`⚠️  No dark theme block found with selector "${DARK_SELECTOR}".`);
-                return;
-              }
-              const lightVars = extractVars(lightBlock);
-              const darkVars = extractVars(darkBlock);
-              const missingInDark = [...lightVars].filter(v => !darkVars.has(v));
-              const missingInLight = [...darkVars].filter(v => !lightVars.has(v));
-              if (missingInDark.length === 0 && missingInLight.length === 0) {
-                addLine('✅ All theme variables are present in both light and dark blocks.');
-              } else {
-                if (missingInDark.length > 0) {
-                  addLine(`❌ Variables defined in "${LIGHT_SELECTOR}" but missing in "${DARK_SELECTOR}":`);
-                  missingInDark.forEach(v => addLine(`   - ${v}`));
-                }
-                if (missingInLight.length > 0) {
-                  addLine(`❌ Variables defined in "${DARK_SELECTOR}" but missing in "${LIGHT_SELECTOR}":`);
-                  missingInLight.forEach(v => addLine(`   - ${v}`));
-                }
-              }
-            } catch (err) {
-              addLine('❌ Error reading/parsing CSS for theme mapping: ' + err.message);
-            }
-          }
-
-          // --- 4. Universal labels (i18n) ---
-          function checkI18n() {
-            addLine('\n=== UNIVERSAL LABELS (i18n) ===');
-            try {
-              const eslintConfig = {
-                plugins: ['i18next'],
-                rules: { [I18N_PLUGIN_RULE]: 'error' },
-                parserOptions: { ecmaVersion: 2020, sourceType: 'module', ecmaFeatures: { jsx: true } }
-              };
-              const configFile = '.eslintrc-temp.json';
-              writeFileSync(configFile, JSON.stringify(eslintConfig));
-              const result = execSync(`npx eslint src --ext .js,.jsx,.ts,.tsx --format json --no-eslintrc --config ${configFile}`, {
-                encoding: 'utf8',
-                stdio: ['pipe', 'pipe', 'pipe']
-              });
-              const output = JSON.parse(result);
-              let violationsFound = false;
-              output.forEach(file => {
-                if (file.messages.length > 0) {
-                  violationsFound = true;
-                  file.messages.forEach(msg => {
-                    if (msg.ruleId === I18N_PLUGIN_RULE) {
-                      addLine(`❌ Hardcoded text in ${file.filePath}:${msg.line} – ${msg.message}`);
-                    }
-                  });
-                }
-              });
-              if (!violationsFound) {
-                addLine('✅ No hardcoded strings found. All labels come from i18n.');
-              }
-              execSync(`rm ${configFile}`);
-            } catch (e) {
-              if (e.stdout) {
-                try {
-                  const output = JSON.parse(e.stdout);
-                  let violationsFound = false;
-                  output.forEach(file => {
-                    file.messages.forEach(msg => {
-                      if (msg.ruleId === I18N_PLUGIN_RULE) {
-                        violationsFound = true;
-                        addLine(`❌ Hardcoded text in ${file.filePath}:${msg.line} – ${msg.message}`);
-                      }
-                    });
-                  });
-                  if (!violationsFound) addLine('✅ No hardcoded strings found.');
-                } catch (parseErr) {
-                  addLine('❌ Could not parse ESLint output.');
-                }
-              } else {
-                addLine('❌ Could not run ESLint. Is it installed?');
-              }
-              if (existsSync('.eslintrc-temp.json')) execSync('rm .eslintrc-temp.json');
-            }
-          }
-
-          // --- Main execution ---
-          (async () => {
-            console.log('Running quality checks...');
-            await checkBrokenLinks();
-            checkHardcodedColors();
-            checkThemeMapping();
-            checkI18n();
-
-            const fullReport = report.join('\n');
-            writeFileSync(REPORT_FILE, fullReport, 'utf8');
-            console.log(`Report written to ${REPORT_FILE}`);
-          })();
-          SCRIPT_EOF
-
-      - name: Run all quality checks
+      - name: Run quality checks
         run: node check-quality.js
 
-      - name: Check for issues and set status
+      - name: Check for issues
         id: check_issues
         run: |
           if grep -q '❌' quality-report.txt; then
             echo "fail=true" >> $GITHUB_OUTPUT
-            echo "Issues detected in report."
           else
             echo "fail=false" >> $GITHUB_OUTPUT
-            echo "No issues found."
           fi
 
-      - name: Upload quality report
+      - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
