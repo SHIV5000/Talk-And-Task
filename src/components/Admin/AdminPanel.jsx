@@ -22,7 +22,6 @@ const getTimestampMs = (value) => value?.toMillis?.() || (value ? new Date(value
 const stripHtml = (html) =>
   html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
-
 const SYSTEM_ROLES = ['Super Admin', 'Auditor', 'Department Moderator'];
 const PERMISSION_AREAS = ['Users', 'Tasks', 'Messages', 'Logs', 'Settings', 'Backups', 'Integrations', 'Compliance'];
 const PERMISSION_ACTIONS = ['read', 'create', 'update', 'delete'];
@@ -68,9 +67,9 @@ export default function AdminPanel({
   setViewMode,
   setActiveModal,
   dbUsers,
-  allUsers, // <--- Add this new prop
+  allUsers,
   groups,
-    filteredAuditLogs,
+  filteredAuditLogs,
   adminFilterUser,
   setAdminFilterUser,
   adminFilterDate,
@@ -138,6 +137,7 @@ export default function AdminPanel({
 
   // ----- People (Users + Departments) -----
   const [showAddUser, setShowAddUser] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserTempPassword, setNewUserTempPassword] = useState('');
@@ -190,7 +190,6 @@ export default function AdminPanel({
   });
   const [isOrgSaved, setIsOrgSaved] = useState(false);
 
-
   // ----- Enterprise Admin Workspace -----
   const [sessions, setSessions] = useState([]);
   const [roles, setRoles] = useState(DEFAULT_ROLES);
@@ -217,8 +216,6 @@ export default function AdminPanel({
     });
     return () => unsub();
   }, [effectiveOrgId, orgDoc]);
-
-
 
   useEffect(() => {
     if (!effectiveOrgId) return undefined;
@@ -608,8 +605,6 @@ export default function AdminPanel({
     setSelectedUsers(s);
   };
 
-
-  // Replace the old archiveUser function with this:
   const toggleArchiveUser = async (userRecord) => {
     const willArchive = !userRecord.isArchived;
     if (!window.confirm(`${willArchive ? 'Archive' : 'Unarchive'} ${userRecord.name || userRecord.email}? ${willArchive ? 'This user will be disabled and hidden globally.' : 'This user will be re-enabled.'}`)) return;
@@ -994,19 +989,17 @@ export default function AdminPanel({
           <div className="flex h-full flex-col gap-4 p-4 md:p-5 overflow-y-auto custom-sidebar-scroll">
             {/* Users Section */}
             {activeTab === 'users' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-              // In the Users Tab render block, update the header actions:
-  <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
-    <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
-    <div className="flex gap-4 items-center">
-      {/* Add Show Archived Toggle */}
-      <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
-        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="w-4 h-4 accent-indigo-600" />
-        Show Archived
-      </label>
-      <button onClick={() => setShowRoleMatrix(true)} disabled={!hasFeature('dataGovernance')} className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-50"><i className="fa-solid fa-user-shield mr-2"></i>Manage Roles</button>
-      <button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button>
-    </div>
-  </div>
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
+                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
+                <div className="flex gap-4 items-center">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
+                    <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="w-4 h-4 accent-indigo-600" />
+                    Show Archived
+                  </label>
+                  <button onClick={() => setShowRoleMatrix(true)} disabled={!hasFeature('dataGovernance')} className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-50"><i className="fa-solid fa-user-shield mr-2"></i>Manage Roles</button>
+                  <button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button>
+                </div>
+              </div>
               {showAddUser && (
                 <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-end">
                   <div><label className="text-xs font-bold text-slate-500 block mb-1">Email</label><input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="user@example.com" /></div>
@@ -1020,17 +1013,15 @@ export default function AdminPanel({
                 <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center gap-3 flex-wrap">
                   <span className="text-sm font-bold text-indigo-700">{selectedUsers.size} selected</span>
                   <div className="flex flex-wrap gap-2">
-                    
                     <button onClick={async () => { if (!window.confirm(`Approve ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isApproved: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Approve</button>
                     <button onClick={async () => { if (!window.confirm(`Grant admin to ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isAdmin: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600">Make Admin</button>
                     <button onClick={async () => { if (!window.confirm(`Revoke admin from ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isAdmin: false }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600">Revoke Admin</button>
                     <button onClick={async () => { 
-  if (!window.confirm(`Archive ${selectedUsers.size} user(s)? They will be disabled and hidden.`)) return; 
-  const toggleUserArchiveStatus = httpsCallable(functions, 'toggleUserArchiveStatus');
-  await Promise.all(Array.from(selectedUsers).map((uid) => toggleUserArchiveStatus({ uid, isArchived: true }))); 
-  setSelectedUsers(new Set()); 
-}} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600">Archive</button>
-                    
+                      if (!window.confirm(`Archive ${selectedUsers.size} user(s)? They will be disabled and hidden.`)) return; 
+                      const toggleUserArchiveStatus = httpsCallable(functions, 'toggleUserArchiveStatus');
+                      await Promise.all(Array.from(selectedUsers).map((uid) => toggleUserArchiveStatus({ uid, isArchived: true }))); 
+                      setSelectedUsers(new Set()); 
+                    }} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600">Archive</button>
                     <button onClick={() => { const sel = filteredUsers.filter((u) => selectedUsers.has(u.uid)); const csv = 'Name,Email,Approved,Admin\n' + sel.map((u) => `"${u.name}","${u.email}","${u.isApproved}","${u.isAdmin}"`).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'selected_users.csv'; link.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50">Export CSV</button>
                   </div>
                   <button onClick={() => setSelectedUsers(new Set())} className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600">Clear</button>
@@ -1066,12 +1057,11 @@ export default function AdminPanel({
                         <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-4 h-4 accent-indigo-600" /></td>
                         <td className="px-3 py-3 text-center text-[11px] text-slate-500">{formatDateTime(u.lastLogin || u.lastActive)}</td>
                         <td className="px-3 py-3 text-center"><select onChange={(e) => { if (!e.target.value) return; setDsarForm((prev) => ({ ...prev, uid: u.uid, mode: e.target.value })); setActiveTab('compliance'); e.target.value = ''; }} className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white"><option value="">DSAR Actions</option><option value="access">Export User Data</option><option value="delete">Right to be Forgotten</option></select></td>
-                        // Replace the old Archive button in the user row mapping with this:
-  <td className="px-3 py-3 text-right">
-    <button onClick={() => toggleArchiveUser(u)} className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${u.isArchived ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-      {u.isArchived ? 'Unarchive' : 'Archive'}
-    </button>
-  </td>
+                        <td className="px-3 py-3 text-right">
+                          <button onClick={() => toggleArchiveUser(u)} className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${u.isArchived ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                            {u.isArchived ? 'Unarchive' : 'Archive'}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1549,7 +1539,7 @@ export default function AdminPanel({
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Retention policies can auto-delete chat messages and task cards. Audit logs remain exempt.</p></div>
             <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end"><div><label className="text-xs font-bold text-slate-500">Category</label><select value={newRetentionPolicy.category} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, category: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option>Chat Messages</option><option>Task Cards</option><option>All Messages & Task Cards</option></select></div><div><label className="text-xs font-bold text-slate-500">TTL</label><select value={newRetentionPolicy.ttlDays} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, ttlDays: Number(e.target.value) })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option></select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={newRetentionPolicy.action} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, action: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value="archive">Archive</option><option value="delete">Delete permanently</option></select></div><button onClick={saveRetentionPolicy} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Add Rule</button></div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Policies</div>{retentionPolicies.map((policy) => <div key={policy.id} className="p-4 border-b last:border-0 flex items-center justify-between gap-3"><div><div className="font-bold text-slate-800">{policy.category}</div><div className="text-xs text-slate-500">{policy.ttlDays} days • {policy.action} • applies to {policy.category === 'Task Cards' ? 'task cards' : policy.category === 'All Messages & Task Cards' ? 'chat messages and task cards' : 'chat messages'}</div></div><div className="flex flex-wrap justify-end gap-2"><button onClick={() => updateRetentionPolicy(policy, { isActive: !policy.isActive })} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${policy.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{policy.isActive ? 'Active' : 'Inactive'}</button><button onClick={() => runCleanupNow(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'update')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 disabled:opacity-50">Run Cleanup Now</button><button onClick={() => deleteRetentionPolicy(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'delete')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 disabled:opacity-50">Delete</button></div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Past Cleanup Executions</div>{retentionRuns.map((run) => <div key={run.id} className="p-4 border-b last:border-0"><div className="flex justify-between"><span className="font-bold text-slate-700">{run.ruleName || run.ruleId}</span><span className="text-xs text-slate-400">{formatDateTime(run.timestamp)}</span></div><div className="text-xs text-slate-500">{run.affected || 0} documents • {run.status}</div></div>)}</div></div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Policies</div>{retentionPolicies.map((policy) => <div key={policy.id} className="p-4 border-b last:border-0 flex items-center justify-between gap-3"><div><div className="font-bold text-slate-800">{policy.category}</div><div className="text-xs text-slate-500">{policy.ttlDays} days • {policy.action} • applies to {policy.category === 'Task Cards' ? 'task cards' : policy.category === 'All Messages & Task Cards' ? 'chat messages'}</div></div><div className="flex flex-wrap justify-end gap-2"><button onClick={() => updateRetentionPolicy(policy, { isActive: !policy.isActive })} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${policy.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{policy.isActive ? 'Active' : 'Inactive'}</button><button onClick={() => runCleanupNow(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'update')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 disabled:opacity-50">Run Cleanup Now</button><button onClick={() => deleteRetentionPolicy(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'delete')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 disabled:opacity-50">Delete</button></div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Past Cleanup Executions</div>{retentionRuns.map((run) => <div key={run.id} className="p-4 border-b last:border-0"><div className="flex justify-between"><span className="font-bold text-slate-700">{run.ruleName || run.ruleId}</span><span className="text-xs text-slate-400">{formatDateTime(run.timestamp)}</span></div><div className="text-xs text-slate-500">{run.affected || 0} documents • {run.status}</div></div>)}</div></div>
           </div>
         )}
 
