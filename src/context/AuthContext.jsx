@@ -22,6 +22,7 @@ import {
 import { notifyRuntimeEvent } from '../utils/runtimeEventNotifier.js';
 
 const DEFAULT_APP_VERSION = '25.0';
+const DEFAULT_PLATFORM_OWNER_ORG_ID = 'mpgs';
 const PLATFORM_OWNER_EMAIL = 'shivsuri1@gmail.com';
 
 const defaultFeatureFlags = {};
@@ -126,6 +127,8 @@ async function ensureUserProfile(loggedInUser, claims = {}) {
       isAdmin: isFirstUser || isPlatformOwnerEmail,
       canCreateGroups: isFirstUser || isPlatformOwnerEmail,
       isPlatformOwner: !!claims.isPlatformOwner || !!claims.platformOwner || isPlatformOwnerEmail,
+      orgId: isPlatformOwnerEmail ? DEFAULT_PLATFORM_OWNER_ORG_ID : claims.orgId || null,
+      role: isPlatformOwnerEmail ? 'admin' : claims.role || 'member',
       profilePicUrl: loggedInUser.photoURL || null,
       toolPreferences: {
         reply: true,
@@ -161,6 +164,8 @@ async function ensureUserProfile(loggedInUser, claims = {}) {
       isAdmin: true,
       canCreateGroups: true,
       isPlatformOwner: true,
+      orgId: existingProfile.orgId || DEFAULT_PLATFORM_OWNER_ORG_ID,
+      role: existingProfile.role || 'admin',
     };
     await setDoc(userRef, ownerPatch, { merge: true });
     return { ...existingProfile, ...ownerPatch };
@@ -170,8 +175,6 @@ async function ensureUserProfile(loggedInUser, claims = {}) {
 }
 
 function resolveSessionClaims(claims, profile) {
-  const resolvedOrgId = claims.orgId || profile?.orgId || profile?.organizationId || null;
-  const resolvedRole = claims.role || profile?.role || profile?.roles?.[0] || (profile?.isAdmin ? 'admin' : 'member');
   const resolvedIsPlatformOwner = !!(
     claims.isPlatformOwner ||
     claims.platformOwner ||
@@ -179,6 +182,8 @@ function resolveSessionClaims(claims, profile) {
     profile?.isPlatformOwner ||
     (profile?.email || '').toLowerCase() === PLATFORM_OWNER_EMAIL
   );
+  const resolvedOrgId = claims.orgId || profile?.orgId || profile?.organizationId || (resolvedIsPlatformOwner ? DEFAULT_PLATFORM_OWNER_ORG_ID : null);
+  const resolvedRole = claims.role || profile?.role || profile?.roles?.[0] || (profile?.isAdmin || resolvedIsPlatformOwner ? 'admin' : 'member');
 
   return { resolvedOrgId, resolvedRole, resolvedIsPlatformOwner };
 }
@@ -249,6 +254,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setAuthChecked(false);
       setAuthError('');
       try {
         await hydrateSession(currentUser);
@@ -257,7 +263,7 @@ export function AuthProvider({ children }) {
         clearSession();
         setAuthError('Failed to load your session. Please sign in again.');
       } finally {
-        setTimeout(() => setAuthChecked(true), 300);
+        setAuthChecked(true);
       }
     });
 

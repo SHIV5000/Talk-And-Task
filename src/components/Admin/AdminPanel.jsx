@@ -107,17 +107,17 @@ export default function AdminPanel({
   const hasFeature = useCallback((flag) => featureFlags?.[flag] !== false, [featureFlags]);
   const adminTabs = useMemo(() => [
     { id: 'overview', flag: 'advancedAnalytics' },
-    { id: 'users' },
+    { id: 'users', flag: 'usersTab' },
     { id: 'security', flag: 'dataGovernance' },
-    { id: 'groups' },
+    { id: 'groups', flag: 'departmentsTab' },
     { id: 'tasks', flag: 'taskCards' },
     { id: 'logs', flag: 'auditLogs' },
-    { id: 'broadcast' },
+    { id: 'broadcast', flag: 'broadcasts' },
     { id: 'tags', flag: 'customBranding' },
     { id: 'lifecycle', flag: 'dataGovernance' },
     { id: 'recovery', flag: 'dsarCompliance' },
     { id: 'compliance', flag: 'dsarCompliance' },
-    { id: 'organization' },
+    { id: 'organization', flag: 'organizationSettings' },
   ].filter((tab) => !tab.flag || hasFeature(tab.flag)).map((tab) => tab.id), [hasFeature]);
 
   const [limitDraft, setLimitDraft] = useState(maxFileSizeMb || 5);
@@ -192,7 +192,7 @@ export default function AdminPanel({
   const [exportsHistory, setExportsHistory] = useState([]);
   const [storageIndex, setStorageIndex] = useState([]);
   const [dsarForm, setDsarForm] = useState({ uid: '', startDate: '', endDate: '', mode: 'access' });
-  const [adminSettings, setAdminSettings] = useState({ institutionName: '', pointOfContactEmail: '', fileUploadSizeMb: maxFileSizeMb || 5 });
+  const [adminSettings, setAdminSettings] = useState({ fileUploadSizeMb: maxFileSizeMb || 5 });
 
   // ===== REAL-TIME LISTENERS =====
   // Organization doc
@@ -1317,7 +1317,7 @@ export default function AdminPanel({
                 )}
 
                 {/* Historical Vault with search filter */}
-                {!globalAnnouncement?.isActive && pastBroadcasts.length > 0 && (
+                {pastBroadcasts.length > 0 && (
                   <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-0 flex-1">
                     <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between shrink-0">
                       <div>
@@ -1521,13 +1521,8 @@ export default function AdminPanel({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                   {hasFeature('customBranding') && <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Official Institution Name</label>
-                      <input type="text" value={adminSettings.institutionName || ''} onChange={(e) => setAdminSettings({ ...adminSettings, institutionName: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Point-of-Contact Email</label>
-                      <input type="email" value={adminSettings.pointOfContactEmail || ''} onChange={(e) => setAdminSettings({ ...adminSettings, pointOfContactEmail: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
+                    <div className="md:col-span-2 rounded-xl border border-indigo-100 bg-white/70 p-3 text-sm font-semibold text-indigo-700">
+                      Organization identity fields were removed; this form now keeps only operational limits and package-controlled settings.
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">File Upload Size Limit (MB)</label>

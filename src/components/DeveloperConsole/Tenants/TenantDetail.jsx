@@ -9,6 +9,13 @@ const formatBytes = (bytes) => {
   return `${(value / (1024 ** exponent)).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 };
 
+const formatINR = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(value || 0));
+
+const calculateMonthlyCostInr = (pricePerUser, userCount) => {
+  const subtotal = Number(pricePerUser || 0) * Number(userCount || 0);
+  return { subtotal, gst: subtotal * 0.18, total: subtotal * 1.18 };
+};
+
 const formatDateTime = (value) => {
   const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '—';
@@ -49,8 +56,16 @@ export default function TenantDetail({
 }) {
   const [isEditing, setIsEditing] = useState(false);
 
+  const packageRecord = useMemo(() => {
+    const packageId = getTenantPackageId(tenant);
+    return subscriptionPackages.find((item) => item.id === packageId || item.name === packageId || item.packageName === packageId) || null;
+  }, [tenant, subscriptionPackages]);
   const packageName = useMemo(() => getPackageName(tenant, subscriptionPackages), [tenant, subscriptionPackages]);
-  const storageLimit = tenant?.storageLimitOverride ?? tenant?.storageLimitBytes ?? tenant?.storageLimit ?? null;
+  const monthlyCost = useMemo(() => calculateMonthlyCostInr(packageRecord?.pricePerUserPerMonth ?? tenant?.pricePerUserPerMonth, tenant?.userCount), [packageRecord?.pricePerUserPerMonth, tenant?.pricePerUserPerMonth, tenant?.userCount]);
+  const storageLimit = tenant?.storageLimitOverride ?? tenant?.storageLimitMB ?? tenant?.storageLimitBytes ?? tenant?.storageLimit ?? null;
+  const storageLimitValue = storageLimit === null || storageLimit === undefined || storageLimit === ''
+    ? 'Package default'
+    : (tenant?.storageLimitOverride !== undefined || tenant?.storageLimitMB !== undefined ? `${storageLimit} MB` : formatBytes(storageLimit));
   const maxUsers = tenant?.maxUsersOverride ?? tenant?.maxUsers ?? null;
   const featureOverrides = Object.entries(tenant?.featureFlagsOverride || {}).sort(([a], [b]) => a.localeCompare(b));
 
@@ -129,14 +144,40 @@ export default function TenantDetail({
 
       <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <DetailItem label="Package" value={packageName} />
-        <DetailItem label="Users" value={tenant.userCount} />
+        <DetailItem label="Admin Name" value={tenant.adminName} />
+        <DetailItem label="Admin Email" value={tenant.adminEmail} />
+        <DetailItem label="Total Users" value={tenant.userCount} />
         <DetailItem label="Storage used" value={formatBytes(tenant.storageUsedBytes || tenant.storageUsed || tenant.storageBytes)} />
         <DetailItem label="Storage Limit for Organization" value={storageLimit === null || storageLimit === undefined || storageLimit === '' ? 'Package default' : formatBytes(storageLimit)} />
         <DetailItem label="Max users" value={maxUsers === null || maxUsers === undefined || maxUsers === '' ? 'Package default' : maxUsers} />
-        <DetailItem label="Admin" value={tenant.adminName || tenant.adminEmail} />
+        <DetailItem label="Monthly Cost (INR incl. 18% GST)" value={formatINR(monthlyCost.total)} />
         <DetailItem label="Created" value={formatDateTime(tenant.createdAt)} />
         <DetailItem label="Updated" value={formatDateTime(tenant.updatedAt)} />
       </dl>
+
+      <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+        <h4 className="text-sm font-semibold text-emerald-900">Dynamic INR pricing</h4>
+        <p className="mt-2 text-sm font-bold text-emerald-800">
+          Total Cost Per Month = ({formatINR(packageRecord?.pricePerUserPerMonth || 0)} × {tenant.userCount || 0} users) + 18% GST = {formatINR(monthlyCost.total)}
+        </p>
+        <p className="mt-1 text-xs font-semibold text-emerald-700">Subtotal {formatINR(monthlyCost.subtotal)} • GST {formatINR(monthlyCost.gst)}</p>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-slate-200 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-800">Organization users</h4>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{tenant.userCount || 0} total</span>
+        </div>
+        {tenant.userEmails?.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {tenant.userEmails.map((email) => (
+              <span key={email} className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{email}</span>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">No user emails found for this organization.</p>
+        )}
+      </div>
 
       <div className="mt-6 rounded-lg border border-slate-200 p-4">
         <h4 className="text-sm font-semibold text-slate-800">Feature override summary</h4>

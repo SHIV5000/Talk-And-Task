@@ -9,6 +9,8 @@ const emptyPackage = {
   featureFlags: {},
 };
 
+const formatINR = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(value || 0));
+
 const toNumberOrNull = (value) => {
   if (value === '' || value === null || value === undefined) return null;
   const number = Number(value);
@@ -39,6 +41,7 @@ export default function PackageForm({
   }), [packageRecord]);
 
   const [formState, setFormState] = useState(initialForm);
+  const pricePreview = Number(formState.pricePerUserPerMonth || 0);
 
   useEffect(() => {
     setFormState(initialForm);
@@ -89,7 +92,7 @@ export default function PackageForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-widest text-slate-500">Price per user / month</label>
+          <label className="mb-1.5 block text-xs font-bold uppercase tracking-widest text-slate-500">Price per user / month (INR)</label>
           <input
             required
             min="0"
@@ -99,6 +102,7 @@ export default function PackageForm({
             onChange={(event) => updateField('pricePerUserPerMonth', event.target.value)}
             className="w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm font-semibold text-slate-800 outline-none transition-all focus:border-[#008069] focus:ring-2 focus:ring-[#008069]/20"
           />
+          <p className="mt-1 text-xs font-semibold text-slate-500">Preview: {formatINR(pricePreview)} per user/month before 18% GST.</p>
         </div>
 
         <div>

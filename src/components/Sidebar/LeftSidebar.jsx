@@ -281,19 +281,7 @@ export default function LeftSidebar({
           })}
         </div>
 
-        {/* Admin Workspace v25.0 button (visible if user is admin) */}
-        {featureFlags.prioritySupport && (
-          <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
-            <button
-              type="button"
-              className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
-            >
-              <i className="fa-solid fa-headset"></i> Priority Support
-            </button>
-          </div>
-        )}
-
-
+        {/* Admin Workspace button (visible if user is admin) */}
         {isPlatformOwner && (
           <div className="p-3 bg-white/5 border-t border-white/10 shrink-0">
             <button
@@ -312,7 +300,7 @@ export default function LeftSidebar({
               onClick={() => setViewMode('admin')}
               className="w-full bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-shield-halved"></i> Admin Workspace v25.0
+              <i className="fa-solid fa-shield-halved"></i> Admin Workspace
             </button>
           </div>
         )}

@@ -16,6 +16,8 @@ const TENANT_COLLECTIONS = [
   'audit_logs',
 ];
 const DEFAULT_APP_VERSION = '1.0.0';
+const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+const SUPPORT_GROUP_ID = 'support';
 const DEFAULT_PACKAGES = {
   starter: {
     name: 'Starter',
@@ -119,21 +121,33 @@ const seedOrganizationDetails = async (orgId, details = {}, batchState) => {
   const packageData = packageSnap.data() || DEFAULT_PACKAGES[packageId] || DEFAULT_PACKAGES.enterprise;
   await queueBatchSet(batchState, db.collection('organizations').doc(orgId), {
     orgId,
-    name: details.name || details.displayName || 'MPGS',
+    name: details.orgName || details.name || details.displayName || 'MPGS',
+    orgName: details.orgName || details.name || details.displayName || 'MPGS',
+    adminName: details.adminName || '',
+    adminEmail: details.adminEmail || '',
     status: details.status || 'active',
     subscriptionPackageId: packageId,
     storageUsedBytes: Number(details.storageUsedBytes || 0),
     storageLimitBytes: Number(details.storageLimitBytes || packageData.storageLimitBytes || 0),
+    storageLimitOverride: details.storageLimitOverride ?? null,
+    maxUsersOverride: details.maxUsersOverride ?? null,
+    featureFlagsOverride: details.featureFlagsOverride || {},
     updatedAt: now,
     createdAt: details.createdAt || now,
   }, { merge: true });
   await queueBatchSet(batchState, db.collection('organizations').doc(orgId).collection('org_details').doc('details'), {
     orgId,
-    name: details.name || details.displayName || 'MPGS',
+    name: details.orgName || details.name || details.displayName || 'MPGS',
+    orgName: details.orgName || details.name || details.displayName || 'MPGS',
+    adminName: details.adminName || '',
+    adminEmail: details.adminEmail || '',
     status: details.status || 'active',
     subscriptionPackageId: packageId,
     storageUsedBytes: Number(details.storageUsedBytes || 0),
     storageLimitBytes: Number(details.storageLimitBytes || packageData.storageLimitBytes || 0),
+    storageLimitOverride: details.storageLimitOverride ?? null,
+    maxUsersOverride: details.maxUsersOverride ?? null,
+    featureFlagsOverride: details.featureFlagsOverride || {},
     contactEmail: details.contactEmail || null,
     domain: details.domain || null,
     updatedAt: now,
@@ -518,7 +532,8 @@ exports.setCustomClaims = onCall(async (request) => {
 exports.onboardTenant = onCall(async (request) => {
   await assertPlatformOwner(request);
   const data = request.data || {};
-  const orgId = data.orgId || toSlug(data.name || data.displayName);
+  const orgName = data.orgName || data.name || data.displayName;
+  const orgId = data.orgId || toSlug(orgName);
   if (!orgId) throw new HttpsError('invalid-argument', 'orgId or name is required.');
   const orgRef = db.collection('organizations').doc(orgId);
   const existing = await orgRef.get();
@@ -528,6 +543,8 @@ exports.onboardTenant = onCall(async (request) => {
   await seedSubscriptionPackages(batchState);
   await seedOrganizationDetails(orgId, {
     ...data,
+    orgName,
+    name: orgName,
     status: 'active',
     createdAt: existing.exists ? existing.data().createdAt : serverTimestamp(),
   }, batchState);
@@ -552,10 +569,27 @@ exports.onboardTenant = onCall(async (request) => {
     senderUid: "system",
     senderEmail: "Developer Console",
     groupId: groupRef.id,
+    groupName: "Welcome",
     timestamp: serverTimestamp(),
     isTask: false,
     seenBy: adminEmail ? [adminEmail] : [],
-    reactions: {}
+    reactions: {},
+    isPrivateForward: false,
+    allowedUsers: []
+  }, { merge: true });
+
+  const supportMembers = [...new Set([adminEmail].filter(Boolean))];
+  const supportGroupRef = db.collection('organizations').doc(orgId).collection('groups').doc(SUPPORT_GROUP_ID);
+  await queueBatchSet(batchState, supportGroupRef, {
+    name: "SUPPORT",
+    members: supportMembers,
+    admins: [GLOBAL_SUPPORT_ADMIN_EMAIL],
+    createdBy: GLOBAL_SUPPORT_ADMIN_EMAIL,
+    createdAt: serverTimestamp(),
+    isArchived: false,
+    isSupport: true,
+    universalRead: true,
+    profilePicUrl: null
   }, { merge: true });
   // ---------------------------------------------------
 
