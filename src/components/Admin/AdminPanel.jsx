@@ -205,13 +205,12 @@ export default function AdminPanel({
   const [adminSettings, setAdminSettings] = useState({ fileUploadSizeMb: maxFileSizeMb || 5 });
 
   // ===== REAL-TIME LISTENERS =====
-  // Organization doc
   useEffect(() => {
     if (!effectiveOrgId) return undefined;
     const unsub = onSnapshot(orgDoc('org_details', 'details'), (docSnap) => {
       if (docSnap.exists()) {
         setOrgDetails(docSnap.data());
-        setIsOrgSaved(true); // assume saved if data exists
+        setIsOrgSaved(true);
       }
     });
     return () => unsub();
@@ -243,7 +242,7 @@ export default function AdminPanel({
     });
   }, [effectiveOrgId, orgDoc]);
 
-  // Broadcast acks (for live & historical)
+  // Broadcast acks
   useEffect(() => {
     if (activeTab === 'broadcast' && effectiveOrgId) {
       const unsubAcks = onSnapshot(orgCollection('broadcast_acks'), (snap) => {
@@ -251,7 +250,6 @@ export default function AdminPanel({
         acks.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
         setAllAcks(acks);
       });
-      // Past broadcasts are stored in the current organization's broadcast history collection.
       const q = query(broadcastHistoryCollectionRef(), orderBy('timestamp', 'desc'));
       const unsubPast = onSnapshot(q, (snap) => {
         setPastBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -391,7 +389,6 @@ export default function AdminPanel({
   const canRunCompliance = hasFeature('dsarCompliance') && hasPermission(effectiveAdminUser, roles, 'Compliance', 'create');
 
   // ===== FUNCTIONS =====
-
   const logAuditEvent = async (type, target = '', details = {}) => {
     if (!effectiveOrgId) return;
     await addDoc(orgCollection('audit_logs'), {
@@ -655,7 +652,6 @@ export default function AdminPanel({
     if (!ensureOrgContext()) return;
     if (!broadcastMessage.trim()) return alert('Please enter a message.');
     setIsBroadcasting(true);
-    // Store the active announcement in the same org-scoped document read by useWorkspaceData.
     await setDoc(broadcastAnnouncementRef(), {
       message: broadcastMessage.trim(),
       type: broadcastType,
@@ -663,7 +659,6 @@ export default function AdminPanel({
       timestamp: serverTimestamp(),
       author: currentUserData?.name || 'Administrator',
     });
-    // Also store a copy in the organization's broadcasts collection for history.
     await addDoc(broadcastHistoryCollectionRef(), {
       message: broadcastMessage.trim(),
       type: broadcastType,
@@ -862,7 +857,6 @@ export default function AdminPanel({
         {/* ========= OVERVIEW TAB ========= */}
         {activeTab === 'overview' && hasFeature('advancedAnalytics') && (
           <div className="flex h-full flex-col gap-4 p-4 md:p-5 overflow-y-auto custom-sidebar-scroll">
-            {/* time range */}
             <div className="flex items-center gap-2 justify-end">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Show:</span>
               {['today', 'week', 'month'].map((range) => (
@@ -874,7 +868,6 @@ export default function AdminPanel({
               ))}
             </div>
 
-            {/* Metric cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div onClick={() => hasFeature('auditLogs') && setActiveTab('logs')} className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
@@ -927,7 +920,6 @@ export default function AdminPanel({
               ))}
             </div>
 
-            {/* additional cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
                 <div>
@@ -954,7 +946,6 @@ export default function AdminPanel({
               </div>
             </div>}
 
-            {/* activity feed */}
             {hasFeature('auditLogs') && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-1 flex-col min-h-[320px]">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2"><i className="fa-solid fa-clock-rotate-left text-indigo-500"></i> Recent Activity</h3>
@@ -1069,7 +1060,7 @@ export default function AdminPanel({
               </div>
             </div>}
 
-            {/* Departments Section - TABLE view */}
+            {/* Departments Section */}
             {activeTab === 'groups' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center">
                 <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>DEPARTMENTS</h2>
@@ -1099,7 +1090,6 @@ export default function AdminPanel({
                   </form>
                 </div>
               )}
-              {/* Departments Table */}
               <div className="overflow-y-auto custom-sidebar-scroll flex-1">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0">
@@ -1135,7 +1125,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ========= TASKS TAB (Table with S.No., Edit/Delete buttons) ========= */}
+        {/* ========= TASKS TAB ========= */}
         {activeTab === 'tasks' && (
           <div className="flex flex-col gap-4 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             <div className="flex flex-wrap gap-3 items-center justify-between">
@@ -1209,7 +1199,6 @@ export default function AdminPanel({
                             <td className="px-4 py-3 text-xs font-medium">{groupName}</td>
                             <td className="px-4 py-3 text-right text-slate-300">—</td>
                           </tr>
-                          {/* Edit form row */}
                           {editingTaskId === task.id && (
                             <tr>
                               <td colSpan={7} className="bg-slate-50 p-4">
@@ -1236,7 +1225,6 @@ export default function AdminPanel({
                               </td>
                             </tr>
                           )}
-                          {/* Trail expansion */}
                           {isExpanded && (
                             <tr>
                               <td colSpan={7} className="bg-slate-50 p-4 border-t border-slate-200">
@@ -1304,7 +1292,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ========= BROADCAST TAB (Smaller compose, filterable vault) ========= */}
+        {/* ========= BROADCAST TAB ========= */}
         {activeTab === 'broadcast' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full max-w-4xl mx-auto">
@@ -1367,7 +1355,6 @@ export default function AdminPanel({
                   </div>
                 )}
 
-                {/* Historical Vault with search filter */}
                 {pastBroadcasts.length > 0 && (
                   <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-0 flex-1">
                     <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between shrink-0">
@@ -1409,7 +1396,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ========= TAGS TAB (Table with Edit/Delete) ========= */}
+        {/* ========= TAGS TAB ========= */}
         {activeTab === 'tags' && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col h-full min-h-0 overflow-hidden">
@@ -1419,7 +1406,6 @@ export default function AdminPanel({
               </div>
 
               <div className="flex flex-col md:flex-row gap-6 h-full min-h-0">
-                {/* Create Tag */}
                 <div className="w-full md:w-1/3 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-inner overflow-y-auto custom-sidebar-scroll">
                   <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Create New Tag</h3>
                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Hashtag Label</label>
@@ -1438,7 +1424,6 @@ export default function AdminPanel({
                   <button onClick={handleAddTag} className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition-all hover:-translate-y-0.5"><i className="fa-solid fa-cloud-arrow-up mr-2"></i>Publish Tag</button>
                 </div>
 
-                {/* Active Tags Table */}
                 <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-5 overflow-y-auto custom-sidebar-scroll shadow-sm">
                   <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase tracking-wider">Active Global Tags</h3>
                   {(!customTags || customTags.length === 0) ? (
@@ -1476,7 +1461,6 @@ export default function AdminPanel({
                                   <span className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold tracking-wide shadow-sm ${tag.bgClass} ${tag.textClass}`}>
                                     {tag.label}
                                   </span>
-                                  {/* Price-tag style effect: little circle */}
                                   <span className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-l-[8px] border-l-slate-300"></span>
                                 </span>
                               </td>
@@ -1497,8 +1481,7 @@ export default function AdminPanel({
           </div>
         )}
 
-
-
+        {/* ========= ROLE MATRIX ========= */}
         {showRoleMatrix && hasFeature('dataGovernance') && (
           <div className="fixed inset-0 bg-slate-900/40 z-[250] flex justify-end" onClick={() => setShowRoleMatrix(false)}>
             <div className="w-full max-w-4xl bg-white h-full shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -1517,6 +1500,7 @@ export default function AdminPanel({
           </div>
         )}
 
+        {/* ========= SECURITY TAB ========= */}
         {activeTab === 'security' && hasFeature('dataGovernance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-shield-halved text-rose-600 mr-2"></i>Security & Sessions</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Live users auto-refresh from real-time Firestore activity and session documents.</p></div><button onClick={forceLogoutAll} className="bg-rose-600 text-white px-5 py-3 rounded-xl font-black shadow-sm hover:bg-rose-700"><i className="fa-solid fa-power-off mr-2"></i>Force Logout All Users</button></div>
@@ -1535,7 +1519,8 @@ export default function AdminPanel({
           </div>
         )}
 
-      |{activeTab === 'lifecycle' && hasFeature('dataGovernance') && (
+        {/* ========= LIFECYCLE TAB ========= */}
+        {activeTab === 'lifecycle' && hasFeature('dataGovernance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
               <h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2>
@@ -1576,7 +1561,6 @@ export default function AdminPanel({
                   <div key={policy.id} className="p-4 border-b last:border-0 flex items-center justify-between gap-3">
                     <div>
                       <div className="font-bold text-slate-800">{policy.category}</div>
-                      {/* FIXED TERNARY OPERATOR BELOW */}
                       <div className="text-xs text-slate-500">
                         {policy.ttlDays} days • {policy.action} • applies to {policy.category === 'Task Cards' ? 'task cards' : (policy.category === 'All Messages & Task Cards' ? 'messages & tasks' : 'chat messages')}
                       </div>
@@ -1605,3 +1589,135 @@ export default function AdminPanel({
             </div>
           </div>
         )}
+
+        {/* ========= RECOVERY TAB ========= */}
+        {activeTab === 'recovery' && hasFeature('dsarCompliance') && (
+          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4"><div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-cloud-arrow-down text-indigo-600 mr-2"></i>Disaster Recovery</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Exports are logged to Firestore and downloaded as JSON.</p></div><button onClick={exportFullDatabase} disabled={!canRunBackups} className="bg-indigo-600 text-white px-5 py-3 rounded-xl font-black disabled:opacity-50">Export Full Database (JSON)</button></div><div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Export History</div>{exportsHistory.map((item) => <div key={item.id} className="p-4 border-b last:border-0"><div className="font-bold text-slate-700">{item.fileName}</div><div className="text-xs text-slate-500">{formatDateTime(item.timestamp)} • {item.size || 0} bytes • {item.status}</div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b flex justify-between"><span>Storage Link Index</span><button onClick={buildStorageIndex} className="text-xs text-indigo-600 font-bold">Refresh</button></div>{storageIndex.map((file, idx) => <div key={`${file.path}-${idx}`} className="p-4 border-b last:border-0 flex justify-between gap-3"><div className="min-w-0"><div className="font-bold text-slate-700 truncate">{file.name}</div><div className="text-xs text-slate-500 truncate">{file.path}</div></div><button onClick={() => window.open(file.url, '_blank')} className="text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg">Download</button></div>)}</div></div></div>
+        )}
+
+        {/* ========= COMPLIANCE TAB ========= */}
+        {activeTab === 'compliance' && hasFeature('dsarCompliance') && (
+          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4"><div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-scale-balanced text-purple-600 mr-2"></i>Compliance (DSAR)</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Generate access reports or execute right-to-be-forgotten workflows.</p></div><div className="bg-white rounded-2xl border border-slate-200 p-5 grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500">User</label><select value={dsarForm.uid} onChange={(e) => setDsarForm({ ...dsarForm, uid: e.target.value })} className="modern-date-input"><option value="">Select user</option>{dbUsers.map((u) => <option key={u.uid} value={u.uid}>{u.name} — {u.email}</option>)}</select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={dsarForm.mode} onChange={(e) => setDsarForm({ ...dsarForm, mode: e.target.value })} className="modern-date-input"><option value="access">Generate Access Report</option><option value="delete">Execute Hard Delete</option></select></div><div><label className="text-xs font-bold text-slate-500">Start Date</label><input type="date" value={dsarForm.startDate} onChange={(e) => setDsarForm({ ...dsarForm, startDate: e.target.value })} className="modern-date-input" /></div><div><label className="text-xs font-bold text-slate-500">End Date</label><input type="date" value={dsarForm.endDate} onChange={(e) => setDsarForm({ ...dsarForm, endDate: e.target.value })} className="modern-date-input" /></div><div className="md:col-span-2 flex gap-3"><button onClick={generateDsarReport} disabled={!canRunCompliance} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">Generate Access Report</button><button onClick={executeHardDelete} disabled={!canRunCompliance} className="bg-rose-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">Execute Hard Delete</button></div></div></div>
+        )}
+
+        {/* ========= ORGANIZATION TAB ========= */}
+        {activeTab === 'organization' && (
+          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col max-w-4xl mx-auto h-full min-h-0">
+              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-building-columns text-2xl"></i></div>
+                <div>
+                  <h2 className="font-bold text-slate-800 text-xl leading-tight">Organization Details</h2>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manage your company profile</span>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-sidebar-scroll pr-2">
+                {isOrgSaved && (
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm font-bold mb-5 flex items-center gap-2">
+                    <i className="fa-solid fa-circle-check"></i> Details saved successfully.
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  {hasFeature('customBranding') && <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2 rounded-xl border border-indigo-100 bg-white/70 p-3 text-sm font-semibold text-indigo-700">
+                      Organization identity fields were removed; this form now keeps only operational limits and package-controlled settings.
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">File Upload Size Limit (MB)</label>
+                      <input type="number" min="1" value={adminSettings.fileUploadSizeMb || maxFileSizeMb || 5} onChange={(e) => setAdminSettings({ ...adminSettings, fileUploadSizeMb: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Active User Count</label>
+                      <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <VersionManager currentVersion={appVersion} />
+                    </div>
+                    <div className="md:col-span-2 flex justify-end"><button type="button" onClick={saveInstitutionSettings} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Save Institution Settings</button></div>
+                  </div>}
+
+                  {hasFeature('apiAccess') && (
+                    <div className="md:col-span-2 bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-between gap-4">
+                      <div><h3 className="font-black"><i className="fa-solid fa-code mr-2"></i>API Access</h3><p className="text-xs text-slate-300 font-bold uppercase tracking-wider">Manage integration keys and webhook settings.</p></div>
+                      <button type="button" onClick={() => logAuditEvent('API_SETTINGS_VIEW', 'organization')} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-sm font-bold">Open API Settings</button>
+                    </div>
+                  )}
+
+                  {hasFeature('prioritySupport') && (
+                    <div className="md:col-span-2 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-2xl p-4 flex items-center justify-between gap-4">
+                      <div><h3 className="font-black"><i className="fa-solid fa-headset mr-2"></i>Priority Support</h3><p className="text-xs font-bold uppercase tracking-wider">Escalation workflows and premium support contacts are enabled.</p></div>
+                      <button type="button" className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Contact Support</button>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Organization Name</label>
+                    <input type="text" value={orgDetails.orgName} onChange={(e) => setOrgDetails({ ...orgDetails, orgName: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Address</label>
+                    <input type="text" value={orgDetails.address} onChange={(e) => setOrgDetails({ ...orgDetails, address: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Email</label>
+                    <input type="email" value={orgDetails.email} onChange={(e) => setOrgDetails({ ...orgDetails, email: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Phone</label>
+                    <input type="text" value={orgDetails.phone} onChange={(e) => setOrgDetails({ ...orgDetails, phone: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Admin Name</label>
+                    <input type="text" value={orgDetails.adminName} onChange={(e) => setOrgDetails({ ...orgDetails, adminName: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Admin Designation</label>
+                    <input type="text" value={orgDetails.adminDesignation} onChange={(e) => setOrgDetails({ ...orgDetails, adminDesignation: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Admin Email</label>
+                    <input type="email" value={orgDetails.adminEmail} onChange={(e) => setOrgDetails({ ...orgDetails, adminEmail: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Admin Mobile</label>
+                    <input type="text" value={orgDetails.adminMobile} onChange={(e) => setOrgDetails({ ...orgDetails, adminMobile: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Subscription Type</label>
+                    <select value={orgDetails.subscriptionType} onChange={(e) => setOrgDetails({ ...orgDetails, subscriptionType: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500">
+                      <option>Free</option>
+                      <option>Basic</option>
+                      <option>Premium</option>
+                      <option>Enterprise</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Active Users</label>
+                    <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                  {isOrgSaved ? (
+                    <button onClick={() => setIsOrgSaved(false)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700">
+                      <i className="fa-solid fa-pen-to-square mr-2"></i>Edit Details
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => setIsOrgSaved(true)} className="bg-white border border-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-bold hover:bg-slate-50">Cancel</button>
+                      <button onClick={saveOrgDetails} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700">
+                        <i className="fa-solid fa-floppy-disk mr-2"></i>Save Details
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
