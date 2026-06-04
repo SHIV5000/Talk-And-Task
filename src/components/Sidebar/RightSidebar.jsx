@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import VersionDisplay from '../Common/VersionDisplay.jsx';
 
 const inRange = (message, start, end) => {
@@ -13,6 +13,12 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
   const [preset, setPreset] = useState('today');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [liveRefreshTick, setLiveRefreshTick] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setLiveRefreshTick((tick) => tick + 1), 30000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const range = useMemo(() => {
     const now = new Date();
@@ -24,6 +30,7 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
   }, [preset, startDate, endDate]);
 
   const stats = useMemo(() => {
+    // messages is fed by Firestore snapshots; liveRefreshTick keeps date/online cards fresh without a page reload.
     const scoped = messages.filter((m) => inRange(m, range.start, range.end));
     const sent = scoped.filter((m) => m.senderEmail === user.email);
     const received = scoped.filter((m) => m.senderEmail !== user.email && (!m.isPrivateMention || m.allowedUsers?.includes(user.email)));
@@ -32,12 +39,12 @@ export default function RightSidebar({ messages = [], user, sidebarWidth, dbUser
       { label: 'Messages Received', value: received.filter((m) => !m.isTask).length, icon: 'fa-inbox', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
       { label: 'Messages Acknowledged', value: scoped.filter((m) => m.taskData?.ackBy?.[user.email] || (m.seenBy || []).includes(user.email)).length, icon: 'fa-circle-check', tone: 'bg-lime-50 text-lime-700 border-lime-100' },
       { label: 'Messages Replied', value: scoped.filter((m) => m.replyToId && m.senderEmail === user.email).length, icon: 'fa-reply', tone: 'bg-purple-50 text-purple-700 border-purple-100' },
-      { label: 'Task Allotted', value: scoped.filter((m) => m.isTask && m.senderEmail === user.email).length, icon: 'fa-list-check', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+      { label: 'Tasks Allotted To Me', value: scoped.filter((m) => m.isTask && m.taskData?.assignees?.includes(user.email)).length, icon: 'fa-list-check', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
       { label: 'Task Completed', value: scoped.filter((m) => m.isTask && m.taskData?.status === 'Completed' && (m.senderEmail === user.email || m.taskData?.assignees?.includes(user.email))).length, icon: 'fa-flag-checkered', tone: 'bg-rose-50 text-rose-700 border-rose-100' },
     ];
-  }, [messages, range, user.email]);
+  }, [messages, range, user.email, liveRefreshTick]);
 
-  const onlineCount = useMemo(() => dbUsers.filter(u => u.lastActive && Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000).length, [dbUsers]);
+  const onlineCount = useMemo(() => dbUsers.filter(u => u.lastActive && Date.now() - (u.lastActive?.toMillis?.() || 0) < 900000).length, [dbUsers, liveRefreshTick]);
 
   const filters = [
     ['today', 'Today'],

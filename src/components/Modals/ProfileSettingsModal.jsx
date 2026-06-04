@@ -1,14 +1,6 @@
 import React, { useState } from 'react';
 
 const fontOptions = ['Inter', 'Roboto', 'Nunito', 'Poppins', 'System'];
-const accentOptions = [
-  { key: 'indigo', label: 'Indigo', className: 'bg-indigo-600' },
-  { key: 'teal', label: 'Teal', className: 'bg-teal-600' },
-  { key: 'rose', label: 'Rose', className: 'bg-rose-600' },
-  { key: 'amber', label: 'Amber', className: 'bg-amber-500' },
-  { key: 'emerald', label: 'Emerald', className: 'bg-emerald-600' },
-];
-
 export default function ProfileSettingsModal({
   setActiveModal,
   currentUserData,
@@ -31,7 +23,7 @@ export default function ProfileSettingsModal({
 
   return (
     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setActiveModal(null)}>
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl animate-in zoom-in-95 overflow-hidden transform-gpu" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-700 animate-in zoom-in-95 overflow-hidden transform-gpu" onClick={e => e.stopPropagation()}>
         
         <div className="bg-indigo-600 text-white px-6 py-5 flex items-center gap-4">
           <button onClick={() => setActiveModal(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors -ml-2">
@@ -40,9 +32,9 @@ export default function ProfileSettingsModal({
           <h3 className="font-bold text-lg tracking-wide">Profile Settings</h3>
         </div>
 
-        <div className="px-6 pt-5 flex gap-2 bg-slate-50 border-b border-slate-100">
+        <div className="px-6 pt-5 flex gap-2 bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-700">
           {tabs.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-t-xl text-sm font-bold capitalize transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-indigo-600'}`}>{tab}</button>
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-t-xl text-sm font-bold capitalize transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300'}`}>{tab}</button>
           ))}
         </div>
         
@@ -98,20 +90,10 @@ export default function ProfileSettingsModal({
                 </select>
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-2 ml-1">Theme Color</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {accentOptions.map(color => (
-                    <button key={color.key} type="button" onClick={()=>setProfileForm({...profileForm, accentColor: color.key})} className={`h-12 rounded-2xl ${color.className} shadow-sm border-4 ${profileForm.accentColor === color.key ? 'border-slate-900' : 'border-white'} transition-all`} title={color.label}>
-                      {profileForm.accentColor === color.key && <i className="fa-solid fa-check text-white drop-shadow"></i>}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-950 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
                 <div>
-                  <div className="text-sm font-bold text-slate-800">Display Mode</div>
+                  <div className="text-sm font-bold text-slate-800 dark:text-slate-100">Display Mode</div>
                   <div className="text-xs text-slate-500">Switch between light and dark UI modes.</div>
                 </div>
                 <button type="button" onClick={()=>setProfileForm({...profileForm, displayMode: profileForm.displayMode === 'dark' ? 'light' : 'dark'})} className={`w-16 h-8 rounded-full p-1 transition-all ${profileForm.displayMode === 'dark' ? 'bg-slate-900' : 'bg-indigo-100'}`}>
@@ -123,7 +105,7 @@ export default function ProfileSettingsModal({
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-2 ml-1">Global Typography</label>
                 <div className="grid grid-cols-4 gap-2">
                   {fontScaleOptions.map(opt => (
-                    <button key={opt.key} type="button" onClick={()=>setProfileForm({...profileForm, fontScale: opt.key})} className={`py-2 rounded-xl text-xs font-bold border transition-all ${profileForm.fontScale === opt.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-200'}`}>{opt.label}</button>
+                    <button key={opt.key} type="button" onClick={()=>setProfileForm({...profileForm, fontScale: opt.key})} className={`py-2 rounded-xl text-xs font-bold border transition-all ${profileForm.fontScale === opt.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-200'}`}>{opt.label}</button>
                   ))}
                 </div>
               </div>
@@ -131,7 +113,7 @@ export default function ProfileSettingsModal({
           )}
 
           <div className="flex items-center gap-3 pt-1">
-            <button type="button" onClick={() => setActiveModal(null)} className="flex-1 bg-white border border-slate-200 text-slate-700 py-3.5 rounded-xl hover:bg-slate-50 transition-all font-bold tracking-wide">Cancel</button>
+            <button type="button" onClick={() => setActiveModal(null)} className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100 py-3.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-bold tracking-wide">Cancel</button>
             <button onClick={handleProfileSubmit} disabled={profileUploadProgress > 0} className="flex-1 bg-indigo-600 text-white py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold tracking-wide hover:-translate-y-0.5 active:translate-y-0">
               {profileUploadProgress > 0 ? `Uploading Photo ${Math.round(profileUploadProgress)}%` : 'Save Changes'}
             </button>

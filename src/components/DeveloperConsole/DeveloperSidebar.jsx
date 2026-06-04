@@ -26,6 +26,18 @@ const developerLinks = [
     icon: 'fa-database',
   },
   {
+    href: '/developer-hq/live-users',
+    label: 'Live Users',
+    description: 'Logged-in users',
+    icon: 'fa-signal',
+  },
+  {
+    href: '/developer-hq/global-dispatch',
+    label: 'Global Dispatch',
+    description: 'SUPPORT broadcasts',
+    icon: 'fa-tower-broadcast',
+  },
+  {
     href: '/developer-hq/version',
     label: 'Version',
     description: 'Release control',
