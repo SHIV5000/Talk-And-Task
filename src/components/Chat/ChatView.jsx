@@ -22,7 +22,7 @@ export default function ChatView({
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
   unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
-  customTags, setActiveReplies, setActiveTaskSidebar, featureFlags = {}
+  customTags, setActiveReplies, setActiveTaskSidebar, sendMessageToDB, featureFlags = {}
 }) {
   const [expandedThreads, setExpandedThreads] = useState({});
   const userEmail = (user?.email || '').toLowerCase();
@@ -208,6 +208,7 @@ export default function ChatView({
                   threadReplies={threadReplies}
                   threadExpanded={!!expandedThreads[msg.id]}
                   onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+                  sendMessageToDB={sendMessageToDB}
                   featureFlags={featureFlags}
                 />
               </React.Fragment>
