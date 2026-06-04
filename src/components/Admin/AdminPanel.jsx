@@ -1535,140 +1535,73 @@ export default function AdminPanel({
           </div>
         )}
 
-        {activeTab === 'lifecycle' && hasFeature('dataGovernance') && (
+      |{activeTab === 'lifecycle' && hasFeature('dataGovernance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Retention policies can auto-delete chat messages and task cards. Audit logs remain exempt.</p></div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end"><div><label className="text-xs font-bold text-slate-500">Category</label><select value={newRetentionPolicy.category} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, category: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option>Chat Messages</option><option>Task Cards</option><option>All Messages & Task Cards</option></select></div><div><label className="text-xs font-bold text-slate-500">TTL</label><select value={newRetentionPolicy.ttlDays} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, ttlDays: Number(e.target.value) })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option></select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={newRetentionPolicy.action} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, action: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value="archive">Archive</option><option value="delete">Delete permanently</option></select></div><button onClick={saveRetentionPolicy} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Add Rule</button></div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Policies</div>{retentionPolicies.map((policy) => <div key={policy.id} className="p-4 border-b last:border-0 flex items-center justify-between gap-3"><div><div className="font-bold text-slate-800">{policy.category}</div><div className="text-xs text-slate-500">{policy.ttlDays} days • {policy.action} • applies to {policy.category === 'Task Cards' ? 'task cards' : policy.category === 'All Messages & Task Cards' ? 'chat messages'}</div></div><div className="flex flex-wrap justify-end gap-2"><button onClick={() => updateRetentionPolicy(policy, { isActive: !policy.isActive })} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${policy.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{policy.isActive ? 'Active' : 'Inactive'}</button><button onClick={() => runCleanupNow(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'update')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 disabled:opacity-50">Run Cleanup Now</button><button onClick={() => deleteRetentionPolicy(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'delete')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 disabled:opacity-50">Delete</button></div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Past Cleanup Executions</div>{retentionRuns.map((run) => <div key={run.id} className="p-4 border-b last:border-0"><div className="flex justify-between"><span className="font-bold text-slate-700">{run.ruleName || run.ruleId}</span><span className="text-xs text-slate-400">{formatDateTime(run.timestamp)}</span></div><div className="text-xs text-slate-500">{run.affected || 0} documents • {run.status}</div></div>)}</div></div>
-          </div>
-        )}
-
-        {activeTab === 'recovery' && hasFeature('dsarCompliance') && (
-          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4"><div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-cloud-arrow-down text-indigo-600 mr-2"></i>Disaster Recovery</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Exports are logged to Firestore and downloaded as JSON.</p></div><button onClick={exportFullDatabase} disabled={!canRunBackups} className="bg-indigo-600 text-white px-5 py-3 rounded-xl font-black disabled:opacity-50">Export Full Database (JSON)</button></div><div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Export History</div>{exportsHistory.map((item) => <div key={item.id} className="p-4 border-b last:border-0"><div className="font-bold text-slate-700">{item.fileName}</div><div className="text-xs text-slate-500">{formatDateTime(item.timestamp)} • {item.size || 0} bytes • {item.status}</div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b flex justify-between"><span>Storage Link Index</span><button onClick={buildStorageIndex} className="text-xs text-indigo-600 font-bold">Refresh</button></div>{storageIndex.map((file, idx) => <div key={`${file.path}-${idx}`} className="p-4 border-b last:border-0 flex justify-between gap-3"><div className="min-w-0"><div className="font-bold text-slate-700 truncate">{file.name}</div><div className="text-xs text-slate-500 truncate">{file.path}</div></div><button onClick={() => window.open(file.url, '_blank')} className="text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg">Download</button></div>)}</div></div></div>
-        )}
-
-        {activeTab === 'compliance' && hasFeature('dsarCompliance') && (
-          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4"><div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-scale-balanced text-purple-600 mr-2"></i>Compliance (DSAR)</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Generate access reports or execute right-to-be-forgotten workflows.</p></div><div className="bg-white rounded-2xl border border-slate-200 p-5 grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500">User</label><select value={dsarForm.uid} onChange={(e) => setDsarForm({ ...dsarForm, uid: e.target.value })} className="modern-date-input"><option value="">Select user</option>{dbUsers.map((u) => <option key={u.uid} value={u.uid}>{u.name} — {u.email}</option>)}</select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={dsarForm.mode} onChange={(e) => setDsarForm({ ...dsarForm, mode: e.target.value })} className="modern-date-input"><option value="access">Generate Access Report</option><option value="delete">Execute Hard Delete</option></select></div><div><label className="text-xs font-bold text-slate-500">Start Date</label><input type="date" value={dsarForm.startDate} onChange={(e) => setDsarForm({ ...dsarForm, startDate: e.target.value })} className="modern-date-input" /></div><div><label className="text-xs font-bold text-slate-500">End Date</label><input type="date" value={dsarForm.endDate} onChange={(e) => setDsarForm({ ...dsarForm, endDate: e.target.value })} className="modern-date-input" /></div><div className="md:col-span-2 flex gap-3"><button onClick={generateDsarReport} disabled={!canRunCompliance} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">Generate Access Report</button><button onClick={executeHardDelete} disabled={!canRunCompliance} className="bg-rose-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">Execute Hard Delete</button></div></div></div>
-        )}
-
-        {/* ========= ORGANIZATION TAB ========= */}
-        {activeTab === 'organization' && (
-          <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col max-w-4xl mx-auto h-full min-h-0">
-              <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4 shrink-0">
-                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner"><i className="fa-solid fa-building-columns text-2xl"></i></div>
-                <div>
-                  <h2 className="font-bold text-slate-800 text-xl leading-tight">Organization Details</h2>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manage your company profile</span>
-                </div>
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+              <h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Retention policies can auto-delete chat messages and task cards. Audit logs remain exempt.</p>
+            </div>
+            
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="text-xs font-bold text-slate-500">Category</label>
+                <select value={newRetentionPolicy.category} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, category: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                  <option>Chat Messages</option>
+                  <option>Task Cards</option>
+                  <option>All Messages & Task Cards</option>
+                </select>
               </div>
-
-              <div className="flex-1 overflow-y-auto custom-sidebar-scroll pr-2">
-                {isOrgSaved && (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm font-bold mb-5 flex items-center gap-2">
-                    <i className="fa-solid fa-circle-check"></i> Details saved successfully.
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                  {hasFeature('customBranding') && <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2 rounded-xl border border-indigo-100 bg-white/70 p-3 text-sm font-semibold text-indigo-700">
-                      Organization identity fields were removed; this form now keeps only operational limits and package-controlled settings.
-                    </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">TTL</label>
+                <select value={newRetentionPolicy.ttlDays} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, ttlDays: Number(e.target.value) })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                  <option value={30}>30 days</option>
+                  <option value={60}>60 days</option>
+                  <option value={90}>90 days</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">Action</label>
+                <select value={newRetentionPolicy.action} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, action: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                  <option value="archive">Archive</option>
+                  <option value="delete">Delete permanently</option>
+                </select>
+              </div>
+              <button onClick={saveRetentionPolicy} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Add Rule</button>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="p-3 font-black text-slate-700 border-b">Policies</div>
+                {retentionPolicies.map((policy) => (
+                  <div key={policy.id} className="p-4 border-b last:border-0 flex items-center justify-between gap-3">
                     <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">File Upload Size Limit (MB)</label>
-                      <input type="number" min="1" value={adminSettings.fileUploadSizeMb || maxFileSizeMb || 5} onChange={(e) => setAdminSettings({ ...adminSettings, fileUploadSizeMb: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
+                      <div className="font-bold text-slate-800">{policy.category}</div>
+                      {/* FIXED TERNARY OPERATOR BELOW */}
+                      <div className="text-xs text-slate-500">
+                        {policy.ttlDays} days • {policy.action} • applies to {policy.category === 'Task Cards' ? 'task cards' : (policy.category === 'All Messages & Task Cards' ? 'messages & tasks' : 'chat messages')}
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Active User Count</label>
-                      <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button onClick={() => updateRetentionPolicy(policy, { isActive: !policy.isActive })} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${policy.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{policy.isActive ? 'Active' : 'Inactive'}</button>
+                      <button onClick={() => runCleanupNow(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'update')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 disabled:opacity-50">Run Cleanup Now</button>
+                      <button onClick={() => deleteRetentionPolicy(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'delete')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 disabled:opacity-50">Delete</button>
                     </div>
-                    <div className="md:col-span-2">
-                      <VersionManager currentVersion={appVersion} />
+                  </div>
+                ))}
+              </div>
+              
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="p-3 font-black text-slate-700 border-b">Past Cleanup Executions</div>
+                {retentionRuns.map((run) => (
+                  <div key={run.id} className="p-4 border-b last:border-0">
+                    <div className="flex justify-between">
+                      <span className="font-bold text-slate-700">{run.ruleName || run.ruleId}</span>
+                      <span className="text-xs text-slate-400">{formatDateTime(run.timestamp)}</span>
                     </div>
-                    <div className="md:col-span-2 flex justify-end"><button type="button" onClick={saveInstitutionSettings} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Save Institution Settings</button></div>
-                  </div>}
-
-                  {hasFeature('apiAccess') && (
-                    <div className="md:col-span-2 bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-between gap-4">
-                      <div><h3 className="font-black"><i className="fa-solid fa-code mr-2"></i>API Access</h3><p className="text-xs text-slate-300 font-bold uppercase tracking-wider">Manage integration keys and webhook settings.</p></div>
-                      <button type="button" onClick={() => logAuditEvent('API_SETTINGS_VIEW', 'organization')} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-sm font-bold">Open API Settings</button>
-                    </div>
-                  )}
-
-                  {hasFeature('prioritySupport') && (
-                    <div className="md:col-span-2 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-2xl p-4 flex items-center justify-between gap-4">
-                      <div><h3 className="font-black"><i className="fa-solid fa-headset mr-2"></i>Priority Support</h3><p className="text-xs font-bold uppercase tracking-wider">Escalation workflows and premium support contacts are enabled.</p></div>
-                      <button type="button" className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Contact Support</button>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Organization Name</label>
-                    <input type="text" value={orgDetails.orgName} onChange={(e) => setOrgDetails({ ...orgDetails, orgName: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
+                    <div className="text-xs text-slate-500">{run.affected || 0} documents • {run.status}</div>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Address</label>
-                    <input type="text" value={orgDetails.address} onChange={(e) => setOrgDetails({ ...orgDetails, address: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Email</label>
-                    <input type="email" value={orgDetails.email} onChange={(e) => setOrgDetails({ ...orgDetails, email: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Phone</label>
-                    <input type="text" value={orgDetails.phone} onChange={(e) => setOrgDetails({ ...orgDetails, phone: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Admin Name</label>
-                    <input type="text" value={orgDetails.adminName} onChange={(e) => setOrgDetails({ ...orgDetails, adminName: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Admin Designation</label>
-                    <input type="text" value={orgDetails.adminDesignation} onChange={(e) => setOrgDetails({ ...orgDetails, adminDesignation: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Admin Email</label>
-                    <input type="email" value={orgDetails.adminEmail} onChange={(e) => setOrgDetails({ ...orgDetails, adminEmail: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Admin Mobile</label>
-                    <input type="text" value={orgDetails.adminMobile} onChange={(e) => setOrgDetails({ ...orgDetails, adminMobile: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Subscription Type</label>
-                    <select value={orgDetails.subscriptionType} onChange={(e) => setOrgDetails({ ...orgDetails, subscriptionType: e.target.value })} disabled={isOrgSaved} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium disabled:bg-slate-100 disabled:text-slate-500">
-                      <option>Free</option>
-                      <option>Basic</option>
-                      <option>Premium</option>
-                      <option>Enterprise</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1">Active Users</label>
-                    <input type="number" value={dbUsers.length} readOnly className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium bg-slate-100 text-slate-500" />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 mt-6">
-                  {isOrgSaved ? (
-                    <button onClick={() => setIsOrgSaved(false)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700">
-                      <i className="fa-solid fa-pen-to-square mr-2"></i>Edit Details
-                    </button>
-                  ) : (
-                    <>
-                      <button onClick={() => setIsOrgSaved(true)} className="bg-white border border-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-bold hover:bg-slate-50">Cancel</button>
-                      <button onClick={saveOrgDetails} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-sm hover:bg-indigo-700">
-                        <i className="fa-solid fa-floppy-disk mr-2"></i>Save Details
-                      </button>
-                    </>
-                  )}
-                </div>
+                ))}
               </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
