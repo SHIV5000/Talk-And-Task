@@ -1317,7 +1317,7 @@ export default function AdminPanel({
                 )}
 
                 {/* Historical Vault with search filter */}
-                {!globalAnnouncement?.isActive && pastBroadcasts.length > 0 && (
+                {pastBroadcasts.length > 0 && (
                   <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-0 flex-1">
                     <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between shrink-0">
                       <div>
