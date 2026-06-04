@@ -16,6 +16,7 @@ const buildFallbackUserData = (user) => ({
 });
 
 export default function useWorkspaceData(user, profileForm, setProfileForm, orgId) {
+    const [allUsers, setAllUsers] = useState([]); // Add this new state
     const [isVipAdmin, setIsVipAdmin] = useState(false);
     const [currentUserData, setCurrentUserData] = useState(() => buildFallbackUserData(user));
     const [dbUsers, setDbUsers] = useState([]);
@@ -137,7 +138,11 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
         const unsubUsers = onSnapshot(query(collection(db, "users"), where("orgId", "==", orgId)), (snapshot) => {
             const fetchedUsers = snapshot.docs.map(document => document.data());
             fetchedUsers.sort((a, b) => (a.email || "").localeCompare(b.email || ""));
-            setDbUsers(fetchedUsers);
+            // Set all users for the Admin panel to view/unarchive
+            setAllUsers(fetchedUsers);
+            
+            // Hide archived users from the rest of the application
+            setDbUsers(fetchedUsers.filter(u => !u.isArchived));
         });
         
         const unsubGroups = onSnapshot(orgCollection("groups"), (snapshot) => {
@@ -148,7 +153,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
     }, [orgId, user, currentUserData?.isAdmin, isVipAdmin, profileForm.name, setProfileForm, orgCollection]);
 
     return {
-        isVipAdmin, currentUserData, dbUsers, groups,
+        isVipAdmin, currentUserData, dbUsers, allUsers,groups,
         activeReminders, genericNotifications, allAdminReminders,
         immutableAuditLogs, toolPreferences, setToolPreferences, customTags,
         globalAnnouncement 
