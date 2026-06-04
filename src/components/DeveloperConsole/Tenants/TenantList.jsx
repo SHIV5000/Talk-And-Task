@@ -54,7 +54,8 @@ const createTenantDirectly = async (payload) => {
  if (payload.adminEmail) {
     await addDoc(collection(db, 'tenantInvitations'), {
       orgId,
-      email: payload.adminEmail,
+      email: String(payload.adminEmail || '').trim().toLowerCase(),
+      emailLower: String(payload.adminEmail || '').trim().toLowerCase(),
       name: payload.adminName || '',
       role: 'admin',
       status: 'pending',

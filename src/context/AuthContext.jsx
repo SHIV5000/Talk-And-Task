@@ -13,11 +13,10 @@ import {
   serverTimestamp,
   doc,
   updateDoc,
-  setDoc,
   collection,
   getDocs,
-  query,
-  where,
+  functions,
+  httpsCallable,
 } from '../firebase.js';
 import { notifyRuntimeEvent } from '../utils/runtimeEventNotifier.js';
 
@@ -86,92 +85,32 @@ async function readAppVersion() {
   return configSnap.data()?.appVersion || DEFAULT_APP_VERSION;
 }
 
+async function ensureUserProfile(loggedInUser) {
+  const resolveAuthOnboarding = httpsCallable(functions, 'resolveAuthOnboarding');
 
-async function findTenantInvitation(email) {
-  const lowerEmail = String(email || '').trim().toLowerCase();
-  if (!lowerEmail) return null;
-
-  const invitationSnap = await getDocs(query(collection(db, 'tenantInvitations'), where('email', '==', lowerEmail))).catch(() => null);
-  const invitationDoc = invitationSnap?.docs?.[0];
-  return invitationDoc ? { id: invitationDoc.id, ...invitationDoc.data() } : null;
-}
-
-function applyInvitationProfile(profile, invitation) {
-  if (!invitation?.orgId) return profile;
-  return {
-    ...profile,
-    orgId: profile.orgId || invitation.orgId,
-    role: profile.role || invitation.role || 'admin',
-    isApproved: profile.isApproved !== false,
-    isAdmin: profile.isAdmin || invitation.role === 'admin',
-    canCreateGroups: profile.canCreateGroups !== false,
-  };
-}
-
-async function ensureUserProfile(loggedInUser, claims = {}) {
-  const userRef = doc(db, 'users', loggedInUser.uid);
-  const userSnap = await getDoc(userRef);
-  const lowerEmail = (loggedInUser.email || '').toLowerCase();
-  const isPlatformOwnerEmail = lowerEmail === PLATFORM_OWNER_EMAIL;
-
-  const invitation = await findTenantInvitation(lowerEmail);
-
-  if (!userSnap.exists()) {
-    const allUsersSnap = await getDocs(collection(db, 'users'));
-    const isFirstUser = allUsersSnap.empty;
-    const newProfile = {
-      uid: loggedInUser.uid,
-      email: loggedInUser.email,
-      name: loggedInUser.displayName || (loggedInUser.email || '').split('@')[0],
-      isApproved: isFirstUser || isPlatformOwnerEmail,
-      isAdmin: isFirstUser || isPlatformOwnerEmail,
-      canCreateGroups: isFirstUser || isPlatformOwnerEmail,
-      isPlatformOwner: !!claims.isPlatformOwner || !!claims.platformOwner || isPlatformOwnerEmail,
-      orgId: isPlatformOwnerEmail ? DEFAULT_PLATFORM_OWNER_ORG_ID : claims.orgId || null,
-      role: isPlatformOwnerEmail ? 'admin' : claims.role || 'member',
-      profilePicUrl: loggedInUser.photoURL || null,
-      toolPreferences: {
-        reply: true,
-        react: true,
-        edit: true,
-        delete: true,
-        pin: true,
-        bookmark: true,
-        showWatermark: true,
-        soundProfile: 'classic',
-      },
-      lastActive: serverTimestamp(),
-    };
-    const invitedProfile = applyInvitationProfile(newProfile, invitation);
-    await setDoc(userRef, invitedProfile, { merge: true });
-    return invitedProfile;
+  try {
+    const result = await resolveAuthOnboarding({
+      displayName: loggedInUser.displayName || '',
+      photoURL: loggedInUser.photoURL || '',
+    });
+    const profile = result?.data?.profile;
+    if (!profile?.uid) {
+      throw new Error('The onboarding service returned an incomplete profile.');
+    }
+    return profile;
+  } catch (error) {
+    console.error('Failed to resolve auth onboarding:', error);
+    const code = error?.code || '';
+    const message = error?.message || '';
+    const controlledError = new Error(
+      code === 'functions/unauthenticated'
+        ? 'Your sign-in session expired before onboarding completed. Please sign in again.'
+        : message || 'We could not finish onboarding your account. Please contact your workspace admin.'
+    );
+    controlledError.code = code || 'auth/onboarding-failed';
+    controlledError.userMessage = controlledError.message;
+    throw controlledError;
   }
-
-  const existingProfile = applyInvitationProfile({ id: userSnap.id, ...userSnap.data() }, invitation);
-  if (invitation?.orgId && (!userSnap.data()?.orgId || !userSnap.data()?.role)) {
-    await setDoc(userRef, {
-      orgId: existingProfile.orgId,
-      role: existingProfile.role,
-      isApproved: existingProfile.isApproved,
-      isAdmin: existingProfile.isAdmin,
-      canCreateGroups: existingProfile.canCreateGroups,
-    }, { merge: true });
-  }
-
-  if (isPlatformOwnerEmail) {
-    const ownerPatch = {
-      isApproved: true,
-      isAdmin: true,
-      canCreateGroups: true,
-      isPlatformOwner: true,
-      orgId: existingProfile.orgId || DEFAULT_PLATFORM_OWNER_ORG_ID,
-      role: existingProfile.role || 'admin',
-    };
-    await setDoc(userRef, ownerPatch, { merge: true });
-    return { ...existingProfile, ...ownerPatch };
-  }
-
-  return existingProfile;
 }
 
 function resolveSessionClaims(claims, profile) {
@@ -222,10 +161,11 @@ export function AuthProvider({ children }) {
       return null;
     }
 
-    const idTokenResult = await firebaseUser.getIdTokenResult();
-    const claims = idTokenResult.claims || {};
+    await firebaseUser.getIdTokenResult();
 
-    const profile = await ensureUserProfile(firebaseUser, claims);
+    const profile = await ensureUserProfile(firebaseUser);
+    const idTokenResult = await firebaseUser.getIdTokenResult(true);
+    const claims = idTokenResult.claims || {};
     const { resolvedOrgId, resolvedRole, resolvedIsPlatformOwner } = resolveSessionClaims(claims, profile);
 
     const details = await readOrgDetails(resolvedOrgId);
@@ -261,7 +201,7 @@ export function AuthProvider({ children }) {
       } catch (error) {
         console.error('Failed to hydrate auth session:', error);
         clearSession();
-        setAuthError('Failed to load your session. Please sign in again.');
+        setAuthError(error?.userMessage || 'Failed to load your session. Please sign in again.');
       } finally {
         setAuthChecked(true);
       }
@@ -306,7 +246,7 @@ export function AuthProvider({ children }) {
       await hydrateSession(loggedInUser);
       await notifyLoginSuccess(loggedInUser, 'User authenticated with Google successfully. Safe checkpoint for rollback mapping.');
     } catch (err) {
-      setAuthError('Google Sign-In Cancelled or Failed.');
+      setAuthError(err?.userMessage || 'Google Sign-In Cancelled or Failed.');
     }
   }, [hydrateSession, notifyLoginSuccess, requestNotificationPermission]);
 
@@ -342,7 +282,7 @@ export function AuthProvider({ children }) {
         setAuthError('Please enter a valid email address.');
         return;
       }
-      setAuthError('Email/password sign-in failed. Please try again.');
+      setAuthError(err?.userMessage || 'Email/password sign-in failed. Please try again.');
     }
   }, [hydrateSession, notifyLoginSuccess, requestNotificationPermission]);
 

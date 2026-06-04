@@ -8,7 +8,7 @@ import {
   doc, updateDoc, setDoc, getDocs, where, deleteDoc
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { getFunctions } from 'firebase/functions';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAoOsog2NP6Pf8YNSxn0rRYK4MSLEVNNZc",
@@ -32,5 +32,5 @@ export {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, setDoc, getDocs, where, deleteDoc,
   ref, uploadBytesResumable, getDownloadURL,
-  functions
+  functions, httpsCallable
 };
