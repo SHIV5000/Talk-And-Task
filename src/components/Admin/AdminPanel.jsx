@@ -68,8 +68,9 @@ export default function AdminPanel({
   setViewMode,
   setActiveModal,
   dbUsers,
+  allUsers, // <--- Add this new prop
   groups,
-  filteredAuditLogs,
+    filteredAuditLogs,
   adminFilterUser,
   setAdminFilterUser,
   adminFilterDate,
@@ -297,7 +298,10 @@ export default function AdminPanel({
     roles: isGlobalSuperAdmin ? Array.from(new Set([...(currentUserData?.roles || []), 'Super Admin'])) : currentUserData?.roles,
   }), [currentUserData, isVipAdmin, isGlobalSuperAdmin]);
 
-  const filteredUsers = useMemo(() => dbUsers || [], [dbUsers]);
+  const filteredUsers = useMemo(() => {
+    const users = allUsers || dbUsers || [];
+    return showArchived ? users : users.filter((u) => !u.isArchived);
+  }, [allUsers, dbUsers, showArchived]);
 
   const allTasks = useMemo(() => (messages || []).filter((m) => m.isTask), [messages]);
 
@@ -605,15 +609,17 @@ export default function AdminPanel({
   };
 
 
-  const archiveUser = async (userRecord) => {
-    if (userRecord.isArchived) return;
-    if (!window.confirm(`Archive ${userRecord.name || userRecord.email}? This user will no longer be treated as active.`)) return;
-    await updateDoc(doc(db, 'users', userRecord.uid), {
-      isArchived: true,
-      archivedAt: serverTimestamp(),
-      archivedBy: currentUserData?.email || currentUserData?.uid || 'admin',
-    });
-    await logAuditEvent('USER_ARCHIVE', userRecord.uid, { email: userRecord.email });
+  // Replace the old archiveUser function with this:
+  const toggleArchiveUser = async (userRecord) => {
+    const willArchive = !userRecord.isArchived;
+    if (!window.confirm(`${willArchive ? 'Archive' : 'Unarchive'} ${userRecord.name || userRecord.email}? ${willArchive ? 'This user will be disabled and hidden globally.' : 'This user will be re-enabled.'}`)) return;
+
+    try {
+      const toggleUserArchiveStatus = httpsCallable(functions, 'toggleUserArchiveStatus');
+      await toggleUserArchiveStatus({ uid: userRecord.uid, isArchived: willArchive });
+    } catch (e) {
+      alert(`Failed to ${willArchive ? 'archive' : 'unarchive'} user: ` + e.message);
+    }
   };
 
   const handleAddUser = async () => {
@@ -988,10 +994,19 @@ export default function AdminPanel({
           <div className="flex h-full flex-col gap-4 p-4 md:p-5 overflow-y-auto custom-sidebar-scroll">
             {/* Users Section */}
             {activeTab === 'users' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
-                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
-                <div className="flex gap-2"><button onClick={() => setShowRoleMatrix(true)} disabled={!hasFeature('dataGovernance')} className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-50"><i className="fa-solid fa-user-shield mr-2"></i>Manage Roles</button><button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button></div>
-              </div>
+              // In the Users Tab render block, update the header actions:
+  <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
+    <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-users text-indigo-600 mr-2"></i>User Control</h2>
+    <div className="flex gap-4 items-center">
+      {/* Add Show Archived Toggle */}
+      <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
+        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="w-4 h-4 accent-indigo-600" />
+        Show Archived
+      </label>
+      <button onClick={() => setShowRoleMatrix(true)} disabled={!hasFeature('dataGovernance')} className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-50"><i className="fa-solid fa-user-shield mr-2"></i>Manage Roles</button>
+      <button onClick={() => setShowAddUser(!showAddUser)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>Add User</button>
+    </div>
+  </div>
               {showAddUser && (
                 <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-end">
                   <div><label className="text-xs font-bold text-slate-500 block mb-1">Email</label><input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="user@example.com" /></div>
@@ -1005,10 +1020,17 @@ export default function AdminPanel({
                 <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center gap-3 flex-wrap">
                   <span className="text-sm font-bold text-indigo-700">{selectedUsers.size} selected</span>
                   <div className="flex flex-wrap gap-2">
+                    
                     <button onClick={async () => { if (!window.confirm(`Approve ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isApproved: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Approve</button>
                     <button onClick={async () => { if (!window.confirm(`Grant admin to ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isAdmin: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600">Make Admin</button>
                     <button onClick={async () => { if (!window.confirm(`Revoke admin from ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isAdmin: false }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600">Revoke Admin</button>
-                    <button onClick={async () => { if (!window.confirm(`Archive ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isArchived: true, archivedAt: serverTimestamp(), archivedBy: currentUserData?.email || currentUserData?.uid || 'admin' }))); await logAuditEvent('USER_ARCHIVE', 'bulk', { count: selectedUsers.size }); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600">Archive</button>
+                    <button onClick={async () => { 
+  if (!window.confirm(`Archive ${selectedUsers.size} user(s)? They will be disabled and hidden.`)) return; 
+  const toggleUserArchiveStatus = httpsCallable(functions, 'toggleUserArchiveStatus');
+  await Promise.all(Array.from(selectedUsers).map((uid) => toggleUserArchiveStatus({ uid, isArchived: true }))); 
+  setSelectedUsers(new Set()); 
+}} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600">Archive</button>
+                    
                     <button onClick={() => { const sel = filteredUsers.filter((u) => selectedUsers.has(u.uid)); const csv = 'Name,Email,Approved,Admin\n' + sel.map((u) => `"${u.name}","${u.email}","${u.isApproved}","${u.isAdmin}"`).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'selected_users.csv'; link.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50">Export CSV</button>
                   </div>
                   <button onClick={() => setSelectedUsers(new Set())} className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600">Clear</button>
@@ -1044,7 +1066,12 @@ export default function AdminPanel({
                         <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-4 h-4 accent-indigo-600" /></td>
                         <td className="px-3 py-3 text-center text-[11px] text-slate-500">{formatDateTime(u.lastLogin || u.lastActive)}</td>
                         <td className="px-3 py-3 text-center"><select onChange={(e) => { if (!e.target.value) return; setDsarForm((prev) => ({ ...prev, uid: u.uid, mode: e.target.value })); setActiveTab('compliance'); e.target.value = ''; }} className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white"><option value="">DSAR Actions</option><option value="access">Export User Data</option><option value="delete">Right to be Forgotten</option></select></td>
-                        <td className="px-3 py-3 text-right"><button onClick={() => archiveUser(u)} disabled={u.isArchived} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50">{u.isArchived ? 'Archived' : 'Archive'}</button></td>
+                        // Replace the old Archive button in the user row mapping with this:
+  <td className="px-3 py-3 text-right">
+    <button onClick={() => toggleArchiveUser(u)} className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${u.isArchived ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+      {u.isArchived ? 'Unarchive' : 'Archive'}
+    </button>
+  </td>
                       </tr>
                     ))}
                   </tbody>
