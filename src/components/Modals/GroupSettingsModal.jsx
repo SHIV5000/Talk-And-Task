@@ -38,7 +38,7 @@ export default function GroupSettingsModal({
             ) : (
                <div className="text-xl font-bold text-slate-800 truncate">{activeGroup.name}</div>
             )}
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Group Info</div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Department Info</div>
           </div>
         </div>
 

@@ -216,7 +216,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         const storageUsedMB = toNumberOrNull(orgStorageDetails.storageUsedMB) || 0;
         const effectiveStorageLimitMB = getEffectiveStorageLimitMB(orgStorageDetails);
         if (storageUsedMB >= effectiveStorageLimitMB) {
-            throw new Error(`Storage limit reached. Used ${storageUsedMB.toFixed(2)} MB of ${effectiveStorageLimitMB.toFixed(2)} MB.`);
+            throw new Error(`Storage Limit for Organization reached. Used ${storageUsedMB.toFixed(2)} MB of ${effectiveStorageLimitMB.toFixed(2)} MB.`);
         }
     }
 

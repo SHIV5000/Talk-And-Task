@@ -102,7 +102,7 @@ export default function PackageForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-widest text-slate-500">Storage limit (MB)</label>
+          <label className="mb-1.5 block text-xs font-bold uppercase tracking-widest text-slate-500">Storage Limit for Organization (MB)</label>
           <input
             required
             min="0"

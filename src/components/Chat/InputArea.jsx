@@ -72,6 +72,14 @@ export default function InputArea({
     setEmojiPickerOpen(false);
   };
 
+  const clearComposer = () => {
+    if (chatInputRef.current) {
+      chatInputRef.current.innerHTML = '';
+    }
+    setInputText('');
+    setReplyingTo?.(null);
+  };
+
   return (
     <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-3 safe-bottom'} shrink-0 z-40 flex flex-col gap-2 w-full relative ${containerClassName}`}>
       <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }.mention-chip{display:inline-block;background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:0 6px;font-weight:800;}`}</style>
@@ -121,7 +129,7 @@ export default function InputArea({
             <div className="px-4 py-2 text-xs text-slate-400 italic">No users found</div>
           )}
 
-          <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t mt-1 pt-2">Groups</div>
+          <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t mt-1 pt-2">DEPARTMENTS</div>
           {groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).length > 0 ? (
              groups.filter(g => (g.name||"").toLowerCase().includes(mentionQuery) && !g.isArchived).map(g => (
               <div
@@ -194,7 +202,7 @@ export default function InputArea({
           )}
         </div>
 
-        <div className="flex-1 bg-slate-50 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white resize-y min-h-[46px] max-h-[34vh]">
+        <div className="flex-1 max-w-full bg-slate-50 dark:bg-slate-900 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 dark:border-slate-700 focus-within:border-indigo-500 focus-within:bg-white dark:focus-within:bg-slate-950 resize-y overflow-y-auto min-h-[46px] max-h-[34vh]">
           <div
             contentEditable
             ref={chatInputRef}
@@ -205,8 +213,8 @@ export default function InputArea({
             onBlur={() => { if (activeGroup?.id && user?.uid) deleteDoc(doc(db, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 py-3 px-4 w-full overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words"
-            style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)' }}
+            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 dark:text-slate-100 py-3 px-4 w-full max-w-full resize-y overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words [overflow-wrap:break-word] [word-wrap:break-word]"
+            style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordWrap: 'break-word' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -229,13 +237,23 @@ export default function InputArea({
           </button>
         )}
 
-        <button
-          onClick={handleSendOfflineAware}
-          disabled={!inputText.trim() || inputText === '<br>'}
-          className={`shrink-0 min-w-[42px] w-[42px] h-[42px] flex justify-center items-center rounded-full transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-        >
-          <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={clearComposer}
+            disabled={!inputText.trim() || inputText === '<br>'}
+            className={`h-[42px] px-3 rounded-xl text-xs font-bold transition-colors ${inputText.trim() && inputText !== '<br>' ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700' : 'border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:border-slate-800 dark:bg-slate-900 dark:text-slate-600'}`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSendOfflineAware}
+            disabled={!inputText.trim() || inputText === '<br>'}
+            className={`min-w-[42px] h-[42px] px-3 flex justify-center items-center rounded-xl transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-600'}`}
+          >
+            <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
+          </button>
+        </div>
       </div>
     </div>
   );
