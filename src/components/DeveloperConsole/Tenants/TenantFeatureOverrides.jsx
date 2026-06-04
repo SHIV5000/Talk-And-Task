@@ -1,12 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 const FEATURE_FLAG_HINTS = [
-  'advancedTasks',
-  'analytics',
+  'chat',
+  'usersTab',
+  'departmentsTab',
+  'taskCards',
+  'advancedAnalytics',
+  'dataGovernance',
+  'auditLogs',
   'broadcasts',
-  'complianceExports',
   'customBranding',
-  'retentionPolicies',
+  'dsarCompliance',
+  'organizationSettings',
+  'apiAccess',
 ];
 
 const normalizeFlags = (flags = {}) => Object.entries(flags || {}).reduce((acc, [key, value]) => {

@@ -1,12 +1,18 @@
 import React, { useMemo, useState } from 'react';
 
 export const DEFAULT_FEATURE_FLAGS = [
-  { key: 'advancedReporting', label: 'Advanced reporting', description: 'Dashboards, exports, and analytics.' },
-  { key: 'auditLogs', label: 'Audit logs', description: 'Track administrative and workspace activity.' },
-  { key: 'customRoles', label: 'Custom roles', description: 'Role-based permissions beyond defaults.' },
-  { key: 'prioritySupport', label: 'Priority support', description: 'Expedited support routing.' },
-  { key: 'scheduleSend', label: 'Schedule send', description: 'Schedule messages and reminders.' },
-  { key: 'taskAnalytics', label: 'Task analytics', description: 'Task insights and performance trends.' },
+  { key: 'chat', label: 'Chat workspace', description: 'Main chat screen and message search.' },
+  { key: 'usersTab', label: 'Admin: Users tab', description: 'User control and account governance.' },
+  { key: 'departmentsTab', label: 'Admin: Departments tab', description: 'Department creation and member management.' },
+  { key: 'taskCards', label: 'Admin: Tasks tab', description: 'Task cards, conversion, and task workspace.' },
+  { key: 'advancedAnalytics', label: 'Admin: Overview tab', description: 'Overview dashboard, metrics, and analytics.' },
+  { key: 'dataGovernance', label: 'Admin: Security & Lifecycle tabs', description: 'Security sessions, retention policies, and governance tools.' },
+  { key: 'auditLogs', label: 'Admin: Logs tab', description: 'Track administrative and workspace activity.' },
+  { key: 'broadcasts', label: 'Admin: Broadcast tab', description: 'Workspace broadcasts and acknowledgement vault.' },
+  { key: 'customBranding', label: 'Admin: Tags tab', description: 'Global tags and branding controls.' },
+  { key: 'dsarCompliance', label: 'Admin: Recovery & Compliance tabs', description: 'Backups, exports, and DSAR workflows.' },
+  { key: 'organizationSettings', label: 'Admin: Organization tab', description: 'Organization profile and app settings.' },
+  { key: 'apiAccess', label: 'API access', description: 'Developer and integration API surfaces.' },
 ];
 
 const normalizeFlagKey = (value) => String(value || '')

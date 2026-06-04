@@ -119,21 +119,33 @@ const seedOrganizationDetails = async (orgId, details = {}, batchState) => {
   const packageData = packageSnap.data() || DEFAULT_PACKAGES[packageId] || DEFAULT_PACKAGES.enterprise;
   await queueBatchSet(batchState, db.collection('organizations').doc(orgId), {
     orgId,
-    name: details.name || details.displayName || 'MPGS',
+    name: details.orgName || details.name || details.displayName || 'MPGS',
+    orgName: details.orgName || details.name || details.displayName || 'MPGS',
+    adminName: details.adminName || '',
+    adminEmail: details.adminEmail || '',
     status: details.status || 'active',
     subscriptionPackageId: packageId,
     storageUsedBytes: Number(details.storageUsedBytes || 0),
     storageLimitBytes: Number(details.storageLimitBytes || packageData.storageLimitBytes || 0),
+    storageLimitOverride: details.storageLimitOverride ?? null,
+    maxUsersOverride: details.maxUsersOverride ?? null,
+    featureFlagsOverride: details.featureFlagsOverride || {},
     updatedAt: now,
     createdAt: details.createdAt || now,
   }, { merge: true });
   await queueBatchSet(batchState, db.collection('organizations').doc(orgId).collection('org_details').doc('details'), {
     orgId,
-    name: details.name || details.displayName || 'MPGS',
+    name: details.orgName || details.name || details.displayName || 'MPGS',
+    orgName: details.orgName || details.name || details.displayName || 'MPGS',
+    adminName: details.adminName || '',
+    adminEmail: details.adminEmail || '',
     status: details.status || 'active',
     subscriptionPackageId: packageId,
     storageUsedBytes: Number(details.storageUsedBytes || 0),
     storageLimitBytes: Number(details.storageLimitBytes || packageData.storageLimitBytes || 0),
+    storageLimitOverride: details.storageLimitOverride ?? null,
+    maxUsersOverride: details.maxUsersOverride ?? null,
+    featureFlagsOverride: details.featureFlagsOverride || {},
     contactEmail: details.contactEmail || null,
     domain: details.domain || null,
     updatedAt: now,
@@ -383,17 +395,46 @@ exports.retentionCleanup = onSchedule('every day 02:00', async () => {
   const policies = await db.collection('retentionPolicies').where('isActive', '==', true).get();
   for (const policyDoc of policies.docs) {
     const policy = policyDoc.data();
-    if (policy.category !== 'Chat Messages') continue;
+    const category = policy.category || 'Chat Messages';
     const threshold = admin.firestore.Timestamp.fromMillis(Date.now() - Number(policy.ttlDays || 30) * 86400000);
-    const oldMessages = await db.collection('messages').where('isTask', '==', false).where('timestamp', '<', threshold).limit(500).get();
-    const batch = db.batch();
-    oldMessages.docs.forEach((msgDoc) => {
-      if (policy.action === 'archive') batch.set(db.collection('archived_messages').doc(msgDoc.id), { ...msgDoc.data(), archivedAt: admin.firestore.FieldValue.serverTimestamp() });
-      batch.delete(msgDoc.ref);
-    });
-    await batch.commit();
-    await db.collection('retention_cleanup_logs').add({ ruleId: policyDoc.id, ruleName: policy.category, affected: oldMessages.size, status: 'completed', timestamp: admin.firestore.FieldValue.serverTimestamp() });
-    await logAuditEvent('RETENTION_RUN', 'scheduler', policyDoc.id, { affected: oldMessages.size });
+    const queryConfigs = [];
+
+    if (category === 'Chat Messages' || category === 'All Messages & Task Cards') {
+      queryConfigs.push({ isTask: false, archiveCollection: 'archived_messages' });
+    }
+    if (category === 'Task Cards' || category === 'All Messages & Task Cards') {
+      queryConfigs.push({ isTask: true, archiveCollection: 'archived_tasks' });
+    }
+    if (queryConfigs.length === 0) continue;
+
+    let affected = 0;
+    for (const config of queryConfigs) {
+      const expiredMessages = await db.collectionGroup('messages')
+        .where('isTask', '==', config.isTask)
+        .where('timestamp', '<', threshold)
+        .limit(500)
+        .get();
+      if (expiredMessages.empty) continue;
+
+      const batch = db.batch();
+      expiredMessages.docs.forEach((msgDoc) => {
+        if (policy.action === 'archive') {
+          const archiveId = msgDoc.ref.path.replace(/[^a-zA-Z0-9_-]/g, '__');
+          batch.set(db.collection(config.archiveCollection).doc(archiveId), {
+            ...msgDoc.data(),
+            originalPath: msgDoc.ref.path,
+            lifecycleRuleId: policyDoc.id,
+            archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        batch.delete(msgDoc.ref);
+      });
+      await batch.commit();
+      affected += expiredMessages.size;
+    }
+
+    await db.collection('retention_cleanup_logs').add({ ruleId: policyDoc.id, ruleName: category, affected, status: 'completed', timestamp: admin.firestore.FieldValue.serverTimestamp() });
+    await logAuditEvent('RETENTION_RUN', 'scheduler', policyDoc.id, { affected, category, action: policy.action });
   }
 });
 
@@ -489,7 +530,8 @@ exports.setCustomClaims = onCall(async (request) => {
 exports.onboardTenant = onCall(async (request) => {
   await assertPlatformOwner(request);
   const data = request.data || {};
-  const orgId = data.orgId || toSlug(data.name || data.displayName);
+  const orgName = data.orgName || data.name || data.displayName;
+  const orgId = data.orgId || toSlug(orgName);
   if (!orgId) throw new HttpsError('invalid-argument', 'orgId or name is required.');
   const orgRef = db.collection('organizations').doc(orgId);
   const existing = await orgRef.get();
@@ -499,6 +541,8 @@ exports.onboardTenant = onCall(async (request) => {
   await seedSubscriptionPackages(batchState);
   await seedOrganizationDetails(orgId, {
     ...data,
+    orgName,
+    name: orgName,
     status: 'active',
     createdAt: existing.exists ? existing.data().createdAt : serverTimestamp(),
   }, batchState);

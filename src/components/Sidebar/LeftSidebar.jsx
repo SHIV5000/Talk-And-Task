@@ -142,11 +142,11 @@ export default function LeftSidebar({
           }}
         >
           <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">Groups</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">DEPARTMENTS</span>
             <button 
               onClick={() => { setGroupForm({name: "", members: [], admins: [], profilePicUrl: null}); setEditingGroup(null); setActiveModal('group_form_modal'); }} 
               className="w-6 h-6 flex items-center justify-center rounded-md bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all shadow-sm"
-              title="Create New Group"
+              title="Create New Department"
             >
               <i className="fa-solid fa-plus text-xs"></i>
             </button>
@@ -176,7 +176,7 @@ export default function LeftSidebar({
                   name={g.name}
                   sizeClass="w-[49px] h-[49px]"
                   isGroup={true}
-                  extraClasses={`mr-3 shrink-0 border-4 ${hasUnread ? 'border-emerald-700' : 'border-[#800020]'}`}
+                  extraClasses={`mr-3 shrink-0 border-2 ${hasUnread ? 'border-emerald-500' : 'border-white/30'}`}
                 />
                 <div className="flex-1 min-w-0 overflow-hidden border-b-2 border-white/20 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
@@ -199,7 +199,7 @@ export default function LeftSidebar({
             );
           })}
 
-          <div className="px-4 pt-4 pb-2 text-[10px] font-black uppercase tracking-[0.22em] text-white/50">Members / Direct Messages</div>
+          <div className="px-4 pt-4 pb-2 text-[10px] font-black uppercase tracking-[0.22em] text-white/50">STAFF MEMBERS</div>
           {dmUsers.map(u => {
             const dmIdList = [user.uid, u.uid].sort();
             const dmIdStr = dmIdList.join('_');
