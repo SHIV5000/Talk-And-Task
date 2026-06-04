@@ -16,6 +16,8 @@ import TenantDetail from './TenantDetail.jsx';
 import TenantForm from './TenantForm.jsx';
 
 const DETAILS_DOC_FALLBACK_ID = 'details';
+const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+const SUPPORT_GROUP_ID = 'support';
 
 const normalizeOrgId = (value) => String(value || '')
   .trim()
@@ -78,11 +80,26 @@ const createTenantDirectly = async (payload) => {
     senderUid: "system",
     senderEmail: "Developer Console",
     groupId: defaultGroupRef.id,
+    groupName: "Welcome",
     timestamp: now,
     isTask: false,
     seenBy: payload.adminEmail ? [payload.adminEmail] : [],
-    reactions: {}
+    reactions: {},
+    isPrivateForward: false,
+    allowedUsers: []
   });
+
+  await setDoc(doc(db, 'organizations', orgId, 'groups', SUPPORT_GROUP_ID), {
+    name: "SUPPORT",
+    members: payload.adminEmail ? [payload.adminEmail] : [],
+    admins: [GLOBAL_SUPPORT_ADMIN_EMAIL],
+    createdBy: GLOBAL_SUPPORT_ADMIN_EMAIL,
+    createdAt: now,
+    isArchived: false,
+    isSupport: true,
+    universalRead: true,
+    profilePicUrl: null,
+  }, { merge: true });
   // ---------------------------------------------------
 
   return orgId;

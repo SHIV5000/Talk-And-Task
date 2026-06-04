@@ -799,8 +799,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [orgId, messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
 
     const myGroups = useMemo(() => {
-        // Implicitly include "Welcome" or "General" groups for everyone so a default group is always present
-        let filtered = groups.filter(g => (g.members?.includes(user.email) || g.name === "Welcome" || g.name === "General") && !g.isArchived);
+        // Implicitly include default departments and the tenant-wide SUPPORT department for every signed-in member.
+        let filtered = groups.filter(g => (g.members?.includes(user.email) || g.name === "Welcome" || g.name === "General" || g.name === "SUPPORT" || g.isSupport === true || g.id === "support") && !g.isArchived);
         if (sidebarSearch) filtered = filtered.filter(g => g.name.toLowerCase().includes(sidebarSearch.toLowerCase()));
         return filtered;
     }, [groups, user.email, sidebarSearch]);
@@ -1332,7 +1332,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         e.preventDefault();
         try {
             const finalMembers = [...new Set([...groupForm.members, ...(activeGroup?.admins || [])])];
-            await updateDoc(doc(db, "groups", activeGroup.id), { members: finalMembers });
+            await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), { members: finalMembers });
             setActiveModal(null);
             setActiveGroup(prev => ({...prev, members: finalMembers}));
         } catch (error) {
@@ -1346,8 +1346,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         try {
             const finalMembers = [...new Set([...groupForm.members, user.email])];
             const groupData = { name: groupForm.name, members: finalMembers, profilePicUrl: groupForm.profilePicUrl };
-            if (editingGroup) await updateDoc(doc(db, "groups", editingGroup.id), groupData);
-            else await addDoc(collection(db, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
+            if (editingGroup) await updateDoc(doc(db, "organizations", orgId, "groups", editingGroup.id), groupData);
+            else await addDoc(collection(db, "organizations", orgId, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
             setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
         } catch (error) { alert("Failed to save department."); }
     };
@@ -1362,7 +1362,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), groupFile);
             uploadTask.on('state_changed', null, null, async () => {
                 const url = await getDownloadURL(uploadTask.snapshot.ref);
-                await updateDoc(doc(db, "groups", activeGroup.id), { profilePicUrl: url });
+                await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), { profilePicUrl: url });
                 setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
                 setActiveModal(null);
             });
@@ -1373,9 +1373,9 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         if (updates.members) { cleanUpdates.members = updates.members; cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a)); }
         if (Object.keys(cleanUpdates).length === 0) return;
         setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
-        await updateDoc(doc(db, "groups", activeGroup.id), cleanUpdates);
+        await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), cleanUpdates);
         setActiveModal(null);
-    }, [activeGroup, storage, db, setActiveModal]);
+    }, [activeGroup, orgId, storage, db, setActiveModal]);
 
     const handleProfileSubmit = async (e) => {
         e.preventDefault();

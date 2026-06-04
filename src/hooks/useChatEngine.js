@@ -37,6 +37,26 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 
     const orgCollection = useCallback((collectionName) => collection(db, "organizations", orgId, collectionName), [orgId]);
     const orgDoc = useCallback((collectionName, id) => doc(db, "organizations", orgId, collectionName, id), [orgId]);
+    const isGlobalSupportAdmin = (user?.email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
+    const isSupportGroup = activeGroup?.isSupport === true || activeGroup?.id === 'support' || activeGroup?.name === 'SUPPORT';
+
+    const buildSupportRoutingPayload = (replyingMessage = null) => {
+        if (!isSupportGroup) return {};
+        if (!isGlobalSupportAdmin) {
+            return replyingMessage?.id ? {
+                isPrivateForward: true,
+                allowedUsers: [...new Set([user.email, GLOBAL_SUPER_ADMIN_EMAIL].filter(Boolean))]
+            } : { blockedTopLevelSupportPost: true };
+        }
+        const inheritedAllowedUsers = Array.isArray(replyingMessage?.allowedUsers) ? replyingMessage.allowedUsers : [];
+        if (inheritedAllowedUsers.length > 0) {
+            return {
+                isPrivateForward: true,
+                allowedUsers: [...new Set(inheritedAllowedUsers)]
+            };
+        }
+        return { isPrivateForward: false, allowedUsers: [] };
+    };
 
     const playAlertSound = useCallback((type = 'incoming') => {
         try {
@@ -177,12 +197,17 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 
         let replyData = null;
         if (replyingTo) replyData = { replyToId: replyingTo.id, originalText: replyingTo.text || replyingTo.fileName || 'Attachment', originalSender: (replyingTo.sender||"").split('@')[0] };
+        const supportRouting = buildSupportRoutingPayload(replyingTo);
+        if (supportRouting.blockedTopLevelSupportPost) {
+            addToast?.('Reply to a SUPPORT broadcast to open a private support thread.', 'warning');
+            return;
+        }
 
         const hasTextMessage = !!(messageText || '').replace(/<br\s*\/?>/gi, '').trim();
         let groupMsgRef = null;
         if (hasTextMessage) {
-            groupMsgRef = await addDoc(orgCollection("messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, isPrivateMention: false, allowedUsers: [], mentionEmails: uniqueMentions, seenBy: [user.email], groupId: activeGroup.id, reactions: {}, ...(replyData || {}) });
-            logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, uniqueMentions.length ? `Mentions: ${uniqueMentions.join(', ')}` : "Public");
+            groupMsgRef = await addDoc(orgCollection("messages"), { text: messageText, senderUid: user.uid, senderEmail: user.email, timestamp: serverTimestamp(), isTask: false, isPrivateMention: false, allowedUsers: [], mentionEmails: uniqueMentions, seenBy: [user.email], groupId: activeGroup.id, groupName: activeGroup.name, reactions: {}, isPrivateForward: false, ...(replyData || {}), ...supportRouting });
+            logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, supportRouting.isPrivateForward ? `Private SUPPORT: ${(supportRouting.allowedUsers || []).join(', ')}` : (uniqueMentions.length ? `Mentions: ${uniqueMentions.join(', ')}` : "Public"));
         }
 
 
@@ -250,18 +275,28 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 const replyData = replyingTo ? { replyToId: replyingTo.id, originalText: replyingTo.text || replyingTo.fileName || 'Attachment', originalSender: (replyingTo.sender||'').split('@')[0] } : {};
+                const supportRouting = buildSupportRoutingPayload(replyingTo);
+                if (supportRouting.blockedTopLevelSupportPost) {
+                    addToast?.('Reply to a SUPPORT broadcast to upload privately to support.', 'warning');
+                    resolve();
+                    return;
+                }
                 await addDoc(orgCollection("messages"), {
                     text: safeCaption.trim(),
                     senderUid: user.uid,
                     senderEmail: user.email,
                     groupId: activeGroup.id,
+                    groupName: activeGroup.name,
                     fileUrl: downloadURL,
                     fileName: customName,
                     fileType: processedFile.type,
                     timestamp: serverTimestamp(),
                     isTask: false,
                     seenBy: [user.email],
-                    ...replyData
+                    isPrivateForward: false,
+                    allowedUsers: [],
+                    ...replyData,
+                    ...supportRouting
                 });
                 resolve();
             }

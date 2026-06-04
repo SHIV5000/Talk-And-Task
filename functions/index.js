@@ -16,6 +16,8 @@ const TENANT_COLLECTIONS = [
   'audit_logs',
 ];
 const DEFAULT_APP_VERSION = '1.0.0';
+const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+const SUPPORT_GROUP_ID = 'support';
 const DEFAULT_PACKAGES = {
   starter: {
     name: 'Starter',
@@ -567,10 +569,27 @@ exports.onboardTenant = onCall(async (request) => {
     senderUid: "system",
     senderEmail: "Developer Console",
     groupId: groupRef.id,
+    groupName: "Welcome",
     timestamp: serverTimestamp(),
     isTask: false,
     seenBy: adminEmail ? [adminEmail] : [],
-    reactions: {}
+    reactions: {},
+    isPrivateForward: false,
+    allowedUsers: []
+  }, { merge: true });
+
+  const supportMembers = [...new Set([adminEmail].filter(Boolean))];
+  const supportGroupRef = db.collection('organizations').doc(orgId).collection('groups').doc(SUPPORT_GROUP_ID);
+  await queueBatchSet(batchState, supportGroupRef, {
+    name: "SUPPORT",
+    members: supportMembers,
+    admins: [GLOBAL_SUPPORT_ADMIN_EMAIL],
+    createdBy: GLOBAL_SUPPORT_ADMIN_EMAIL,
+    createdAt: serverTimestamp(),
+    isArchived: false,
+    isSupport: true,
+    universalRead: true,
+    profilePicUrl: null
   }, { merge: true });
   // ---------------------------------------------------
 
