@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
+const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+
 const DAY_FMT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
 const formatDayLabel = (value) => {
   if (!value) return '';
@@ -23,6 +25,11 @@ export default function ChatView({
   customTags, setActiveReplies, setActiveTaskSidebar, featureFlags = {}
 }) {
   const [expandedThreads, setExpandedThreads] = useState({});
+  const userEmail = (user?.email || '').toLowerCase();
+  const canManagePinnedMessages =
+    userEmail === GLOBAL_SUPER_ADMIN_EMAIL ||
+    (activeGroup?.admins || []).some((email) => (email || '').toLowerCase() === userEmail);
+  const pinnedTooltip = canManagePinnedMessages ? 'Unpin message' : 'Only admins can unpin';
 
   // Inject pinned banner glow CSS
   useEffect(() => {
@@ -80,10 +87,10 @@ export default function ChatView({
           setTimeout(() => {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-            el.classList.add('ring-4', 'ring-indigo-400', 'bg-indigo-50', 'transition-all', 'duration-500');
+            el.classList.add('ring-4', 'ring-yellow-300', 'bg-yellow-100', 'dark:bg-yellow-500/20', 'transition-all', 'duration-500');
             setTimeout(() => {
-              el.classList.remove('ring-4', 'ring-indigo-400', 'bg-indigo-50');
-            }, 4000);
+              el.classList.remove('ring-4', 'ring-yellow-300', 'bg-yellow-100', 'dark:bg-yellow-500/20');
+            }, 2000);
 
             setPendingScrollTarget(null);
           }, 150);
@@ -101,8 +108,8 @@ export default function ChatView({
   }, [pendingScrollTarget, setPendingScrollTarget]);
 
   return (
-    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 md:px-[8%] bg-slate-50 relative">
-      <div className="flex flex-col min-h-full justify-end py-4 pb-10">
+    <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-3 md:px-4 bg-slate-50 dark:bg-slate-950 relative">
+      <div className="mx-auto flex w-full max-w-3xl flex-col min-h-full justify-end py-4 pb-10">
 
         {toolPreferences?.showWatermark !== false && (
           <div className="doodle-watermark">
@@ -119,20 +126,33 @@ export default function ChatView({
         )}
 
         <div className="text-center mb-6 mt-4 relative z-[1]">
-          <span className="text-[12.5px] text-slate-500 bg-slate-200/50 px-4 py-1.5 rounded-lg shadow-sm font-medium border border-slate-200">
+          <span className="text-[12.5px] text-slate-500 dark:text-slate-300 bg-slate-200/50 dark:bg-slate-800/80 px-4 py-1.5 rounded-lg shadow-sm font-medium border border-slate-200 dark:border-slate-700">
             <i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.
           </span>
         </div>
 
         {pinnedMessages.length > 0 && (
           <div
-            className="sticky top-2 z-10 bg-white shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100 pinned-banner-glow relative overflow-hidden"
+            className="sticky top-2 z-10 bg-white dark:bg-slate-900 shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border border-slate-100 dark:border-slate-700 pinned-banner-glow relative overflow-hidden"
             onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}
           >
-            <div className="flex justify-between items-center text-xs text-slate-500 font-medium mb-1">
+            <div className="flex justify-between items-center gap-3 text-xs text-slate-500 dark:text-slate-300 font-medium mb-1">
               <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (canManagePinnedMessages) handleTogglePin?.(pinnedMessages[0]);
+                }}
+                disabled={!canManagePinnedMessages}
+                title={pinnedTooltip}
+                aria-label={pinnedTooltip}
+                className={`relative z-20 inline-flex h-6 w-6 items-center justify-center rounded-full border text-[10px] transition-colors ${canManagePinnedMessages ? 'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200 dark:hover:bg-rose-500/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-70 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500'}`}
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
             </div>
-            <div className="text-sm text-slate-800 line-clamp-1 truncate font-medium">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
+            <div className="text-sm text-slate-800 dark:text-slate-100 line-clamp-1 truncate font-medium">{pinnedMessages[0].text || pinnedMessages[0].fileName}</div>
           </div>
         )}
 
@@ -146,10 +166,10 @@ export default function ChatView({
             return (
               <React.Fragment key={msg.id}>
                 {currentDay && currentDay !== prevDay && (
-                  <div className="flex items-center gap-3 my-5 text-[11px] font-bold uppercase tracking-widest text-slate-400">
-                    <div className="flex-1 border-t border-dotted border-slate-300"></div>
+                  <div className="flex items-center gap-3 my-5 text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    <div className="flex-1 border-t border-dotted border-slate-300 dark:border-slate-700"></div>
                     <span>{formatDayLabel(currentDay)}</span>
-                    <div className="flex-1 border-t border-dotted border-slate-300"></div>
+                    <div className="flex-1 border-t border-dotted border-slate-300 dark:border-slate-700"></div>
                   </div>
                 )}
                 <MessageBubble
@@ -197,12 +217,12 @@ export default function ChatView({
 
         {typingStatus.length > 0 && (
           <div className="flex items-start mt-2 relative z-[1]">
-            <div className="bg-white px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 border border-indigo-500/10">
+            <div className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 border border-indigo-500/10 dark:border-indigo-400/20">
               <div className="flex -space-x-2">
                 {typingStatus.map(t => {
                   const uidPart = t.id.split('_')[1] || t.id;
                   const typist = dbUsers.find(u => u.uid === uidPart) || {};
-                  return <MemoizedAvatar key={t.id} uid={uidPart} url={typist.profilePicUrl} name={t.name} sizeClass="w-7 h-7 typing-avatar-pulse border-2 border-white relative z-10" />
+                  return <MemoizedAvatar key={t.id} uid={uidPart} url={typist.profilePicUrl} name={t.name} sizeClass="w-7 h-7 typing-avatar-pulse border-2 border-white dark:border-slate-900 relative z-10" />
                 })}
               </div>
               <span className="typing-gradient-text text-sm">... typing</span>

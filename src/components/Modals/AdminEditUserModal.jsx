@@ -19,7 +19,7 @@ export default function AdminEditUserModal({ setActiveModal, adminForm, setAdmin
               <input type="checkbox" checked={adminForm.isAdmin} onChange={(e) => setAdminForm({...adminForm, isAdmin: e.target.checked})} className="w-5 h-5 accent-[#008069] rounded"/> Grant Full Admin Rights
             </label>
             <label className="flex items-center gap-3 text-[13px] font-bold text-slate-800 cursor-pointer">
-              <input type="checkbox" checked={adminForm.canCreateGroups} onChange={(e) => setAdminForm({...adminForm, canCreateGroups: e.target.checked})} className="w-5 h-5 accent-[#008069] rounded"/> Allow Group Creation
+              <input type="checkbox" checked={adminForm.canCreateGroups} onChange={(e) => setAdminForm({...adminForm, canCreateGroups: e.target.checked})} className="w-5 h-5 accent-[#008069] rounded"/> Allow Department Creation
             </label>
           </div>
           <button type="submit" className="w-full bg-[#008069] text-white py-3.5 mt-2 rounded-xl font-bold shadow-[0_4px_15px_rgba(0,128,105,0.3)] hover:bg-[#006e5a] transition-all">Save Changes</button>

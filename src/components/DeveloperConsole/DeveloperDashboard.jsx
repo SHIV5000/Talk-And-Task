@@ -6,6 +6,7 @@ const quickActions = [
   { href: '/developer-hq/tenants', label: 'Review tenants', icon: 'fa-users-gear' },
   { href: '/developer-hq/packages', label: 'Manage packages', icon: 'fa-layer-group' },
   { href: '/developer-hq/storage', label: 'Audit storage', icon: 'fa-hard-drive' },
+  { href: '/developer-hq/global-dispatch', label: 'Global Dispatch', icon: 'fa-tower-broadcast' },
   { href: '/developer-hq/version', label: 'Release version', icon: 'fa-rocket' },
 ];
 

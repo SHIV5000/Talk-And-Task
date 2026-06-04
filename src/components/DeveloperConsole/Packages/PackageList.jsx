@@ -20,9 +20,9 @@ import PackageForm from './PackageForm.jsx';
 const PACKAGE_COLLECTION = 'subscriptionPackages';
 const ORG_DETAILS_COLLECTION_GROUP = 'org_details';
 
-const formatCurrency = (value) => new Intl.NumberFormat(undefined, {
+const formatCurrency = (value) => new Intl.NumberFormat('en-IN', {
   style: 'currency',
-  currency: 'USD',
+  currency: 'INR',
   minimumFractionDigits: 2,
 }).format(Number(value || 0));
 
@@ -65,15 +65,6 @@ const getPackageUsage = async (packageRecord) => {
     const snapshot = await getDocs(usageQuery);
     const match = snapshot.docs.find((orgDoc) => orgUsesPackage(orgDoc.data(), packageRecord));
     if (match) return { inUse: true, orgPath: match.ref.path, orgData: match.data() };
-  }
-
-  const workspaceDetails = await getDocs(query(collection(db, 'workspace'), limit(20)));
-  const workspaceMatch = workspaceDetails.docs.find((workspaceDoc) => (
-    workspaceDoc.id === 'org_details' && orgUsesPackage(workspaceDoc.data(), packageRecord)
-  ));
-
-  if (workspaceMatch) {
-    return { inUse: true, orgPath: workspaceMatch.ref.path, orgData: workspaceMatch.data() };
   }
 
   return { inUse: false, orgPath: null, orgData: null };
@@ -245,7 +236,7 @@ export default function PackageList() {
               <thead className="bg-slate-50 text-xs font-bold uppercase tracking-widest text-slate-500">
                 <tr>
                   <th className="px-5 py-3">Package</th>
-                  <th className="px-5 py-3">Price</th>
+                  <th className="px-5 py-3">Price (INR)</th>
                   <th className="px-5 py-3">Storage</th>
                   <th className="px-5 py-3">Users</th>
                   <th className="px-5 py-3">Flags</th>

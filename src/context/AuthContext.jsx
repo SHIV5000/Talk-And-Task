@@ -9,7 +9,7 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   setPersistence,
-  inMemoryPersistence,
+  browserLocalPersistence,
   serverTimestamp,
   doc,
   updateDoc,
@@ -22,6 +22,7 @@ import {
 import { notifyRuntimeEvent } from '../utils/runtimeEventNotifier.js';
 
 const DEFAULT_APP_VERSION = '25.0';
+const DEFAULT_PLATFORM_OWNER_ORG_ID = 'mpgs';
 const PLATFORM_OWNER_EMAIL = 'shivsuri1@gmail.com';
 
 const defaultFeatureFlags = {};
@@ -90,9 +91,13 @@ async function findTenantInvitation(email) {
   const lowerEmail = String(email || '').trim().toLowerCase();
   if (!lowerEmail) return null;
 
-  const invitationSnap = await getDocs(query(collection(db, 'tenantInvitations'), where('email', '==', lowerEmail))).catch(() => null);
-  const invitationDoc = invitationSnap?.docs?.[0];
-  return invitationDoc ? { id: invitationDoc.id, ...invitationDoc.data() } : null;
+  const invitationByLower = await getDocs(query(collection(db, 'tenantInvitations'), where('emailLower', '==', lowerEmail))).catch(() => null);
+  const invitationDoc = invitationByLower?.docs?.[0];
+  if (invitationDoc) return { id: invitationDoc.id, ...invitationDoc.data() };
+
+  const invitationByEmail = await getDocs(query(collection(db, 'tenantInvitations'), where('email', '==', lowerEmail))).catch(() => null);
+  const fallbackDoc = invitationByEmail?.docs?.[0];
+  return fallbackDoc ? { id: fallbackDoc.id, ...fallbackDoc.data() } : null;
 }
 
 function applyInvitationProfile(profile, invitation) {
@@ -116,8 +121,11 @@ async function ensureUserProfile(loggedInUser, claims = {}) {
   const invitation = await findTenantInvitation(lowerEmail);
 
   if (!userSnap.exists()) {
-    const allUsersSnap = await getDocs(collection(db, 'users'));
-    const isFirstUser = allUsersSnap.empty;
+    let isFirstUser = false;
+    if (isPlatformOwnerEmail) {
+      const allUsersSnap = await getDocs(collection(db, 'users')).catch(() => null);
+      isFirstUser = !!allUsersSnap?.empty;
+    }
     const newProfile = {
       uid: loggedInUser.uid,
       email: loggedInUser.email,
@@ -126,6 +134,8 @@ async function ensureUserProfile(loggedInUser, claims = {}) {
       isAdmin: isFirstUser || isPlatformOwnerEmail,
       canCreateGroups: isFirstUser || isPlatformOwnerEmail,
       isPlatformOwner: !!claims.isPlatformOwner || !!claims.platformOwner || isPlatformOwnerEmail,
+      orgId: isPlatformOwnerEmail ? DEFAULT_PLATFORM_OWNER_ORG_ID : claims.orgId || null,
+      role: isPlatformOwnerEmail ? 'admin' : claims.role || 'member',
       profilePicUrl: loggedInUser.photoURL || null,
       toolPreferences: {
         reply: true,
@@ -161,6 +171,8 @@ async function ensureUserProfile(loggedInUser, claims = {}) {
       isAdmin: true,
       canCreateGroups: true,
       isPlatformOwner: true,
+      orgId: existingProfile.orgId || DEFAULT_PLATFORM_OWNER_ORG_ID,
+      role: existingProfile.role || 'admin',
     };
     await setDoc(userRef, ownerPatch, { merge: true });
     return { ...existingProfile, ...ownerPatch };
@@ -170,8 +182,6 @@ async function ensureUserProfile(loggedInUser, claims = {}) {
 }
 
 function resolveSessionClaims(claims, profile) {
-  const resolvedOrgId = claims.orgId || profile?.orgId || profile?.organizationId || null;
-  const resolvedRole = claims.role || profile?.role || profile?.roles?.[0] || (profile?.isAdmin ? 'admin' : 'member');
   const resolvedIsPlatformOwner = !!(
     claims.isPlatformOwner ||
     claims.platformOwner ||
@@ -179,6 +189,8 @@ function resolveSessionClaims(claims, profile) {
     profile?.isPlatformOwner ||
     (profile?.email || '').toLowerCase() === PLATFORM_OWNER_EMAIL
   );
+  const resolvedOrgId = claims.orgId || profile?.orgId || profile?.organizationId || (resolvedIsPlatformOwner ? DEFAULT_PLATFORM_OWNER_ORG_ID : null);
+  const resolvedRole = claims.role || profile?.role || profile?.roles?.[0] || (profile?.isAdmin || resolvedIsPlatformOwner ? 'admin' : 'member');
 
   return { resolvedOrgId, resolvedRole, resolvedIsPlatformOwner };
 }
@@ -249,6 +261,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setAuthChecked(false);
       setAuthError('');
       try {
         await hydrateSession(currentUser);
@@ -257,7 +270,7 @@ export function AuthProvider({ children }) {
         clearSession();
         setAuthError('Failed to load your session. Please sign in again.');
       } finally {
-        setTimeout(() => setAuthChecked(true), 300);
+        setAuthChecked(true);
       }
     });
 
@@ -292,7 +305,7 @@ export function AuthProvider({ children }) {
     requestNotificationPermission();
 
     try {
-      await setPersistence(auth, inMemoryPersistence);
+      await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
@@ -317,7 +330,7 @@ export function AuthProvider({ children }) {
     requestNotificationPermission();
 
     try {
-      await setPersistence(auth, inMemoryPersistence);
+      await setPersistence(auth, browserLocalPersistence);
       const result = await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
       const loggedInUser = result.user;
       await hydrateSession(loggedInUser);

@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
-  signInWithEmailAndPassword, setPersistence, inMemoryPersistence
+  signInWithEmailAndPassword, setPersistence, inMemoryPersistence, browserLocalPersistence
 } from 'firebase/auth';
 import {
   getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
@@ -28,7 +28,7 @@ const functions = getFunctions(app);
 
 export {
   onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
-  signInWithEmailAndPassword, setPersistence, inMemoryPersistence,
+  signInWithEmailAndPassword, setPersistence, inMemoryPersistence, browserLocalPersistence,
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, setDoc, getDocs, where, deleteDoc,
   ref, uploadBytesResumable, getDownloadURL,

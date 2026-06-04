@@ -13,12 +13,17 @@ import { hasPermission } from '../../utils/rbac.js';
 import VersionManager from '../DeveloperConsole/Version/VersionManager.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 
+const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+const isGlobalSuperAdminEmail = (email) => (email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
+const LIVE_USER_WINDOW_MS = 5 * 60 * 1000;
+const getTimestampMs = (value) => value?.toMillis?.() || (value ? new Date(value).getTime() : 0);
+
 // Utility to strip HTML
 const stripHtml = (html) =>
   html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 
 
-const SYSTEM_ROLES = ['Super Admin', 'Auditor', 'Group Moderator'];
+const SYSTEM_ROLES = ['Super Admin', 'Auditor', 'Department Moderator'];
 const PERMISSION_AREAS = ['Users', 'Tasks', 'Messages', 'Logs', 'Settings', 'Backups', 'Integrations', 'Compliance'];
 const PERMISSION_ACTIONS = ['read', 'create', 'update', 'delete'];
 
@@ -30,7 +35,7 @@ const makePermissionGrid = (enabled = false) => PERMISSION_AREAS.reduce((acc, ar
 const DEFAULT_ROLES = [
   { id: 'super-admin', name: 'Super Admin', system: true, permissions: makePermissionGrid(true) },
   { id: 'auditor', name: 'Auditor', system: true, permissions: { ...makePermissionGrid(false), Logs: { read: true, create: false, update: false, delete: false }, Compliance: { read: true, create: false, update: false, delete: false } } },
-  { id: 'group-moderator', name: 'Group Moderator', system: true, permissions: { ...makePermissionGrid(false), Users: { read: true, create: false, update: false, delete: false }, Tasks: { read: true, create: true, update: true, delete: false }, Messages: { read: true, create: true, update: true, delete: false } } },
+  { id: 'group-moderator', name: 'Department Moderator', system: true, permissions: { ...makePermissionGrid(false), Users: { read: true, create: false, update: false, delete: false }, Tasks: { read: true, create: true, update: true, delete: false }, Messages: { read: true, create: true, update: true, delete: false } } },
 ];
 
 const formatDateTime = (value) => {
@@ -102,17 +107,17 @@ export default function AdminPanel({
   const hasFeature = useCallback((flag) => featureFlags?.[flag] !== false, [featureFlags]);
   const adminTabs = useMemo(() => [
     { id: 'overview', flag: 'advancedAnalytics' },
-    { id: 'users' },
+    { id: 'users', flag: 'usersTab' },
     { id: 'security', flag: 'dataGovernance' },
-    { id: 'groups' },
+    { id: 'groups', flag: 'departmentsTab' },
     { id: 'tasks', flag: 'taskCards' },
     { id: 'logs', flag: 'auditLogs' },
-    { id: 'broadcast' },
+    { id: 'broadcast', flag: 'broadcasts' },
     { id: 'tags', flag: 'customBranding' },
     { id: 'lifecycle', flag: 'dataGovernance' },
     { id: 'recovery', flag: 'dsarCompliance' },
     { id: 'compliance', flag: 'dsarCompliance' },
-    { id: 'organization' },
+    { id: 'organization', flag: 'organizationSettings' },
   ].filter((tab) => !tab.flag || hasFeature(tab.flag)).map((tab) => tab.id), [hasFeature]);
 
   const [limitDraft, setLimitDraft] = useState(maxFileSizeMb || 5);
@@ -120,7 +125,7 @@ export default function AdminPanel({
   // ----- Overview time range -----
   const [overviewTimeRange, setOverviewTimeRange] = useState('week');
 
-  // ----- People (Users + Groups) -----
+  // ----- People (Users + Departments) -----
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
@@ -187,56 +192,59 @@ export default function AdminPanel({
   const [exportsHistory, setExportsHistory] = useState([]);
   const [storageIndex, setStorageIndex] = useState([]);
   const [dsarForm, setDsarForm] = useState({ uid: '', startDate: '', endDate: '', mode: 'access' });
-  const [adminSettings, setAdminSettings] = useState({ institutionName: '', pointOfContactEmail: '', fileUploadSizeMb: maxFileSizeMb || 5 });
+  const [adminSettings, setAdminSettings] = useState({ fileUploadSizeMb: maxFileSizeMb || 5 });
 
   // ===== REAL-TIME LISTENERS =====
   // Organization doc
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'workspace', 'org_details'), (docSnap) => {
+    if (!orgId) return undefined;
+    const unsub = onSnapshot(doc(db, 'organizations', orgId, 'org_details', 'details'), (docSnap) => {
       if (docSnap.exists()) {
         setOrgDetails(docSnap.data());
         setIsOrgSaved(true); // assume saved if data exists
       }
     });
     return () => unsub();
-  }, []);
+  }, [orgId]);
 
 
 
   useEffect(() => {
+    if (!orgId) return undefined;
     const unsubs = [
-      onSnapshot(collection(db, 'sessions'), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0)))),
-      onSnapshot(collection(db, 'roles'), (snap) => {
+      onSnapshot(collection(db, 'organizations', orgId, 'sessions'), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0)))),
+      onSnapshot(collection(db, 'organizations', orgId, 'roles'), (snap) => {
         const stored = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         const merged = [...DEFAULT_ROLES.filter((role) => !stored.some((s) => s.id === role.id || s.name === role.name)), ...stored];
         setRoles(merged);
       }),
-      onSnapshot(collection(db, 'retentionPolicies'), (snap) => setRetentionPolicies(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(query(collection(db, 'retention_cleanup_logs'), orderBy('timestamp', 'desc')), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(query(collection(db, 'exports'), orderBy('timestamp', 'desc')), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(doc(db, 'settings', 'institution'), (snap) => {
+      onSnapshot(collection(db, 'organizations', orgId, 'retentionPolicies'), (snap) => setRetentionPolicies(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(query(collection(db, 'organizations', orgId, 'retention_cleanup_logs'), orderBy('timestamp', 'desc')), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(query(collection(db, 'organizations', orgId, 'exports'), orderBy('timestamp', 'desc')), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(doc(db, 'organizations', orgId, 'settings', 'institution'), (snap) => {
         if (snap.exists()) setAdminSettings((prev) => ({ ...prev, ...snap.data() }));
       }),
     ];
     return () => unsubs.forEach((unsub) => unsub());
-  }, []);
+  }, [orgId]);
 
   useEffect(() => {
+    if (!orgId) return;
     DEFAULT_ROLES.forEach((role) => {
-      setDoc(doc(db, 'roles', role.id), { ...role, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      setDoc(doc(db, 'organizations', orgId, 'roles', role.id), { ...role, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
     });
-  }, []);
+  }, [orgId]);
 
   // Broadcast acks (for live & historical)
   useEffect(() => {
-    if (activeTab === 'broadcast') {
-      const unsubAcks = onSnapshot(collection(db, 'broadcast_acks'), (snap) => {
+    if (activeTab === 'broadcast' && orgId) {
+      const unsubAcks = onSnapshot(collection(db, 'organizations', orgId, 'broadcast_acks'), (snap) => {
         const acks = snap.docs.map((d) => d.data());
         acks.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
         setAllAcks(acks);
       });
       // Past broadcasts stored in a subcollection for history
-      const q = query(collection(db, 'broadcasts'), orderBy('timestamp', 'desc'));
+      const q = query(collection(db, 'organizations', orgId, 'broadcasts'), orderBy('timestamp', 'desc'));
       const unsubPast = onSnapshot(q, (snap) => {
         setPastBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       });
@@ -245,7 +253,8 @@ export default function AdminPanel({
         unsubPast();
       };
     }
-  }, [activeTab]);
+    return undefined;
+  }, [activeTab, orgId]);
 
   // Derived broadcast data
   const uniqueBroadcastIds = useMemo(
@@ -271,6 +280,14 @@ export default function AdminPanel({
   }, [pastBroadcasts, broadcastSearch]);
 
   // ===== COMPUTED DATA =====
+  const isGlobalSuperAdmin = isGlobalSuperAdminEmail(currentUserData?.email);
+  const effectiveAdminUser = useMemo(() => ({
+    ...(currentUserData || {}),
+    isAdmin: currentUserData?.isAdmin || isVipAdmin || isGlobalSuperAdmin,
+    isApproved: currentUserData?.isApproved !== false || isGlobalSuperAdmin,
+    roles: isGlobalSuperAdmin ? Array.from(new Set([...(currentUserData?.roles || []), 'Super Admin'])) : currentUserData?.roles,
+  }), [currentUserData, isVipAdmin, isGlobalSuperAdmin]);
+
   const filteredUsers = useMemo(() => dbUsers || [], [dbUsers]);
 
   const allTasks = useMemo(() => (messages || []).filter((m) => m.isTask), [messages]);
@@ -353,13 +370,21 @@ export default function AdminPanel({
 
   const selectedRole = useMemo(() => roles.find((role) => role.id === selectedRoleId) || roles[0] || DEFAULT_ROLES[0], [roles, selectedRoleId]);
   const selectedDsarUser = useMemo(() => dbUsers.find((u) => u.uid === dsarForm.uid), [dbUsers, dsarForm.uid]);
-  const canRunBackups = hasFeature('dsarCompliance') && hasPermission(currentUserData, roles, 'Backups', 'create');
-  const canRunCompliance = hasFeature('dsarCompliance') && hasPermission(currentUserData, roles, 'Compliance', 'create');
+  const liveUsers = useMemo(() => {
+    const now = Date.now();
+    return (dbUsers || [])
+      .map((member) => ({ ...member, lastActiveMs: getTimestampMs(member.lastActive || member.lastLogin) }))
+      .filter((member) => member.lastActiveMs && now - member.lastActiveMs <= LIVE_USER_WINDOW_MS)
+      .sort((a, b) => b.lastActiveMs - a.lastActiveMs);
+  }, [dbUsers]);
+  const canRunBackups = hasFeature('dsarCompliance') && hasPermission(effectiveAdminUser, roles, 'Backups', 'create');
+  const canRunCompliance = hasFeature('dsarCompliance') && hasPermission(effectiveAdminUser, roles, 'Compliance', 'create');
 
   // ===== FUNCTIONS =====
 
   const logAuditEvent = async (type, target = '', details = {}) => {
-    await addDoc(collection(db, 'audit_logs'), {
+    if (!orgId) return;
+    await addDoc(collection(db, 'organizations', orgId, 'audit_logs'), {
       type,
       user: currentUserData?.email || currentUserData?.uid || 'admin',
       adminId: currentUserData?.uid || currentUserData?.email || 'admin',
@@ -374,7 +399,7 @@ export default function AdminPanel({
   const updateRolePermission = async (role, area, action, checked) => {
     const permissions = { ...(role.permissions || makePermissionGrid(false)) };
     permissions[area] = { ...(permissions[area] || {}), [action]: checked };
-    await setDoc(doc(db, 'roles', role.id), { ...role, permissions, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, 'organizations', orgId, 'roles', role.id), { ...role, permissions, updatedAt: serverTimestamp() }, { merge: true });
     await logAuditEvent('ROLE_UPDATE', role.id, { role: role.name, area, action, checked });
   };
 
@@ -382,7 +407,7 @@ export default function AdminPanel({
     const name = newRoleName.trim();
     if (!name) return alert('Enter a role name.');
     const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `role-${Date.now()}`;
-    await setDoc(doc(db, 'roles', id), { id, name, system: false, permissions: makePermissionGrid(false), createdAt: serverTimestamp() });
+    await setDoc(doc(db, 'organizations', orgId, 'roles', id), { id, name, system: false, permissions: makePermissionGrid(false), createdAt: serverTimestamp() });
     await logAuditEvent('ROLE_CREATE', id, { name });
     setNewRoleName('');
     setSelectedRoleId(id);
@@ -391,7 +416,7 @@ export default function AdminPanel({
   const deleteRole = async (role) => {
     if (role.system || SYSTEM_ROLES.includes(role.name)) return alert('System roles cannot be deleted.');
     if (!window.confirm(`Delete role ${role.name}?`)) return;
-    await deleteDoc(doc(db, 'roles', role.id));
+    await deleteDoc(doc(db, 'organizations', orgId, 'roles', role.id));
     await logAuditEvent('ROLE_DELETE', role.id, { name: role.name });
     setSelectedRoleId('super-admin');
   };
@@ -404,37 +429,60 @@ export default function AdminPanel({
 
   const forceLogoutSession = async (session) => {
     if (!window.confirm(`Force logout ${session.email || session.uid}?`)) return;
-    await deleteDoc(doc(db, 'sessions', session.id));
+    await deleteDoc(doc(db, 'organizations', orgId, 'sessions', session.id));
     await logAuditEvent('FORCE_LOGOUT', session.id, { affectedUid: session.uid, email: session.email, ip: session.ip });
   };
 
   const forceLogoutAll = async () => {
     if (!window.confirm('This will immediately sign out every user across all devices. Are you sure?')) return;
-    await Promise.all(sessions.map((session) => deleteDoc(doc(db, 'sessions', session.id))));
+    await Promise.all(sessions.map((session) => deleteDoc(doc(db, 'organizations', orgId, 'sessions', session.id))));
     await logAuditEvent('FORCE_LOGOUT_ALL', 'all-sessions', { affectedUsers: sessions.map((s) => s.uid), count: sessions.length });
   };
 
   const saveRetentionPolicy = async () => {
-    const payload = { ...newRetentionPolicy, ttlDays: Number(newRetentionPolicy.ttlDays), category: 'Chat Messages', updatedAt: serverTimestamp(), exemptTasks: true, exemptAuditLogs: true };
-    await addDoc(collection(db, 'retentionPolicies'), payload);
-    await logAuditEvent('RETENTION_POLICY_UPDATE', 'Chat Messages', payload);
+    const payload = {
+      ...newRetentionPolicy,
+      ttlDays: Number(newRetentionPolicy.ttlDays),
+      category: newRetentionPolicy.category || 'Chat Messages',
+      updatedAt: serverTimestamp(),
+      exemptAuditLogs: true,
+    };
+    await addDoc(collection(db, 'organizations', orgId, 'retentionPolicies'), payload);
+    await logAuditEvent('RETENTION_POLICY_UPDATE', payload.category, payload);
   };
 
   const updateRetentionPolicy = async (policy, updates) => {
-    await updateDoc(doc(db, 'retentionPolicies', policy.id), { ...updates, updatedAt: serverTimestamp() });
+    await updateDoc(doc(db, 'organizations', orgId, 'retentionPolicies', policy.id), { ...updates, updatedAt: serverTimestamp() });
     await logAuditEvent('RETENTION_POLICY_UPDATE', policy.id, updates);
+  };
+
+  const deleteRetentionPolicy = async (policy) => {
+    if (!window.confirm(`Delete lifecycle rule for ${policy.category}?`)) return;
+    await deleteDoc(doc(db, 'organizations', orgId, 'retentionPolicies', policy.id));
+    await logAuditEvent('RETENTION_POLICY_DELETE', policy.id, { category: policy.category, ttlDays: policy.ttlDays, action: policy.action });
   };
 
   const runCleanupNow = async (policy) => {
     const threshold = Date.now() - Number(policy.ttlDays || 30) * 24 * 60 * 60 * 1000;
-    const oldMessages = (messages || []).filter((m) => !m.isTask && (m.timestamp?.toMillis?.() || Date.now()) < threshold).slice(0, 500);
-    const runRef = await addDoc(collection(db, 'retention_cleanup_logs'), { ruleId: policy.id, ruleName: policy.category, timestamp: serverTimestamp(), status: 'running', affected: 0 });
-    for (const msg of oldMessages) {
-      if (policy.action === 'archive') await setDoc(doc(db, 'archived_messages', msg.id), { ...msg, archivedAt: serverTimestamp() });
-      await deleteDoc(doc(db, "organizations", orgId, "messages", msg.id));
+    const category = policy.category || 'Chat Messages';
+    const matchesCategory = (message) => {
+      if (category === 'Task Cards') return message.isTask === true;
+      if (category === 'All Messages & Task Cards') return true;
+      return message.isTask !== true;
+    };
+    const expiredMessages = (messages || [])
+      .filter((message) => matchesCategory(message) && (message.timestamp?.toMillis?.() || Date.now()) < threshold)
+      .slice(0, 500);
+    const runRef = await addDoc(collection(db, 'organizations', orgId, 'retention_cleanup_logs'), { ruleId: policy.id, ruleName: category, timestamp: serverTimestamp(), status: 'running', affected: 0 });
+    for (const message of expiredMessages) {
+      if (policy.action === 'archive') {
+        const archiveCollection = message.isTask ? 'archived_tasks' : 'archived_messages';
+        await setDoc(doc(db, 'organizations', orgId, archiveCollection, message.id), { ...message, archivedAt: serverTimestamp(), lifecycleRuleId: policy.id });
+      }
+      await deleteDoc(doc(db, "organizations", orgId, "messages", message.id));
     }
-    await updateDoc(doc(db, 'retention_cleanup_logs', runRef.id), { status: 'completed', affected: oldMessages.length });
-    await logAuditEvent('RETENTION_RUN', policy.id, { affected: oldMessages.length, action: policy.action, ttlDays: policy.ttlDays });
+    await updateDoc(doc(db, 'organizations', orgId, 'retention_cleanup_logs', runRef.id), { status: 'completed', affected: expiredMessages.length });
+    await logAuditEvent('RETENTION_RUN', policy.id, { affected: expiredMessages.length, action: policy.action, ttlDays: policy.ttlDays, category });
   };
 
   const exportFullDatabase = async () => {
@@ -444,7 +492,7 @@ export default function AdminPanel({
       collections: { users: dbUsers, groups, messages, auditLogs: filteredAuditLogs, settings: adminSettings },
     };
     const fileName = `talk-task-export-${Date.now()}.json`;
-    await addDoc(collection(db, 'exports'), { fileName, size: JSON.stringify(payload).length, timestamp: serverTimestamp(), status: 'ready', downloadUrl: 'Generated in browser download' });
+    await addDoc(collection(db, 'organizations', orgId, 'exports'), { fileName, size: JSON.stringify(payload).length, timestamp: serverTimestamp(), status: 'ready', downloadUrl: 'Generated in browser download' });
     await logAuditEvent('BACKUP_EXPORT', fileName, { collections: Object.keys(payload.collections) });
     downloadTextFile(fileName, JSON.stringify(payload, null, 2));
   };
@@ -476,13 +524,13 @@ export default function AdminPanel({
     if (window.prompt(`This permanently anonymises personal data for ${selectedDsarUser.name || selectedDsarUser.email}. Type: ${code}`) !== code) return;
     await updateDoc(doc(db, 'users', selectedDsarUser.uid), { name: 'Deleted User', emailHash: btoa(selectedDsarUser.email || selectedDsarUser.uid), email: '', isArchived: true, profilePicUrl: null });
     await Promise.all(messages.filter((m) => m.senderUid === selectedDsarUser.uid || m.senderEmail === selectedDsarUser.email).map((m) => updateDoc(doc(db, "organizations", orgId, "messages", m.id), { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: m.isTask ? m.text : '[deleted]' }).catch(() => {})));
-    await Promise.all(sessions.filter((s) => s.uid === selectedDsarUser.uid).map((s) => deleteDoc(doc(db, 'sessions', s.id))));
+    await Promise.all(sessions.filter((s) => s.uid === selectedDsarUser.uid).map((s) => deleteDoc(doc(db, 'organizations', orgId, 'sessions', s.id))));
     await logAuditEvent('DSAR_DELETE', selectedDsarUser.uid, { confirmationCode: code });
   };
 
   const saveInstitutionSettings = async () => {
     const payload = { ...adminSettings, fileUploadSizeMb: Number(adminSettings.fileUploadSizeMb || maxFileSizeMb || 5), activeUsersCount: dbUsers.length, updatedAt: serverTimestamp() };
-    await setDoc(doc(db, 'settings', 'institution'), payload, { merge: true });
+    await setDoc(doc(db, 'organizations', orgId, 'settings', 'institution'), payload, { merge: true });
     if (setMaxFileSizeMb) setMaxFileSizeMb(payload.fileUploadSizeMb);
     localStorage.setItem('maxFileSizeMb', String(payload.fileUploadSizeMb));
     await logAuditEvent('SETTINGS_UPDATE', 'institution', payload);
@@ -533,6 +581,18 @@ export default function AdminPanel({
     setSelectedUsers(s);
   };
 
+
+  const archiveUser = async (userRecord) => {
+    if (userRecord.isArchived) return;
+    if (!window.confirm(`Archive ${userRecord.name || userRecord.email}? This user will no longer be treated as active.`)) return;
+    await updateDoc(doc(db, 'users', userRecord.uid), {
+      isArchived: true,
+      archivedAt: serverTimestamp(),
+      archivedBy: currentUserData?.email || currentUserData?.uid || 'admin',
+    });
+    await logAuditEvent('USER_ARCHIVE', userRecord.uid, { email: userRecord.email });
+  };
+
   const handleAddUser = async () => {
     const email = newUserEmail.trim();
     const name = newUserName.trim();
@@ -568,9 +628,10 @@ export default function AdminPanel({
   // --- Broadcast ---
   const publishBroadcast = async () => {
     if (!broadcastMessage.trim()) return alert('Please enter a message.');
+    if (!orgId) return alert('Organization context is still loading. Please try again.');
     setIsBroadcasting(true);
     // Store in current announcement
-    await setDoc(doc(db, 'workspace', 'announcement'), {
+    await setDoc(doc(db, 'organizations', orgId, 'workspace', 'announcement'), {
       message: broadcastMessage.trim(),
       type: broadcastType,
       isActive: true,
@@ -578,7 +639,7 @@ export default function AdminPanel({
       author: currentUserData?.name || 'Administrator',
     });
     // Also store a copy in the broadcasts collection for history
-    await addDoc(collection(db, 'broadcasts'), {
+    await addDoc(collection(db, 'organizations', orgId, 'broadcasts'), {
       message: broadcastMessage.trim(),
       type: broadcastType,
       timestamp: serverTimestamp(),
@@ -590,7 +651,8 @@ export default function AdminPanel({
 
   const revokeBroadcast = async () => {
     if (!window.confirm('Remove the active broadcast?')) return;
-    await updateDoc(doc(db, 'workspace', 'announcement'), { isActive: false });
+    if (!orgId) return;
+    await updateDoc(doc(db, 'organizations', orgId, 'workspace', 'announcement'), { isActive: false });
     if (globalAnnouncement?.id) setSelectedBroadcastId(globalAnnouncement.id);
   };
 
@@ -600,7 +662,7 @@ export default function AdminPanel({
       return alert("Tag label must begin with '#'");
     const theme = tagThemes[newTagTheme];
     try {
-      await addDoc(collection(db, 'workspace_tags'), {
+      await addDoc(collection(db, 'organizations', orgId, 'workspace_tags'), {
         label: newTagLabel.trim(),
         bgClass: theme.bg,
         textClass: theme.text,
@@ -622,7 +684,7 @@ export default function AdminPanel({
   const saveTagEdit = async () => {
     if (!editTagLabel.trim() || !editTagLabel.startsWith('#')) return alert("Label must start with #");
     const theme = tagThemes[editTagTheme];
-    await updateDoc(doc(db, 'workspace_tags', editingTagId), {
+    await updateDoc(doc(db, 'organizations', orgId, 'workspace_tags', editingTagId), {
       label: editTagLabel.trim(),
       bgClass: theme.bg,
       textClass: theme.text,
@@ -634,7 +696,10 @@ export default function AdminPanel({
   // --- Organization ---
   const saveOrgDetails = async () => {
     try {
-      await setDoc(doc(db, 'workspace', 'org_details'), orgDetails, { merge: true });
+      if (!orgId) throw new Error('Organization context is still loading.');
+      const payload = { ...orgDetails, updatedAt: serverTimestamp() };
+      await setDoc(doc(db, 'organizations', orgId), payload, { merge: true });
+      await setDoc(doc(db, 'organizations', orgId, 'org_details', 'details'), payload, { merge: true });
       setIsOrgSaved(true);
       alert('Organization details saved successfully!');
     } catch (e) {
@@ -771,7 +836,7 @@ export default function AdminPanel({
 
         {/* ========= OVERVIEW TAB ========= */}
         {activeTab === 'overview' && hasFeature('advancedAnalytics') && (
-          <div className="flex flex-col gap-6 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
+          <div className="flex h-full flex-col gap-4 p-4 md:p-5 overflow-y-auto custom-sidebar-scroll">
             {/* time range */}
             <div className="flex items-center gap-2 justify-end">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Show:</span>
@@ -786,40 +851,40 @@ export default function AdminPanel({
 
             {/* Metric cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div onClick={() => hasFeature('auditLogs') && setActiveTab('logs')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer group">
+              <div onClick={() => hasFeature('auditLogs') && setActiveTab('logs')} className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-indigo-500 transition-colors">Messages</p>
-                    <p className="text-2xl font-extrabold text-slate-800 mt-1">{overviewMetrics.totalMessages}</p>
+                    <p className="text-xl font-extrabold text-slate-800 mt-0.5">{overviewMetrics.totalMessages}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-comments"></i></div>
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-comments"></i></div>
                 </div>
               </div>
-              <div onClick={() => hasFeature('taskCards') && setActiveTab('tasks')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-amber-300 transition-all cursor-pointer group">
+              <div onClick={() => hasFeature('taskCards') && setActiveTab('tasks')} className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-md hover:border-amber-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-amber-500 transition-colors">Active Tasks</p>
-                    <p className="text-2xl font-extrabold text-slate-800 mt-1">{overviewMetrics.activeTasks}</p>
+                    <p className="text-xl font-extrabold text-slate-800 mt-0.5">{overviewMetrics.activeTasks}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-spinner"></i></div>
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-spinner"></i></div>
                 </div>
               </div>
-              <div onClick={() => { if (hasFeature('taskCards')) { setActiveTab('tasks'); setTaskStatusFilter('Completed'); } }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer group">
+              <div onClick={() => { if (hasFeature('taskCards')) { setActiveTab('tasks'); setTaskStatusFilter('Completed'); } }} className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-500 transition-colors">Completed</p>
-                    <p className="text-2xl font-extrabold text-slate-800 mt-1">{overviewMetrics.completedTasks}</p>
+                    <p className="text-xl font-extrabold text-slate-800 mt-0.5">{overviewMetrics.completedTasks}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-check-circle"></i></div>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-check-circle"></i></div>
                 </div>
               </div>
-              <div onClick={() => setActiveTab('users')} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-teal-300 transition-all cursor-pointer group">
+              <div onClick={() => setActiveTab('users')} className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-md hover:border-teal-300 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover:text-teal-500 transition-colors">Active Users</p>
-                    <p className="text-2xl font-extrabold text-slate-800 mt-1">{overviewMetrics.activeUsers}</p>
+                    <p className="text-xl font-extrabold text-slate-800 mt-0.5">{overviewMetrics.activeUsers}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-users"></i></div>
+                  <div className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600 group-hover:scale-110 transition-transform"><i className="fa-solid fa-users"></i></div>
                 </div>
               </div>
             </div>
@@ -831,7 +896,7 @@ export default function AdminPanel({
                 ['Upcoming Backup', overviewMetrics.upcomingBackupStatus, 'fa-database', 'text-slate-700'],
                 ['Next Retention Run', overviewMetrics.nextRetentionRun, 'fa-recycle', 'text-emerald-700'],
               ].map(([label, value, icon, tone]) => (
-                <div key={label} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                <div key={label} className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm">
                   <div className="flex justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className={`mt-1 text-lg font-black ${tone}`}>{value}</p></div><i className={`fa-solid ${icon} text-xl text-slate-300`}></i></div>
                 </div>
               ))}
@@ -839,17 +904,17 @@ export default function AdminPanel({
 
             {/* additional cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+              <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Approvals</p>
-                  <p className="text-2xl font-extrabold text-rose-600 mt-1">{overviewMetrics.pendingApprovals}</p>
+                  <p className="text-xl font-extrabold text-rose-600 mt-0.5">{overviewMetrics.pendingApprovals}</p>
                 </div>
                 <button onClick={() => setActiveTab('users')} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-colors">Manage Users</button>
               </div>
-              <div onClick={() => { if (hasFeature('taskCards')) { setActiveTab('tasks'); setTaskStatusFilter('In Progress'); } }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
+              <div onClick={() => { if (hasFeature('taskCards')) { setActiveTab('tasks'); setTaskStatusFilter('In Progress'); } }} className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Overdue Tasks</p>
-                  <p className="text-2xl font-extrabold text-rose-600 mt-1">{overviewMetrics.overdueTasks}</p>
+                  <p className="text-xl font-extrabold text-rose-600 mt-0.5">{overviewMetrics.overdueTasks}</p>
                 </div>
                 <button className="text-xs font-bold text-rose-600 bg-rose-50 px-4 py-2 rounded-lg hover:bg-rose-100 transition-colors">View All</button>
               </div>
@@ -865,7 +930,7 @@ export default function AdminPanel({
             </div>}
 
             {/* activity feed */}
-            {hasFeature('auditLogs') && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-0">
+            {hasFeature('auditLogs') && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-1 flex-col min-h-[320px]">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2"><i className="fa-solid fa-clock-rotate-left text-indigo-500"></i> Recent Activity</h3>
               </div>
@@ -896,7 +961,7 @@ export default function AdminPanel({
 
         {/* ========= USERS / GROUPS TABS ========= */}
         {(activeTab === 'users' || activeTab === 'groups' || (activeTab === 'tasks' && hasFeature('taskCards')) || (activeTab === 'logs' && hasFeature('auditLogs')) || (activeTab === 'tags' && hasFeature('customBranding'))) && (
-          <div className="flex flex-col gap-6 p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full">
+          <div className="flex h-full flex-col gap-4 p-4 md:p-5 overflow-y-auto custom-sidebar-scroll">
             {/* Users Section */}
             {activeTab === 'users' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
@@ -919,7 +984,7 @@ export default function AdminPanel({
                     <button onClick={async () => { if (!window.confirm(`Approve ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isApproved: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Approve</button>
                     <button onClick={async () => { if (!window.confirm(`Grant admin to ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isAdmin: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600">Make Admin</button>
                     <button onClick={async () => { if (!window.confirm(`Revoke admin from ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isAdmin: false }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600">Revoke Admin</button>
-                    <button onClick={async () => { if (!window.confirm(`Archive ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isArchived: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600">Archive</button>
+                    <button onClick={async () => { if (!window.confirm(`Archive ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isArchived: true, archivedAt: serverTimestamp(), archivedBy: currentUserData?.email || currentUserData?.uid || 'admin' }))); await logAuditEvent('USER_ARCHIVE', 'bulk', { count: selectedUsers.size }); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600">Archive</button>
                     <button onClick={() => { const sel = filteredUsers.filter((u) => selectedUsers.has(u.uid)); const csv = 'Name,Email,Approved,Admin\n' + sel.map((u) => `"${u.name}","${u.email}","${u.isApproved}","${u.isAdmin}"`).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'selected_users.csv'; link.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50">Export CSV</button>
                   </div>
                   <button onClick={() => setSelectedUsers(new Set())} className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600">Clear</button>
@@ -936,9 +1001,10 @@ export default function AdminPanel({
                       <th className="px-3 py-3">Roles</th>
                       <th className="px-3 py-3">Status</th>
                       <th className="px-2 py-3 text-center">Admin</th>
-                      <th className="px-2 py-3 text-center">Groups</th>
+                      <th className="px-2 py-3 text-center">DEPARTMENTS</th>
                       <th className="px-3 py-3 text-center">Last Login</th>
                       <th className="px-3 py-3 text-center">DSAR</th>
+                      <th className="px-3 py-3 text-right">User Tab Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -954,6 +1020,7 @@ export default function AdminPanel({
                         <td className="px-2 py-3 text-center"><input type="checkbox" checked={u.canCreateGroups || false} onChange={() => handleToggleCanCreateGroups(u)} className="w-4 h-4 accent-indigo-600" /></td>
                         <td className="px-3 py-3 text-center text-[11px] text-slate-500">{formatDateTime(u.lastLogin || u.lastActive)}</td>
                         <td className="px-3 py-3 text-center"><select onChange={(e) => { if (!e.target.value) return; setDsarForm((prev) => ({ ...prev, uid: u.uid, mode: e.target.value })); setActiveTab('compliance'); e.target.value = ''; }} className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white"><option value="">DSAR Actions</option><option value="access">Export User Data</option><option value="delete">Right to be Forgotten</option></select></td>
+                        <td className="px-3 py-3 text-right"><button onClick={() => archiveUser(u)} disabled={u.isArchived} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50">{u.isArchived ? 'Archived' : 'Archive'}</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -961,16 +1028,16 @@ export default function AdminPanel({
               </div>
             </div>}
 
-            {/* Groups Section - TABLE view */}
+            {/* Departments Section - TABLE view */}
             {activeTab === 'groups' && <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>Groups</h2>
-                <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>New Group</button>
+                <h2 className="font-bold text-slate-800 text-lg"><i className="fa-solid fa-people-group text-indigo-600 mr-2"></i>DEPARTMENTS</h2>
+                <button onClick={() => { setGroupForm({ name: '', members: [], profilePicUrl: null }); setEditingGroup(null); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700"><i className="fa-solid fa-plus mr-2"></i>New Department</button>
               </div>
               {(editingGroup || groupForm?.name || groupForm?.members?.length > 0) && (
                 <div className="p-5 border-b border-slate-200 bg-slate-50">
                   <form onSubmit={(e) => { e.preventDefault(); handleGroupSubmit(e); }} className="space-y-4 max-w-3xl">
-                    <div><label className="text-xs font-bold text-slate-500 block mb-1">Group Name</label><input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} className="w-full bg-white border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-indigo-500" required /></div>
+                    <div><label className="text-xs font-bold text-slate-500 block mb-1">Department Name</label><input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} className="w-full bg-white border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-indigo-500" required /></div>
                     <div><label className="text-xs font-bold text-slate-500 block mb-1">Avatar</label><input type="file" onChange={handleGroupPicUpload} className="text-sm" /> {groupPicUploadProgress > 0 && <span className="text-xs font-bold text-indigo-600 ml-2">{Math.round(groupPicUploadProgress)}%</span>}</div>
                     <div>
                       <div className="flex justify-between items-center mb-2"><label className="text-xs font-bold text-slate-500">Members</label><div className="flex gap-2"><button type="button" onClick={() => setGroupForm({ ...groupForm, members: dbUsers.map((u) => u.email) })} className="text-xs text-indigo-600 font-bold hover:underline">Select All</button><button type="button" onClick={() => setGroupForm({ ...groupForm, members: [] })} className="text-xs text-rose-500 font-bold hover:underline">Clear</button></div></div>
@@ -986,17 +1053,17 @@ export default function AdminPanel({
                     </div>
                     <div className="flex justify-end gap-3">
                       <button type="button" onClick={() => { setEditingGroup(null); setGroupForm({ name: '', members: [], profilePicUrl: null }); }} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50">Cancel</button>
-                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Save Group</button>
+                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Save Department</button>
                     </div>
                   </form>
                 </div>
               )}
-              {/* Groups Table */}
+              {/* Departments Table */}
               <div className="overflow-y-auto custom-sidebar-scroll flex-1">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0">
                     <tr>
-                      <th className="px-4 py-3">Group Name</th>
+                      <th className="px-4 py-3">Department Name</th>
                       <th className="px-4 py-3">Members</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
@@ -1016,7 +1083,7 @@ export default function AdminPanel({
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button onClick={() => { setGroupForm({ name: g.name, members: g.members, profilePicUrl: g.profilePicUrl }); setEditingGroup(g); }} className="text-indigo-600 hover:text-indigo-800 mr-2" title="Edit"><i className="fa-solid fa-pencil"></i></button>
-                          <button onClick={async () => { if (!window.confirm('Delete this group?')) return; await deleteDoc(doc(db, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
+                          <button onClick={async () => { if (!window.confirm('Delete this department?')) return; await deleteDoc(doc(db, 'organizations', orgId, 'groups', g.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
                         </td>
                       </tr>
                     ))}
@@ -1040,7 +1107,7 @@ export default function AdminPanel({
                   <option value="Completed">Completed</option>
                 </select>
                 <select value={taskGroupFilter} onChange={(e) => setTaskGroupFilter(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold">
-                  <option value="">All Groups</option>
+                  <option value="">All Departments</option>
                   {groups.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
                 </select>
                 <input type="text" value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks..." className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold w-48" />
@@ -1057,7 +1124,7 @@ export default function AdminPanel({
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Assignees</th>
                       <th className="px-4 py-3">Due Date</th>
-                      <th className="px-4 py-3">Group</th>
+                      <th className="px-4 py-3">Department</th>
                       <th className="px-4 py-3">Actions</th>
                     </tr>
                   </thead>
@@ -1260,7 +1327,7 @@ export default function AdminPanel({
                 )}
 
                 {/* Historical Vault with search filter */}
-                {!globalAnnouncement?.isActive && pastBroadcasts.length > 0 && (
+                {pastBroadcasts.length > 0 && (
                   <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-0 flex-1">
                     <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between shrink-0">
                       <div>
@@ -1375,7 +1442,7 @@ export default function AdminPanel({
                               <td className="px-4 py-3 text-xs text-slate-500 capitalize">{tag.themeName}</td>
                               <td className="px-4 py-3 text-right">
                                 <button onClick={() => startEditTag(tag)} className="text-indigo-600 hover:text-indigo-800 mr-2" title="Edit"><i className="fa-solid fa-pencil"></i></button>
-                                <button onClick={() => deleteDoc(doc(db, 'workspace_tags', tag.id))} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
+                                <button onClick={() => { if (window.confirm(`Delete ${tag.label}?`)) deleteDoc(doc(db, 'organizations', orgId, 'workspace_tags', tag.id)); }} className="text-rose-500 hover:text-rose-700" title="Delete"><i className="fa-solid fa-trash"></i></button>
                               </td>
                             </tr>
                           )
@@ -1411,16 +1478,27 @@ export default function AdminPanel({
 
         {activeTab === 'security' && hasFeature('dataGovernance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-shield-halved text-rose-600 mr-2"></i>Security & Sessions</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active logins refresh through Firestore session documents.</p></div><button onClick={forceLogoutAll} className="bg-rose-600 text-white px-5 py-3 rounded-xl font-black shadow-sm hover:bg-rose-700"><i className="fa-solid fa-power-off mr-2"></i>Force Logout All Users</button></div>
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap"><div><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-shield-halved text-rose-600 mr-2"></i>Security & Sessions</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Live users auto-refresh from real-time Firestore activity and session documents.</p></div><button onClick={forceLogoutAll} className="bg-rose-600 text-white px-5 py-3 rounded-xl font-black shadow-sm hover:bg-rose-700"><i className="fa-solid fa-power-off mr-2"></i>Force Logout All Users</button></div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-3"><h3 className="font-black text-slate-800"><span className="mr-2 inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.16)]"></span>Currently Online / Live Users</h3><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">{liveUsers.length} live</span></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
+                {liveUsers.length === 0 ? <p className="col-span-full py-6 text-center text-sm font-bold text-slate-400">No users are active in the last 5 minutes.</p> : liveUsers.map((member) => (
+                  <div key={member.uid || member.email} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <MemoizedAvatar uid={member.uid || member.email} url={member.profilePicUrl} name={member.name || member.email} sizeClass="w-9 h-9" />
+                    <div className="min-w-0"><p className="truncate text-sm font-black text-slate-800">{member.name || member.email}</p><p className="truncate text-xs font-bold text-slate-400">{member.email}</p><p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Last ping {formatDateTime(member.lastActive || member.lastLogin)}</p></div>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3 text-left">User</th><th className="p-3 text-left">IP</th><th className="p-3 text-left">Device / Browser / OS</th><th className="p-3 text-left">Location</th><th className="p-3 text-left">Login</th><th className="p-3 text-left">Last Activity</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{sessions.map((session) => <tr key={session.id} className="hover:bg-slate-50"><td className="p-3 font-bold text-slate-800">{session.email || session.uid}</td><td className="p-3 text-slate-600">{session.ip || '—'}</td><td className="p-3 text-slate-600">{session.deviceType || 'Device'} / {session.browser || 'Browser'} / {session.os || 'OS'}</td><td className="p-3 text-slate-600">{session.location?.city || '—'}, {session.location?.country || '—'}</td><td className="p-3 text-xs text-slate-500">{formatDateTime(session.loginTime)}</td><td className="p-3 text-xs text-slate-500">{formatDateTime(session.lastActivity)}</td><td className="p-3 text-right"><button onClick={() => forceLogoutSession(session)} className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded-lg hover:bg-rose-100">Force Logout</button></td></tr>)}</tbody></table>{sessions.length === 0 && <p className="p-6 text-center text-sm text-slate-400">No active sessions.</p>}</div>
           </div>
         )}
 
         {activeTab === 'lifecycle' && hasFeature('dataGovernance') && (
           <div className="p-4 md:p-6 overflow-y-auto custom-sidebar-scroll h-full space-y-4">
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Retention policies are scoped to non-task chat messages only. Task trails and audit logs are exempt.</p></div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end"><div><label className="text-xs font-bold text-slate-500">Category</label><input value="Chat Messages" disabled className="block border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50" /></div><div><label className="text-xs font-bold text-slate-500">TTL</label><select value={newRetentionPolicy.ttlDays} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, ttlDays: Number(e.target.value) })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option></select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={newRetentionPolicy.action} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, action: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value="archive">Archive</option><option value="delete">Delete permanently</option></select></div><button onClick={saveRetentionPolicy} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Add Rule</button></div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Policies</div>{retentionPolicies.map((policy) => <div key={policy.id} className="p-4 border-b last:border-0 flex items-center justify-between gap-3"><div><div className="font-bold text-slate-800">{policy.category}</div><div className="text-xs text-slate-500">{policy.ttlDays} days • {policy.action} • Tasks/audit exempt</div></div><div className="flex gap-2"><button onClick={() => updateRetentionPolicy(policy, { isActive: !policy.isActive })} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${policy.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{policy.isActive ? 'Active' : 'Inactive'}</button><button onClick={() => runCleanupNow(policy)} disabled={!hasPermission(currentUserData, roles, 'Settings', 'update')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 disabled:opacity-50">Run Cleanup Now</button></div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Past Cleanup Executions</div>{retentionRuns.map((run) => <div key={run.id} className="p-4 border-b last:border-0"><div className="flex justify-between"><span className="font-bold text-slate-700">{run.ruleName || run.ruleId}</span><span className="text-xs text-slate-400">{formatDateTime(run.timestamp)}</span></div><div className="text-xs text-slate-500">{run.affected || 0} documents • {run.status}</div></div>)}</div></div>
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"><h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Retention policies can auto-delete chat messages and task cards. Audit logs remain exempt.</p></div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end"><div><label className="text-xs font-bold text-slate-500">Category</label><select value={newRetentionPolicy.category} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, category: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option>Chat Messages</option><option>Task Cards</option><option>All Messages & Task Cards</option></select></div><div><label className="text-xs font-bold text-slate-500">TTL</label><select value={newRetentionPolicy.ttlDays} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, ttlDays: Number(e.target.value) })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option></select></div><div><label className="text-xs font-bold text-slate-500">Action</label><select value={newRetentionPolicy.action} onChange={(e) => setNewRetentionPolicy({ ...newRetentionPolicy, action: e.target.value })} className="block border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value="archive">Archive</option><option value="delete">Delete permanently</option></select></div><button onClick={saveRetentionPolicy} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Add Rule</button></div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Policies</div>{retentionPolicies.map((policy) => <div key={policy.id} className="p-4 border-b last:border-0 flex items-center justify-between gap-3"><div><div className="font-bold text-slate-800">{policy.category}</div><div className="text-xs text-slate-500">{policy.ttlDays} days • {policy.action} • applies to {policy.category === 'Task Cards' ? 'task cards' : policy.category === 'All Messages & Task Cards' ? 'chat messages and task cards' : 'chat messages'}</div></div><div className="flex flex-wrap justify-end gap-2"><button onClick={() => updateRetentionPolicy(policy, { isActive: !policy.isActive })} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${policy.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{policy.isActive ? 'Active' : 'Inactive'}</button><button onClick={() => runCleanupNow(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'update')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 disabled:opacity-50">Run Cleanup Now</button><button onClick={() => deleteRetentionPolicy(policy)} disabled={!hasPermission(effectiveAdminUser, roles, 'Settings', 'delete')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 disabled:opacity-50">Delete</button></div></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-3 font-black text-slate-700 border-b">Past Cleanup Executions</div>{retentionRuns.map((run) => <div key={run.id} className="p-4 border-b last:border-0"><div className="flex justify-between"><span className="font-bold text-slate-700">{run.ruleName || run.ruleId}</span><span className="text-xs text-slate-400">{formatDateTime(run.timestamp)}</span></div><div className="text-xs text-slate-500">{run.affected || 0} documents • {run.status}</div></div>)}</div></div>
           </div>
         )}
 
@@ -1453,13 +1531,8 @@ export default function AdminPanel({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                   {hasFeature('customBranding') && <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Official Institution Name</label>
-                      <input type="text" value={adminSettings.institutionName || ''} onChange={(e) => setAdminSettings({ ...adminSettings, institutionName: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Point-of-Contact Email</label>
-                      <input type="email" value={adminSettings.pointOfContactEmail || ''} onChange={(e) => setAdminSettings({ ...adminSettings, pointOfContactEmail: e.target.value })} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-medium" />
+                    <div className="md:col-span-2 rounded-xl border border-indigo-100 bg-white/70 p-3 text-sm font-semibold text-indigo-700">
+                      Organization identity fields were removed; this form now keeps only operational limits and package-controlled settings.
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">File Upload Size Limit (MB)</label>
