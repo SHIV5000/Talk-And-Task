@@ -6,8 +6,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isGlobalSuperAdmin() {
+      return signedIn() && request.auth.token.email == 'shivsuri1@gmail.com';
+    }
+
     function isPlatformOwner() {
-      return signedIn() && request.auth.token.platformOwner == true;
+      return signedIn() && (request.auth.token.platformOwner == true || isGlobalSuperAdmin());
     }
 
     function hasOrgClaim() {
@@ -74,6 +78,49 @@ service cloud.firestore {
       return sameOrg(orgId) && orgExists(orgId) && !orgIsSuspended(orgId);
     }
 
+    function hasAuthedEmail() {
+      return signedIn() && request.auth.token.email is string;
+    }
+
+    function authedEmail() {
+      return request.auth.token.email;
+    }
+
+    function canReadTaskMessage() {
+      return resource.data.isTask != true ||
+        (hasAuthedEmail() && (
+          resource.data.senderEmail == authedEmail() ||
+          (resource.data.taskData.assignees is list && resource.data.taskData.assignees.hasAny([authedEmail()])) ||
+          (resource.data.taskData.visibleTo is list && resource.data.taskData.visibleTo.hasAny([authedEmail()]))
+        ));
+    }
+
+    function taskMessageWriteIsScoped() {
+      return request.resource.data.isTask != true ||
+        (
+          request.resource.data.taskData.assignees is list &&
+          request.resource.data.taskData.visibleTo is list &&
+          request.resource.data.taskData.visibleTo.hasAll([request.resource.data.senderEmail]) &&
+          request.resource.data.taskData.visibleTo.hasAll(request.resource.data.taskData.assignees)
+        );
+    }
+
+    function messagePinFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPinned']);
+    }
+
+    function isMessageGroupAdmin(orgId) {
+      return hasAuthedEmail() &&
+        resource.data.groupId is string &&
+        exists(/databases/$(database)/documents/organizations/$(orgId)/groups/$(resource.data.groupId)) &&
+        get(/databases/$(database)/documents/organizations/$(orgId)/groups/$(resource.data.groupId)).data.admins is list &&
+        get(/databases/$(database)/documents/organizations/$(orgId)/groups/$(resource.data.groupId)).data.admins.hasAny([authedEmail()]);
+    }
+
+    function messagePinUpdateAllowed(orgId) {
+      return messagePinFieldsUnchanged() || isMessageGroupAdmin(orgId);
+    }
+
     function userUpdateIsOwnSafeProfile(uid) {
       return request.auth.uid == uid && protectedUserFieldsUnchanged();
     }
@@ -98,6 +145,13 @@ service cloud.firestore {
     match /organizations/{orgId} {
       allow read: if isPlatformOwner() || sameOrg(orgId);
       allow create, update, delete: if isPlatformOwner();
+
+      match /messages/{messageId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && canReadTaskMessage());
+        allow create: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped());
+        allow update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped() && messagePinUpdateAllowed(orgId));
+        allow delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
+      }
 
       match /{collectionId}/{documentId} {
         allow read: if isPlatformOwner() || sameOrg(orgId);
