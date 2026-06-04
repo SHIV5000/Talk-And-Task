@@ -105,22 +105,6 @@ service cloud.firestore {
         );
     }
 
-    function messagePinFieldsUnchanged() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPinned']);
-    }
-
-    function isMessageGroupAdmin(orgId) {
-      return hasAuthedEmail() &&
-        resource.data.groupId is string &&
-        exists(/databases/$(database)/documents/organizations/$(orgId)/groups/$(resource.data.groupId)) &&
-        get(/databases/$(database)/documents/organizations/$(orgId)/groups/$(resource.data.groupId)).data.admins is list &&
-        get(/databases/$(database)/documents/organizations/$(orgId)/groups/$(resource.data.groupId)).data.admins.hasAny([authedEmail()]);
-    }
-
-    function messagePinUpdateAllowed(orgId) {
-      return messagePinFieldsUnchanged() || isMessageGroupAdmin(orgId);
-    }
-
     function userUpdateIsOwnSafeProfile(uid) {
       return request.auth.uid == uid && protectedUserFieldsUnchanged();
     }
@@ -148,8 +132,7 @@ service cloud.firestore {
 
       match /messages/{messageId} {
         allow read: if isPlatformOwner() || (sameOrg(orgId) && canReadTaskMessage());
-        allow create: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped());
-        allow update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped() && messagePinUpdateAllowed(orgId));
+        allow create, update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped());
         allow delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
       }
 

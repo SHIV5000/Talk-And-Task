@@ -136,7 +136,7 @@ export default function ChatView({
             className="sticky top-2 z-10 bg-white dark:bg-slate-900 shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border border-slate-100 dark:border-slate-700 pinned-banner-glow relative overflow-hidden"
             onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}
           >
-            <div className="flex justify-between items-center gap-3 text-xs text-slate-500 dark:text-slate-300 font-medium mb-1">
+            <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-300 font-medium mb-1">
               <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
               <button
                 type="button"
