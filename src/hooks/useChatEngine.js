@@ -9,6 +9,22 @@ import { buildPrivateSupportReplyPayload, buildPublicMessagePayload } from '../u
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 
+const sanitizeStoragePathSegment = (value, fallback = 'file') => {
+    const sanitized = String(value || '')
+        .trim()
+        .replace(/[\\/]+/g, '-')
+        .replace(/[^a-zA-Z0-9._-]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    return sanitized || fallback;
+};
+
+const createUploadId = () => {
+    try {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    } catch (e) {}
+    return Math.random().toString(36).slice(2);
+};
+
 export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData, shouldLoadChatData = true }) {
     const [messages, setMessages] = useState([]);
     const [typingStatus, setTypingStatus] = useState([]);
@@ -270,6 +286,15 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     const { file, customName, caption } = pf;
     const safeCaption = caption || ""; // Prevents .trim() crashes
 
+    if (!orgId) throw new Error('Organization context is required before uploading files.');
+    if (!activeGroup?.id) throw new Error('Select a group before uploading files.');
+
+    const supportRouting = buildSupportRoutingPayload(replyingTo);
+    if (supportRouting.blockedTopLevelSupportPost) {
+        addToast?.('Reply to a SUPPORT broadcast to upload privately to support.', 'warning');
+        return;
+    }
+
     if (file.size > maxFileSizeMb * 1024 * 1024) throw new Error(`File too large. Max ${maxFileSizeMb} MB.`);
 
     if (orgStorageDetails) {
@@ -289,22 +314,21 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         } 
     } catch (e) {}
 
-    const storageRef = ref(storage, `chat_uploads/${Date.now()}_${customName}`);
+    const groupPathSegment = sanitizeStoragePathSegment(activeGroup.id, 'group');
+    const storedFileName = sanitizeStoragePathSegment(processedFile.name || customName, 'attachment');
+    const storagePath = `organizations/${orgId}/uploads/chat/${groupPathSegment}/${Date.now()}_${createUploadId()}_${storedFileName}`;
+    const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, processedFile);
 
     return new Promise((resolve, reject) => {
         uploadTask.on('state_changed', 
-            (snapshot) => onProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+            (snapshot) => {
+                if (onProgress) onProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            },
             reject,
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 const replyData = replyingTo ? { replyToId: replyingTo.id, originalText: replyingTo.text || replyingTo.fileName || 'Attachment', originalSender: (replyingTo.sender||'').split('@')[0] } : {};
-                const supportRouting = buildSupportRoutingPayload(replyingTo);
-                if (supportRouting.blockedTopLevelSupportPost) {
-                    addToast?.('Reply to a SUPPORT broadcast to upload privately to support.', 'warning');
-                    resolve();
-                    return;
-                }
                 const buildPayload = supportRouting.isPrivateForward ? buildPrivateSupportReplyPayload : buildPublicMessagePayload;
                 await addDoc(orgCollection("messages"), buildPayload({
                     text: safeCaption.trim(),
@@ -312,8 +336,14 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                     group: activeGroup,
                     timestamp: serverTimestamp(),
                     fileUrl: downloadURL,
+                    storagePath: uploadTask.snapshot.ref.fullPath,
                     fileName: customName,
+                    storedFileName,
                     fileType: processedFile.type,
+                    fileSize: processedFile.size,
+                    originalFileSize: file.size,
+                    uploadedBy: user.uid,
+                    uploadedAt: serverTimestamp(),
                     ...replyData,
                     ...(supportRouting.isPrivateForward ? { allowedUsers: supportRouting.allowedUsers || [] } : {}),
                 }));
