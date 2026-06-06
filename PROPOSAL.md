@@ -26,6 +26,7 @@ The audit identifies the following launch blockers and scale gaps:
 6. Admin destructive actions must be routed through server-side authorization and immutable audit logs.
 7. Storage upload paths must match tenant-scoped Storage rules.
 8. Offline persistence and denormalization are required to reduce latency and recurring Firebase costs.
+9. TIME AS IST(INDIAN STANDARD TIME FOR SCHEDULES,ETC) 
 
 Repo-specific observations that affect execution:
 
