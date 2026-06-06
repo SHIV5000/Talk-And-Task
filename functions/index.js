@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onObjectDeleted, onObjectFinalized } = require('firebase-functions/v2/storage');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 
@@ -18,6 +19,7 @@ const TENANT_COLLECTIONS = [
 const DEFAULT_APP_VERSION = '1.0.0';
 const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const SUPPORT_GROUP_ID = 'support';
+const TENANT_UPLOAD_PREFIX = /^organizations\/([^/]+)\/uploads\//;
 const DEFAULT_PACKAGES = {
   starter: {
     name: 'Starter',
@@ -259,6 +261,27 @@ const logAuditEvent = async (type, adminId, target, details = {}) => db.collecti
   timestamp: admin.firestore.FieldValue.serverTimestamp(),
 });
 
+const getOrgIdFromTenantUploadPath = (filePath = '') => {
+  const match = String(filePath || '').match(TENANT_UPLOAD_PREFIX);
+  return match?.[1] || null;
+};
+
+const updateTenantUploadUsage = async (object, direction) => {
+  const filePath = object?.name || '';
+  const orgId = getOrgIdFromTenantUploadPath(filePath);
+  const size = Number(object?.size || 0);
+  if (!orgId || !Number.isFinite(size) || size <= 0) return;
+
+  const deltaBytes = direction === 'delete' ? -size : size;
+  const update = {
+    storageUsedBytes: admin.firestore.FieldValue.increment(deltaBytes),
+    storageLastUpdatedAt: serverTimestamp(),
+  };
+  const orgRef = db.collection('organizations').doc(orgId);
+  await orgRef.set(update, { merge: true });
+  await orgRef.collection('org_details').doc('details').set(update, { merge: true });
+};
+
 const getMergedPermissions = async (uid) => {
   const userSnap = await db.collection('users').doc(uid).get();
   const user = userSnap.data() || {};
@@ -374,6 +397,30 @@ const setOnboardingClaims = async (uid, profile) => {
   await admin.auth().setCustomUserClaims(uid, customClaims);
   return customClaims;
 };
+
+exports.trackTenantUploadCreated = onObjectFinalized(async (event) => {
+  try {
+    await updateTenantUploadUsage(event.data, 'create');
+  } catch (error) {
+    logger.error('Failed to increment tenant upload usage.', {
+      path: event.data?.name,
+      size: event.data?.size,
+      error: error?.message || error,
+    });
+  }
+});
+
+exports.trackTenantUploadDeleted = onObjectDeleted(async (event) => {
+  try {
+    await updateTenantUploadUsage(event.data, 'delete');
+  } catch (error) {
+    logger.error('Failed to decrement tenant upload usage.', {
+      path: event.data?.name,
+      size: event.data?.size,
+      error: error?.message || error,
+    });
+  }
+});
 
 exports.resolveAuthOnboarding = onCall(async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
