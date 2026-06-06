@@ -625,7 +625,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [currentUserData?.themeFont, currentUserData?.displayMode, currentUserData?.fontScale, profileForm.themeFont, profileForm.displayMode, profileForm.fontScale, toolPreferences?.darkMode]);
 
     const {
-        messages, typingStatus, isOnline, offlineDrafts,
+        messages, typingStatus, isOnline, offlineDrafts, isLoadingOlderMessages, hasOlderMessages, loadOlderMessages,
         logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
@@ -1766,6 +1766,9 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                     setActiveTaskSidebar={setActiveTaskSidebar}
                                     sendMessageToDB={sendMessageToDB}
                                     featureFlags={featureFlags}
+                                    isLoadingOlderMessages={isLoadingOlderMessages}
+                                    hasOlderMessages={hasOlderMessages}
+                                    loadOlderMessages={loadOlderMessages}
                                 />
 
                                 <InputArea

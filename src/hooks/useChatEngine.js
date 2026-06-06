@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db, storage } from '../firebase.js';
-import { collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, orderBy, limit, getDocs, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../utils/imageUtils.js';
 import { getEffectiveStorageLimitMB, toNumberOrNull } from '../utils/storageLimits.js';
 import { buildPrivateSupportReplyPayload, buildPublicMessagePayload } from '../utils/messagePayload.js';
 
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
+const CHAT_MESSAGE_PAGE_SIZE = 50;
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 
 const sanitizeStoragePathSegment = (value, fallback = 'file') => {
@@ -30,6 +31,10 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     const [typingStatus, setTypingStatus] = useState([]);
     const [offlineDrafts, setOfflineDrafts] = useState([]);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+    const [hasOlderMessages, setHasOlderMessages] = useState(false);
+    const messageDocsRef = useRef(new Map());
+    const oldestMessageTimestampRef = useRef(null);
     const prevMessagesCountRef = useRef(0);
     const [orgStorageDetails, setOrgStorageDetails] = useState(null);
 
@@ -97,42 +102,68 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         } catch (e) {}
     }, []);
 
-    // ================== MESSAGE LISTENER ==================
-    useEffect(() => {
-        if (!shouldLoadChatData || !orgId || !user?.uid) return;
+    const normalizeMessage = useCallback((docSnapshot) => {
+        const data = docSnapshot.data();
+        return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
+    }, [user.uid]);
 
-        const normalizeMessage = (docSnapshot) => {
-            const data = docSnapshot.data();
-            return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
-        };
-        const mergeAndPublish = (nonTaskDocs = [], taskDocs = []) => {
-            const byId = new Map([...nonTaskDocs, ...taskDocs].map(docSnapshot => [docSnapshot.id, normalizeMessage(docSnapshot)]));
-            const loadedMessages = Array.from(byId.values()).sort((a, b) => (a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER) - (b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER));
-            setMessages(loadedMessages);
+    const publishMessageDocs = useCallback(() => {
+        const loadedMessages = Array.from(messageDocsRef.current.values())
+            .map(normalizeMessage)
+            .sort((a, b) => (a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER) - (b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER));
+        setMessages(loadedMessages);
+        oldestMessageTimestampRef.current = loadedMessages.find((msg) => msg.timestamp?.toMillis)?.timestamp || null;
 
-            if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
-                const newMsg = loadedMessages[loadedMessages.length - 1];
-                if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
-                    playAlertSound(newMsg?.isTask ? 'task' : 'incoming');
-                    addToast(`New message from ${(newMsg.sender || "").split('@')[0]}`, 'message');
-                    if (document.hidden && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-                        navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `New Message from ${(newMsg.sender || "").split('@')[0]}`, body: newMsg.text || 'Sent an attachment' });
-                    }
+        if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
+            const newMsg = loadedMessages[loadedMessages.length - 1];
+            if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
+                playAlertSound(newMsg?.isTask ? 'task' : 'incoming');
+                addToast(`New message from ${(newMsg.sender || "").split('@')[0]}`, 'message');
+                if (document.hidden && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `New Message from ${(newMsg.sender || "").split('@')[0]}`, body: newMsg.text || 'Sent an attachment' });
                 }
             }
-            prevMessagesCountRef.current = loadedMessages.length;
-        };
+        }
+        prevMessagesCountRef.current = loadedMessages.length;
+    }, [addToast, isWorkspaceLoading, normalizeMessage, playAlertSound]);
 
-        let nonTaskDocs = [];
-        let taskDocs = [];
-        const unsubNonTasks = onSnapshot(query(orgCollection("messages"), where("isTask", "==", false)), (snapshot) => {
-            nonTaskDocs = snapshot.docs;
-            mergeAndPublish(nonTaskDocs, taskDocs);
+    const cacheSnapshotChanges = useCallback((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === 'removed') {
+                messageDocsRef.current.delete(change.doc.id);
+            } else {
+                messageDocsRef.current.set(change.doc.id, change.doc);
+            }
         });
-        const unsubTasks = onSnapshot(query(orgCollection("messages"), where("taskData.visibleTo", "array-contains", user.email)), (snapshot) => {
-            taskDocs = snapshot.docs;
-            mergeAndPublish(nonTaskDocs, taskDocs);
-        });
+        publishMessageDocs();
+    }, [publishMessageDocs]);
+
+    // ================== MESSAGE LISTENER ==================
+    useEffect(() => {
+        messageDocsRef.current.clear();
+        oldestMessageTimestampRef.current = null;
+        prevMessagesCountRef.current = 0;
+        setMessages([]);
+        setHasOlderMessages(false);
+
+        if (!shouldLoadChatData || !orgId || !user?.uid) return;
+
+        setHasOlderMessages(true);
+        const latestNonTaskQuery = query(
+            orgCollection("messages"),
+            where("isTask", "==", false),
+            orderBy("timestamp", "desc"),
+            limit(CHAT_MESSAGE_PAGE_SIZE)
+        );
+        const latestTaskQuery = query(
+            orgCollection("messages"),
+            where("taskData.visibleTo", "array-contains", user.email),
+            orderBy("timestamp", "desc"),
+            limit(CHAT_MESSAGE_PAGE_SIZE)
+        );
+
+        const unsubNonTasks = onSnapshot(latestNonTaskQuery, cacheSnapshotChanges);
+        const unsubTasks = onSnapshot(latestTaskQuery, cacheSnapshotChanges);
 
         const unsubTyping = onSnapshot(orgCollection("typing"), (snapshot) => {
             const typingData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -141,7 +172,44 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         });
 
         return () => { unsubNonTasks(); unsubTasks(); unsubTyping(); };
-    }, [shouldLoadChatData, orgId, user?.uid, user?.email, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
+    }, [shouldLoadChatData, orgId, user?.uid, user?.email, activeGroup?.id, cacheSnapshotChanges, orgCollection]);
+
+    const loadOlderMessages = useCallback(async () => {
+        if (isLoadingOlderMessages || !shouldLoadChatData || !orgId || !user?.uid || !user?.email) return;
+        const oldestTimestamp = oldestMessageTimestampRef.current;
+        if (!oldestTimestamp) {
+            setHasOlderMessages(false);
+            return;
+        }
+
+        setIsLoadingOlderMessages(true);
+        try {
+            const olderNonTaskQuery = query(
+                orgCollection("messages"),
+                where("isTask", "==", false),
+                where("timestamp", "<", oldestTimestamp),
+                orderBy("timestamp", "desc"),
+                limit(CHAT_MESSAGE_PAGE_SIZE)
+            );
+            const olderTaskQuery = query(
+                orgCollection("messages"),
+                where("taskData.visibleTo", "array-contains", user.email),
+                where("timestamp", "<", oldestTimestamp),
+                orderBy("timestamp", "desc"),
+                limit(CHAT_MESSAGE_PAGE_SIZE)
+            );
+            const [nonTaskSnapshot, taskSnapshot] = await Promise.all([getDocs(olderNonTaskQuery), getDocs(olderTaskQuery)]);
+            const olderDocs = [...nonTaskSnapshot.docs, ...taskSnapshot.docs];
+            olderDocs.forEach((docSnapshot) => messageDocsRef.current.set(docSnapshot.id, docSnapshot));
+            setHasOlderMessages(olderDocs.length > 0);
+            publishMessageDocs();
+        } catch (error) {
+            console.error('Failed to load older messages:', error);
+            addToast?.('Unable to load older messages. Please try again.', 'error');
+        } finally {
+            setIsLoadingOlderMessages(false);
+        }
+    }, [addToast, isLoadingOlderMessages, orgCollection, orgId, publishMessageDocs, shouldLoadChatData, user?.email, user?.uid]);
 
     // ================== READ RECEIPTS ==================
     useEffect(() => {
@@ -408,7 +476,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     return {
-        messages, typingStatus, isOnline, offlineDrafts,
+        messages, typingStatus, isOnline, offlineDrafts, isLoadingOlderMessages, hasOlderMessages, loadOlderMessages,
         logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft

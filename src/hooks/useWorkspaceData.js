@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { auth, db } from '../firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, limit, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const isGlobalSuperAdminEmail = (email) => (email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
@@ -56,10 +56,10 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
     useEffect(() => {
         if (!orgId || !user?.uid) return;
 
-        const qPersonal = query(orgCollection("reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false));
+        const qPersonal = query(orgCollection("reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false), orderBy("remindAt", "asc"), limit(100));
         const unsubPersonal = onSnapshot(qPersonal, (snapshot) => setActiveReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-        const qAlerts = query(orgCollection("notifications"), where("userId", "==", user.uid), where("isRead", "==", false));
+        const qAlerts = query(orgCollection("notifications"), where("userId", "==", user.uid), where("isRead", "==", false), orderBy("timestamp", "desc"), limit(100));
         const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
             const now = Date.now();
             const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => !n.snoozeUntil || (n.snoozeUntil?.toMillis?.() || new Date(n.snoozeUntil).getTime() || 0) <= now).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
@@ -89,9 +89,9 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
 
         let unsubAdmin = () => {}; let unsubAudit = () => {};
         if (currentUserData?.isAdmin || isVipAdmin) {
-            const qAdmin = query(orgCollection("reminders"), orderBy("remindAt", "desc"));
+            const qAdmin = query(orgCollection("reminders"), orderBy("remindAt", "desc"), limit(200));
             unsubAdmin = onSnapshot(qAdmin, (snapshot) => setAllAdminReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
-            const qAudit = query(orgCollection("audit_logs"), orderBy("timestamp", "desc"));
+            const qAudit = query(orgCollection("audit_logs"), orderBy("timestamp", "desc"), limit(200));
             unsubAudit = onSnapshot(qAudit, (snapshot) => {
                 setImmutableAuditLogs(snapshot.docs.map(d => {
                     const data = d.data();
@@ -140,7 +140,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
             }
         });
 
-        const unsubUsers = onSnapshot(query(collection(db, "users"), where("orgId", "==", orgId)), (snapshot) => {
+        const unsubUsers = onSnapshot(query(collection(db, "users"), where("orgId", "==", orgId), limit(500)), (snapshot) => {
             const fetchedUsers = snapshot.docs.map(document => document.data());
             fetchedUsers.sort((a, b) => (a.email || "").localeCompare(b.email || ""));
             
