@@ -370,7 +370,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     const scheduleMessageDB = async (text, dt, isTask, taskData) => {
         if (!hasOrgContext('schedule messages') || !activeGroup?.id) return;
         const scheduledDate = new Date(dt);
-        const payload = { text, senderEmail: user.email, senderUid: user.uid, groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp(), allowedUsers: [], isPrivateForward: false };
+        const payload = { text, senderEmail: user.email, senderUid: user.uid, senderName: currentUserData?.name || user.email.split('@')[0], groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, timeZone: 'Asia/Kolkata', status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp(), allowedUsers: [], isPrivateForward: false };
         if (isTask && taskData) { payload.taskData = taskData; payload.taskDeadline = taskData.deadline; payload.taskAssignees = taskData.assignees; }
         await addDoc(orgCollection("scheduled_messages"), payload);
     };

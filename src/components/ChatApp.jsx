@@ -19,7 +19,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 // Utils & Firebase Core
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
-import { buildPrivateSupportReplyPayload, buildPublicMessagePayload, buildTaskMessagePayload } from '../utils/messagePayload.js';
+import { buildTaskMessagePayload } from '../utils/messagePayload.js';
 import { compressImage } from '../utils/imageUtils.js';
 import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
@@ -29,6 +29,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 const formatNotificationTime = (value) => { const date = value?.toDate ? value.toDate() : value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return ''; const diff = Date.now() - date.getTime(); if (diff < 60000) return 'Just now'; if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`; return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 const getSnoozeDate = (mode) => { const date = new Date(); if (mode === '15m') date.setMinutes(date.getMinutes() + 15); else if (mode === '1h') date.setHours(date.getHours() + 1); else { date.setHours(17, 0, 0, 0); if (date <= new Date()) date.setDate(date.getDate() + 1); } return date; };
+const formatIstDateTime = (value) => new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(value));
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
@@ -787,36 +788,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 } catch(e) {}
             }
 
-            try {
-                const q = query(orgCollectionRef("scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
-                const snap = await getDocs(q);
-                for (const document of snap.docs) {
-                    const data = document.data();
-                    const scheduledMs = data.scheduledAt?.toMillis?.() || new Date(data.scheduledFor).getTime();
-                    if (scheduledMs <= now.getTime()) {
-                        const isExplicitlyPrivate = data.isPrivateForward === true || (Array.isArray(data.allowedUsers) && data.allowedUsers.length > 0);
-                        const payloadBuilder = data.isTask ? buildTaskMessagePayload : (isExplicitlyPrivate ? buildPrivateSupportReplyPayload : buildPublicMessagePayload);
-                        const payload = payloadBuilder({
-                            text: data.text,
-                            group: { id: data.groupId, name: data.groupName || 'Scheduled' },
-                            user: { uid: user.uid, email: user.email, name: currentUserData?.name || user.email.split('@')[0] },
-                            timestamp: serverTimestamp(),
-                            dateString: new Date().toISOString().split('T')[0],
-                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            ...(data.isTask ? { taskData: data.taskData || {} } : {}),
-                            isPrivateForward: isExplicitlyPrivate,
-                            allowedUsers: isExplicitlyPrivate ? (data.allowedUsers || []) : []
-                        });
-                        await addDoc(orgCollectionRef("messages"), payload);
-                        await updateDoc(orgDocRef("scheduled_messages", document.id), { status: "sent", sentAt: serverTimestamp(), retryCount: data.retryCount || 0 });
-                        playMelody('messageSent');
-                    }
-                }
-            } catch(e) { console.error(e); }
 
         }, 15000);
         return () => clearInterval(checkerInterval);
-    }, [orgId, messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast, orgCollectionRef, orgDocRef]);
+    }, [orgId, messages, dbUsers, activeReminders, user.uid, playMelody, orgCollectionRef, orgDocRef]);
 
     const myGroups = useMemo(() => {
         // Implicitly include default departments and the tenant-wide SUPPORT department for every signed-in member.
@@ -1081,7 +1056,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         if (!text || text === '<br>' || !scheduleDateTime || !activeGroup || !ensureOrgContext('schedule messages')) return alert("Enter message text and a future date/time.");
         if (new Date(scheduleDateTime) <= new Date()) return alert("Scheduled time must be in the future.");
         try {
-            const scheduledLabel = new Date(scheduleDateTime).toLocaleString();
+            const scheduledLabel = formatIstDateTime(scheduleDateTime);
             setInputText(""); setPendingScheduledText(""); setScheduleDateTime(""); setActiveModal(null);
             if(chatInputRef.current) chatInputRef.current.innerHTML = '';
             addToast(`✅ Scheduled for ${scheduledLabel}`, 'success');

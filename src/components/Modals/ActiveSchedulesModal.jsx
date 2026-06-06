@@ -51,7 +51,8 @@ export default function ActiveSchedulesModal({ setActiveModal, user, activeRemin
           if (isReminder) {
               await updateDoc(orgDocRef("reminders", id), { messageText: editVal, remindAt: editDate });
           } else {
-              await updateDoc(orgDocRef("scheduled_messages", id), { text: editVal, scheduledFor: editDate });
+              const scheduledAt = new Date(editDate);
+              await updateDoc(orgDocRef("scheduled_messages", id), { text: editVal, scheduledFor: scheduledAt.toISOString(), scheduledAt });
               fetchScheduled();
           }
           setEditingId(null);

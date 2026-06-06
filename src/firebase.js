@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAoOsog2NP6Pf8YNSxn0rRYK4MSLEVNNZc",
@@ -20,6 +21,24 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;
+const appCheckDebugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
+
+if (typeof self !== 'undefined' && appCheckDebugToken) {
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = appCheckDebugToken === 'true' ? true : appCheckDebugToken;
+}
+
+export const appCheck = appCheckSiteKey && typeof window !== 'undefined'
+  ? initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    })
+  : null;
+
+if (!appCheckSiteKey) {
+  console.warn('Firebase App Check is not initialized because VITE_FIREBASE_APPCHECK_SITE_KEY is missing.');
+}
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
