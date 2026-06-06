@@ -31,8 +31,14 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
         reply: true, react: true, edit: true, delete: true, pin: true, bookmark: true, showWatermark: true, soundProfile: 'classic'
     });
 
-    const orgCollection = useCallback((collectionName) => collection(db, "organizations", orgId, collectionName), [orgId]);
-    const orgDoc = useCallback((collectionName, id) => doc(db, "organizations", orgId, collectionName, id), [orgId]);
+    const orgCollection = useCallback((collectionName) => {
+        if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}.`);
+        return collection(db, "organizations", orgId, collectionName);
+    }, [orgId]);
+    const orgDoc = useCallback((collectionName, id) => {
+        if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}/${id}.`);
+        return doc(db, "organizations", orgId, collectionName, id);
+    }, [orgId]);
 
     const verifyAdminStatus = useCallback(async () => {
         if (!auth.currentUser) return false;
