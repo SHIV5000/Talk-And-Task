@@ -1195,8 +1195,14 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         } catch (error) { alert("Failed to create task."); }
     };
 
+    const canManageSelectedTask = useCallback((taskMessage) => {
+        if (!taskMessage?.isTask || taskMessage.taskData?.status === 'Completed') return false;
+        const reviewerEmail = taskMessage.taskData?.masterReviewerEmail || taskMessage.senderEmail;
+        return effectiveIsVipAdmin || effectiveCurrentUserData?.isAdmin || reviewerEmail === user.email || taskMessage.senderEmail === user.email;
+    }, [effectiveCurrentUserData?.isAdmin, effectiveIsVipAdmin, user.email]);
+
     const handleSaveTaskTitle = async () => {
-        if (!newTaskTitle.trim() || !selectedMessage || !ensureOrgContext('edit task titles')) return;
+        if (!newTaskTitle.trim() || !selectedMessage || !canManageSelectedTask(selectedMessage) || !ensureOrgContext('edit task titles')) return;
         try {
             await updateDoc(orgDocRef("messages", selectedMessage.id), { text: newTaskTitle });
             setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
@@ -1244,7 +1250,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     const handleTrailFileUpload = async (e) => {
         const file = e.target.files[0];
-        if (!file || !selectedMessage || !ensureOrgContext('upload task files')) return;
+        if (!file || !selectedMessage || !canManageSelectedTask(selectedMessage) || !ensureOrgContext('upload task files')) return;
         setTrailFileUploading(true);
         const uniqueFileName = `${Date.now()}_${file.name}`;
         const uploadTask = uploadBytesResumable(ref(storage, `task_updates/${uniqueFileName}`), file);

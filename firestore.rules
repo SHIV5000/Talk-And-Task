@@ -166,6 +166,48 @@ service cloud.firestore {
         taskMessageWriteIsScoped();
     }
 
+    function taskMessageIsCompleted() {
+      return resource.data.isTask == true && resource.data.taskData.status == 'Completed';
+    }
+
+    function taskManagerCanEdit(orgId) {
+      return isOrgAdmin(orgId) ||
+        resource.data.senderEmail == authedEmail() ||
+        resource.data.taskData.masterReviewerEmail == authedEmail();
+    }
+
+    function taskUpdateIsAllowedForStatus(orgId) {
+      return resource.data.isTask != true ||
+        (
+          (
+            !taskMessageIsCompleted() ||
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'reactions',
+              'seenBy',
+              'deliveredTo',
+              'bookmarkedBy',
+              'isPinned',
+              'updatedAt'
+            ])
+          ) &&
+          (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'text',
+              'fileUrl',
+              'storagePath',
+              'fileName',
+              'storedFileName',
+              'fileType',
+              'fileSize',
+              'originalFileSize',
+              'uploadedBy',
+              'uploadedAt'
+            ]) ||
+            taskManagerCanEdit(orgId)
+          )
+        );
+    }
+
     function messageUpdateIsSafe(orgId) {
       return canWriteOrgAppData(orgId) &&
         request.resource.data.senderUid == resource.data.senderUid &&
@@ -193,7 +235,8 @@ service cloud.firestore {
           'uploadedAt',
           'updatedAt'
         ]) &&
-        taskMessageWriteIsScoped();
+        taskMessageWriteIsScoped() &&
+        taskUpdateIsAllowedForStatus(orgId);
     }
 
     function scheduledCreateIsSafe(orgId) {

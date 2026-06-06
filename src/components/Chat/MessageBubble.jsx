@@ -126,7 +126,9 @@ const MessageBubble = React.memo(({
   const isGlobalSuperAdmin = normalizedUserEmail === GLOBAL_SUPER_ADMIN_EMAIL;
   const isGroupAdmin = (activeGroup?.admins || []).some((email) => (email || '').toLowerCase() === normalizedUserEmail);
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin || isGlobalSuperAdmin;
-  const canEditTask = (!isTaskCompleted || isSuperAdmin) && isCreator;
+  const canManageOpenTask = msg.isTask && !isTaskCompleted && (isCreator || isSuperAdmin);
+  const canEditTask = canManageOpenTask;
+  const canAttachTaskFiles = canManageOpenTask;
   const canPinItem = isGlobalSuperAdmin || isGroupAdmin;
   const bubbleWidthClass = isThreadView ? 'w-full max-w-full' : 'w-[80%] max-w-[80%]';
   const taskShellClass = msg.isTask ? 'border-2 border-indigo-100 border-l-[6px] rounded-2xl' : '';
@@ -221,6 +223,7 @@ const MessageBubble = React.memo(({
   };
 
   const handleInlineSaveTitle = async () => {
+    if (!canEditTask) return;
     if (!hasOrgContext('edit task titles')) return;
     if (!tempTitle.trim()) return setIsEditingTitle(false);
     try { await updateDoc(orgDocRef("messages", msg.id), { text: plainTaskText(tempTitle).trim() || "Task" }); setIsEditingTitle(false); } catch(e) {}
@@ -304,7 +307,7 @@ const MessageBubble = React.memo(({
 
   const handleInlineFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file || !hasOrgContext('upload task files')) return;
+    if (!file || !canAttachTaskFiles || !hasOrgContext('upload task files')) return;
     setTrailFileUploading(true);
     try {
       const uniqueFileName = `${Date.now()}_${file.name}`;
@@ -619,7 +622,7 @@ const MessageBubble = React.memo(({
                            ) : (
                               <>
                                  <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border-2 border-slate-300 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Update</button>
-                                 <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border-2 border-slate-300 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Attach</button>
+                                 {canAttachTaskFiles && <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border-2 border-slate-300 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Attach</button>}
                                  <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border-2 border-slate-300 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Delegate</button>
                                  <button 
                                    onClick={handleInlineComplete} 
@@ -635,7 +638,7 @@ const MessageBubble = React.memo(({
                     )}
 
                     {/* ── MODERN REVIEW SECTION ── */}
-                    {isCreator && (msg.taskData?.assignees || []).filter(email => (assigneeStates[email] || 'assigned') === 'submitted_completed').map(assigneeEmail => {
+                    {canManageOpenTask && (msg.taskData?.assignees || []).filter(email => (assigneeStates[email] || 'assigned') === 'submitted_completed').map(assigneeEmail => {
                       const reviewState = reviewStates[assigneeEmail];
                       const mode = reviewState?.mode;
                       return (
