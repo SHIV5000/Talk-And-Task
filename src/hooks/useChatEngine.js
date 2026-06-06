@@ -52,8 +52,20 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         return () => unsubscribe();
     }, [currentUserData?.orgId, currentUserData?.organizationId, currentUserData?.tenantId, currentUserData?.org_details]);
 
-    const orgCollection = useCallback((collectionName) => collection(db, "organizations", orgId, collectionName), [orgId]);
-    const orgDoc = useCallback((collectionName, id) => doc(db, "organizations", orgId, collectionName, id), [orgId]);
+    const hasOrgContext = useCallback((action = 'continue') => {
+        if (orgId) return true;
+        addToast?.(`Organization context is required to ${action}. Please wait for your workspace to finish loading.`, 'warning');
+        return false;
+    }, [orgId, addToast]);
+
+    const orgCollection = useCallback((collectionName) => {
+        if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}.`);
+        return collection(db, "organizations", orgId, collectionName);
+    }, [orgId]);
+    const orgDoc = useCallback((collectionName, id) => {
+        if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}/${id}.`);
+        return doc(db, "organizations", orgId, collectionName, id);
+    }, [orgId]);
     const isGlobalSupportAdmin = (user?.email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
     const isSupportGroup = activeGroup?.isSupport === true || activeGroup?.id === 'support' || activeGroup?.name === 'SUPPORT';
 
@@ -168,6 +180,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     const flushOfflineDrafts = async () => {
+        if (!orgId || !user?.uid) return;
         try {
             const db2 = await openDraftDB(); const tx = db2.transaction("drafts", "readonly"); const req = tx.objectStore("drafts").getAll();
             req.onsuccess = async () => {
@@ -195,26 +208,27 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     useEffect(() => {
-        const goOnline = () => { setIsOnline(true); flushOfflineDrafts(); };
+        const goOnline = () => { setIsOnline(true); if (orgId && user?.uid) flushOfflineDrafts(); };
         const goOffline = () => setIsOnline(false);
         window.addEventListener('online', goOnline);
         window.addEventListener('offline', goOffline);
         loadOfflineDrafts();
         return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
-    }, [loadOfflineDrafts]);
+    }, [loadOfflineDrafts, orgId, user?.uid]);
 
     // ================== FIREBASE API ACTIONS ==================
     const logImmutableAction = async (actionType, content, target = "") => {
-        if(!activeGroup) return;
+        if(!activeGroup || !hasOrgContext('write audit logs')) return;
         try { await addDoc(orgCollection("audit_logs"), { type: actionType, user: user.email, content, target, groupId: activeGroup.id, groupName: activeGroup.name, timestamp: serverTimestamp() }); } catch(e) {}
     };
 
     const triggerTypingEvent = (userName) => {
-        if(!activeGroup) return;
-        try { setDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
+        if(!activeGroup || !user?.uid || !hasOrgContext('update typing status')) return;
+        try { setDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, userId: user.uid, userEmail: user.email, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
     };
 
     const sendMessageToDB = async (messageText, replyingTo, attachments = [], uploadProgressCb = null) => {
+        if (!hasOrgContext('send messages') || !activeGroup?.id || !user?.uid) return;
         try { deleteDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`)); } catch(e) {}
 
         const mentions = [];
@@ -269,6 +283,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     const reactToMessageDB = async (msgId, emoji) => {
+        if (!hasOrgContext('react to messages')) return;
         const msg = messages.find(m => m.id === msgId);
         if(!msg) return;
         let updatedReactions = { ...msg.reactions };
@@ -353,6 +368,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     });
 };
     const scheduleMessageDB = async (text, dt, isTask, taskData) => {
+        if (!hasOrgContext('schedule messages') || !activeGroup?.id) return;
         const scheduledDate = new Date(dt);
         const payload = { text, senderEmail: user.email, senderUid: user.uid, groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp(), allowedUsers: [], isPrivateForward: false };
         if (isTask && taskData) { payload.taskData = taskData; payload.taskDeadline = taskData.deadline; payload.taskAssignees = taskData.assignees; }
@@ -360,16 +376,19 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     const editMessageDB = async (msgId, originalText, newText) => {
+        if (!hasOrgContext('edit messages')) return;
         await updateDoc(orgDoc("messages", msgId), { text: newText, isEdited: true });
         logImmutableAction("MESSAGE_EDIT", `Original: "${originalText}" | Edited: "${newText}"`, `Message ID: ${msgId}`);
     };
 
     const deleteMessageDB = async (msg) => {
+        if (!hasOrgContext('delete messages')) return;
         await deleteDoc(orgDoc("messages", msg.id));
         logImmutableAction("MESSAGE_DELETE", `Deleted content: "${msg.text || msg.fileName}"`, `Message ID: ${msg.id}`);
     };
 
     const togglePinDB = async (msgId, isPinned) => {
+        if (!hasOrgContext('pin messages')) return;
         const userEmail = (user?.email || '').toLowerCase();
         const canManagePins =
             userEmail === GLOBAL_SUPER_ADMIN_EMAIL ||
@@ -382,6 +401,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
     
     const toggleBookmarkDB = async (msgId, bookmarkedBy) => {
+        if (!hasOrgContext('bookmark messages')) return;
         let bookmarks = bookmarkedBy || [];
         if (bookmarks.includes(user.email)) bookmarks = bookmarks.filter(e => e !== user.email); else bookmarks.push(user.email);
         await updateDoc(orgDoc("messages", msgId), { bookmarkedBy: bookmarks });
