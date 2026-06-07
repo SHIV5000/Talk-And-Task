@@ -1,21 +1,43 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { db, storage } from '../firebase.js';
-import { collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { db, storage, realtimeDb, rtdbRef, rtdbSet, onValue, onDisconnect, rtdbRemove, rtdbServerTimestamp } from '../firebase.js';
+import { collection, addDoc, onSnapshot, query, where, orderBy, limit, getDocs, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../utils/imageUtils.js';
 import { getEffectiveStorageLimitMB, toNumberOrNull } from '../utils/storageLimits.js';
 import { buildPrivateSupportReplyPayload, buildPublicMessagePayload } from '../utils/messagePayload.js';
 
 const DEFAULT_MAX_FILE_SIZE_MB = 5;
+const CHAT_MESSAGE_PAGE_SIZE = 50;
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
+
+const sanitizeStoragePathSegment = (value, fallback = 'file') => {
+    const sanitized = String(value || '')
+        .trim()
+        .replace(/[\\/]+/g, '-')
+        .replace(/[^a-zA-Z0-9._-]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    return sanitized || fallback;
+};
+
+const createUploadId = () => {
+    try {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    } catch (e) {}
+    return Math.random().toString(36).slice(2);
+};
 
 export default function useChatEngine({ orgId, user, activeGroup, dbUsers, groups, toolPreferences, isWorkspaceLoading, addToast, maxFileSizeMb = DEFAULT_MAX_FILE_SIZE_MB, currentUserData, shouldLoadChatData = true }) {
     const [messages, setMessages] = useState([]);
     const [typingStatus, setTypingStatus] = useState([]);
     const [offlineDrafts, setOfflineDrafts] = useState([]);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+    const [hasOlderMessages, setHasOlderMessages] = useState(false);
+    const messageDocsRef = useRef(new Map());
+    const oldestMessageTimestampRef = useRef(null);
     const prevMessagesCountRef = useRef(0);
     const [orgStorageDetails, setOrgStorageDetails] = useState(null);
+    const [typingAccessAllowed, setTypingAccessAllowed] = useState(false);
 
     useEffect(() => {
         const orgId = currentUserData?.orgId || currentUserData?.organizationId || currentUserData?.tenantId;
@@ -36,8 +58,68 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         return () => unsubscribe();
     }, [currentUserData?.orgId, currentUserData?.organizationId, currentUserData?.tenantId, currentUserData?.org_details]);
 
-    const orgCollection = useCallback((collectionName) => collection(db, "organizations", orgId, collectionName), [orgId]);
-    const orgDoc = useCallback((collectionName, id) => doc(db, "organizations", orgId, collectionName, id), [orgId]);
+    useEffect(() => {
+        let cancelled = false;
+        setTypingAccessAllowed(false);
+
+        if (!orgId || !user?.getIdTokenResult) return undefined;
+
+        user.getIdTokenResult(true)
+            .then((tokenResult) => {
+                if (cancelled) return;
+                const claims = tokenResult?.claims || {};
+                const claimOrgId = String(claims.orgId || '');
+                const isPlatformOwner = claims.platformOwner === true || claims.isPlatformOwner === true || (user.email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
+                setTypingAccessAllowed(isPlatformOwner || claimOrgId === orgId);
+            })
+            .catch((error) => {
+                if (!cancelled) console.warn('Unable to verify typing indicator access:', error);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [orgId, user]);
+
+    const hasOrgContext = useCallback((action = 'continue') => {
+        if (orgId) return true;
+        addToast?.(`Organization context is required to ${action}. Please wait for your workspace to finish loading.`, 'warning');
+        return false;
+    }, [orgId, addToast]);
+
+    const orgCollection = useCallback((collectionName) => {
+        if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}.`);
+        return collection(db, "organizations", orgId, collectionName);
+    }, [orgId]);
+    const orgDoc = useCallback((collectionName, id) => {
+        if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}/${id}.`);
+        return doc(db, "organizations", orgId, collectionName, id);
+    }, [orgId]);
+    const buildMessageUser = useCallback((overrides = {}) => ({
+        ...user,
+        uid: overrides.uid || user?.uid,
+        email: overrides.email || user?.email,
+        name: overrides.name || currentUserData?.name || user?.displayName || user?.email?.split('@')[0],
+        profilePicUrl: overrides.profilePicUrl || currentUserData?.profilePicUrl || currentUserData?.photoURL || user?.photoURL || null,
+    }), [currentUserData?.name, currentUserData?.photoURL, currentUserData?.profilePicUrl, user]);
+
+    const buildMessageGroup = useCallback((group = activeGroup) => ({
+        id: group?.id,
+        name: group?.name,
+        profilePicUrl: group?.profilePicUrl || null,
+    }), [activeGroup]);
+
+    const buildTaskDisplayFields = useCallback((taskData = {}, text = '') => ({
+        taskTitle: taskData.title || taskData.taskTitle || text || undefined,
+        taskStatus: taskData.status || undefined,
+        taskPriority: taskData.priority || undefined,
+        taskDeadline: taskData.deadline || undefined,
+        taskAssigneeEmails: Array.isArray(taskData.assignees) ? [...new Set(taskData.assignees)] : [],
+        taskAssigneeNames: Array.isArray(taskData.assigneeNames) ? [...new Set(taskData.assigneeNames)] : undefined,
+        taskAssigneeCount: Array.isArray(taskData.assignees) ? taskData.assignees.length : 0,
+        taskMasterReviewerEmail: taskData.masterReviewerEmail || undefined,
+    }), []);
+
     const isGlobalSupportAdmin = (user?.email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
     const isSupportGroup = activeGroup?.isSupport === true || activeGroup?.id === 'support' || activeGroup?.name === 'SUPPORT';
 
@@ -69,51 +151,132 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         } catch (e) {}
     }, []);
 
-    // ================== MESSAGE LISTENER ==================
-    useEffect(() => {
-        if (!shouldLoadChatData || !orgId || !user?.uid) return;
+    const normalizeMessage = useCallback((docSnapshot) => {
+        const data = docSnapshot.data();
+        return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
+    }, [user.uid]);
 
-        const normalizeMessage = (docSnapshot) => {
-            const data = docSnapshot.data();
-            return { id: docSnapshot.id, ...data, sender: data.senderEmail, isMine: data.senderUid === user.uid, time: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sending...', dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '', isTask: data.isTask === true, groupId: data.groupId || "demo", reactions: data.reactions || {}, seenBy: data.seenBy || [], bookmarkedBy: data.bookmarkedBy || [], isPinned: data.isPinned || false, deliveredTo: data.deliveredTo || [] };
-        };
-        const mergeAndPublish = (nonTaskDocs = [], taskDocs = []) => {
-            const byId = new Map([...nonTaskDocs, ...taskDocs].map(docSnapshot => [docSnapshot.id, normalizeMessage(docSnapshot)]));
-            const loadedMessages = Array.from(byId.values()).sort((a, b) => (a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER) - (b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER));
-            setMessages(loadedMessages);
+    const publishMessageDocs = useCallback(() => {
+        const loadedMessages = Array.from(messageDocsRef.current.values())
+            .map(normalizeMessage)
+            .sort((a, b) => (a.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER) - (b.timestamp?.toMillis?.() || Number.MAX_SAFE_INTEGER));
+        setMessages(loadedMessages);
+        oldestMessageTimestampRef.current = loadedMessages.find((msg) => msg.timestamp?.toMillis)?.timestamp || null;
 
-            if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
-                const newMsg = loadedMessages[loadedMessages.length - 1];
-                if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
-                    playAlertSound(newMsg?.isTask ? 'task' : 'incoming');
-                    addToast(`New message from ${(newMsg.sender || "").split('@')[0]}`, 'message');
-                    if (document.hidden && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-                        navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `New Message from ${(newMsg.sender || "").split('@')[0]}`, body: newMsg.text || 'Sent an attachment' });
-                    }
+        if (prevMessagesCountRef.current > 0 && loadedMessages.length > prevMessagesCountRef.current && !isWorkspaceLoading) {
+            const newMsg = loadedMessages[loadedMessages.length - 1];
+            if (!newMsg.isMine && Date.now() - (newMsg.timestamp?.toMillis?.() || Date.now()) < 5000) {
+                playAlertSound(newMsg?.isTask ? 'task' : 'incoming');
+                addToast(`New message from ${(newMsg.sender || "").split('@')[0]}`, 'message');
+                if (document.hidden && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `New Message from ${(newMsg.sender || "").split('@')[0]}`, body: newMsg.text || 'Sent an attachment' });
                 }
             }
-            prevMessagesCountRef.current = loadedMessages.length;
+        }
+        prevMessagesCountRef.current = loadedMessages.length;
+    }, [addToast, isWorkspaceLoading, normalizeMessage, playAlertSound]);
+
+    const cacheSnapshotChanges = useCallback((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === 'removed') {
+                messageDocsRef.current.delete(change.doc.id);
+            } else {
+                messageDocsRef.current.set(change.doc.id, change.doc);
+            }
+        });
+        publishMessageDocs();
+    }, [publishMessageDocs]);
+
+    // ================== MESSAGE LISTENER ==================
+    useEffect(() => {
+        messageDocsRef.current.clear();
+        oldestMessageTimestampRef.current = null;
+        prevMessagesCountRef.current = 0;
+        setMessages([]);
+        setHasOlderMessages(false);
+
+        if (!shouldLoadChatData || !orgId || !user?.uid) return;
+
+        setHasOlderMessages(true);
+        const latestNonTaskQuery = query(
+            orgCollection("messages"),
+            where("isTask", "==", false),
+            orderBy("timestamp", "desc"),
+            limit(CHAT_MESSAGE_PAGE_SIZE)
+        );
+        const latestTaskQuery = query(
+            orgCollection("messages"),
+            where("taskData.visibleTo", "array-contains", user.email),
+            orderBy("timestamp", "desc"),
+            limit(CHAT_MESSAGE_PAGE_SIZE)
+        );
+
+        const handleMessagesSnapshotError = (error) => {
+            console.warn('Unable to listen for chat messages:', error);
+            addToast?.('Unable to load chat messages. Please refresh after workspace permissions finish syncing.', 'warning');
         };
 
-        let nonTaskDocs = [];
-        let taskDocs = [];
-        const unsubNonTasks = onSnapshot(query(orgCollection("messages"), where("isTask", "==", false)), (snapshot) => {
-            nonTaskDocs = snapshot.docs;
-            mergeAndPublish(nonTaskDocs, taskDocs);
-        });
-        const unsubTasks = onSnapshot(query(orgCollection("messages"), where("taskData.visibleTo", "array-contains", user.email)), (snapshot) => {
-            taskDocs = snapshot.docs;
-            mergeAndPublish(nonTaskDocs, taskDocs);
-        });
+        const unsubNonTasks = onSnapshot(latestNonTaskQuery, cacheSnapshotChanges, handleMessagesSnapshotError);
+        const unsubTasks = onSnapshot(latestTaskQuery, cacheSnapshotChanges, handleMessagesSnapshotError);
 
-        const unsubTyping = onSnapshot(orgCollection("typing"), (snapshot) => {
-            const typingData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            const currentTyping = typingData.filter(t => t.groupId === activeGroup?.id && t.name && Date.now() - t.timestamp < 3000);
+        return () => { unsubNonTasks(); unsubTasks(); };
+    }, [shouldLoadChatData, orgId, user?.uid, user?.email, activeGroup?.id, cacheSnapshotChanges, orgCollection]);
+
+    useEffect(() => {
+        setTypingStatus([]);
+        if (!typingAccessAllowed || !orgId || !activeGroup?.id || !user?.uid) return undefined;
+        const typingListRef = rtdbRef(realtimeDb, `typing/${orgId}/${activeGroup.id}`);
+        const unsubscribe = onValue(typingListRef, (snapshot) => {
+            const data = snapshot.val() || {};
+            const now = Date.now();
+            const currentTyping = Object.entries(data)
+                .map(([id, value]) => ({ id, ...(value || {}) }))
+                .filter((entry) => entry.userId !== user.uid && entry.name && now - Number(entry.clientTimestamp || 0) < 3000);
             setTypingStatus(currentTyping);
+        }, (error) => {
+            console.warn('Unable to listen for typing indicators:', error);
+            setTypingStatus([]);
         });
+        return () => unsubscribe();
+    }, [activeGroup?.id, orgId, typingAccessAllowed, user?.uid]);
 
-        return () => { unsubNonTasks(); unsubTasks(); unsubTyping(); };
-    }, [shouldLoadChatData, orgId, user?.uid, user?.email, activeGroup?.id, playAlertSound, isWorkspaceLoading, addToast, orgCollection]);
+
+    const loadOlderMessages = useCallback(async () => {
+        if (isLoadingOlderMessages || !shouldLoadChatData || !orgId || !user?.uid || !user?.email) return;
+        const oldestTimestamp = oldestMessageTimestampRef.current;
+        if (!oldestTimestamp) {
+            setHasOlderMessages(false);
+            return;
+        }
+
+        setIsLoadingOlderMessages(true);
+        try {
+            const olderNonTaskQuery = query(
+                orgCollection("messages"),
+                where("isTask", "==", false),
+                where("timestamp", "<", oldestTimestamp),
+                orderBy("timestamp", "desc"),
+                limit(CHAT_MESSAGE_PAGE_SIZE)
+            );
+            const olderTaskQuery = query(
+                orgCollection("messages"),
+                where("taskData.visibleTo", "array-contains", user.email),
+                where("timestamp", "<", oldestTimestamp),
+                orderBy("timestamp", "desc"),
+                limit(CHAT_MESSAGE_PAGE_SIZE)
+            );
+            const [nonTaskSnapshot, taskSnapshot] = await Promise.all([getDocs(olderNonTaskQuery), getDocs(olderTaskQuery)]);
+            const olderDocs = [...nonTaskSnapshot.docs, ...taskSnapshot.docs];
+            olderDocs.forEach((docSnapshot) => messageDocsRef.current.set(docSnapshot.id, docSnapshot));
+            setHasOlderMessages(olderDocs.length > 0);
+            publishMessageDocs();
+        } catch (error) {
+            console.error('Failed to load older messages:', error);
+            addToast?.('Unable to load older messages. Please try again.', 'error');
+        } finally {
+            setIsLoadingOlderMessages(false);
+        }
+    }, [addToast, isLoadingOlderMessages, orgCollection, orgId, publishMessageDocs, shouldLoadChatData, user?.email, user?.uid]);
 
     // ================== READ RECEIPTS ==================
     useEffect(() => {
@@ -152,6 +315,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     const flushOfflineDrafts = async () => {
+        if (!orgId || !user?.uid) return;
         try {
             const db2 = await openDraftDB(); const tx = db2.transaction("drafts", "readonly"); const req = tx.objectStore("drafts").getAll();
             req.onsuccess = async () => {
@@ -159,8 +323,8 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                     try {
                         await addDoc(orgCollection("messages"), buildPublicMessagePayload({
                             text: `[Recovered Draft] ${draft.text}`,
-                            user,
-                            group: { id: draft.groupId, name: draft.groupName || activeGroup?.name || 'Recovered Draft' },
+                            user: buildMessageUser(),
+                            group: buildMessageGroup({ id: draft.groupId, name: draft.groupName || activeGroup?.name || 'Recovered Draft' }),
                             timestamp: serverTimestamp(),
                             deliveredTo: [user.email],
                             isPinned: false,
@@ -179,27 +343,59 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     useEffect(() => {
-        const goOnline = () => { setIsOnline(true); flushOfflineDrafts(); };
+        const goOnline = () => { setIsOnline(true); if (orgId && user?.uid) flushOfflineDrafts(); };
         const goOffline = () => setIsOnline(false);
         window.addEventListener('online', goOnline);
         window.addEventListener('offline', goOffline);
         loadOfflineDrafts();
         return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
-    }, [loadOfflineDrafts]);
+    }, [loadOfflineDrafts, orgId, user?.uid]);
 
     // ================== FIREBASE API ACTIONS ==================
     const logImmutableAction = async (actionType, content, target = "") => {
-        if(!activeGroup) return;
+        if(!activeGroup || !hasOrgContext('write audit logs')) return;
         try { await addDoc(orgCollection("audit_logs"), { type: actionType, user: user.email, content, target, groupId: activeGroup.id, groupName: activeGroup.name, timestamp: serverTimestamp() }); } catch(e) {}
     };
 
+    const typingRtdbPath = useCallback(() => {
+        if (!typingAccessAllowed || !orgId || !activeGroup?.id || !user?.uid) return null;
+        return `typing/${orgId}/${activeGroup.id}/${user.uid}`;
+    }, [activeGroup?.id, orgId, typingAccessAllowed, user?.uid]);
+
+    const clearTypingEvent = useCallback(() => {
+        const path = typingRtdbPath();
+        if (!path) return;
+        try {
+            rtdbRemove(rtdbRef(realtimeDb, path)).catch((error) => {
+                console.warn('Failed to clear typing indicator:', error);
+            });
+        } catch (e) {}
+    }, [typingRtdbPath]);
+
     const triggerTypingEvent = (userName) => {
-        if(!activeGroup) return;
-        try { setDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
+        if(!typingAccessAllowed || !activeGroup || !user?.uid || !hasOrgContext('update typing status')) return;
+        const path = typingRtdbPath();
+        if (!path) return;
+        try {
+            const currentTypingRef = rtdbRef(realtimeDb, path);
+            onDisconnect(currentTypingRef).remove().catch(() => {});
+            rtdbSet(currentTypingRef, {
+                orgId,
+                groupId: activeGroup.id,
+                userId: user.uid,
+                userEmail: user.email || '',
+                name: userName || user.email?.split('@')[0] || 'Someone',
+                timestamp: rtdbServerTimestamp(),
+                clientTimestamp: Date.now(),
+            }).catch((error) => {
+                console.warn('Failed to set typing indicator:', error);
+            });
+        } catch (e) {}
     };
 
-    const sendMessageToDB = async (messageText, replyingTo, attachments = [], uploadProgressCb = null) => {
-        try { deleteDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`)); } catch(e) {}
+    const sendMessageToDB = async (messageText, replyingTo, attachments = [], uploadProgressCb = null, options = {}) => {
+        if (!hasOrgContext('send messages') || !activeGroup?.id || !user?.uid) return;
+        clearTypingEvent();
 
         const mentions = [];
         dbUsers.forEach(u => { if (messageText.toLowerCase().includes(`@${(u.name || "").toLowerCase()}`)) mentions.push(u.email); });
@@ -217,19 +413,21 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             return;
         }
 
-        const hasTextMessage = !!(messageText || '').replace(/<br\s*\/?>/gi, '').trim();
+        const externalLinks = Array.isArray(options.externalLinks) ? options.externalLinks.filter(link => link?.displayName && link?.url) : [];
+        const hasTextMessage = !!(messageText || '').replace(/<br\s*\/?>/gi, '').trim() || externalLinks.length > 0;
         let groupMsgRef = null;
         if (hasTextMessage) {
             const buildPayload = supportRouting.isPrivateForward ? buildPrivateSupportReplyPayload : buildPublicMessagePayload;
             groupMsgRef = await addDoc(orgCollection("messages"), buildPayload({
                 text: messageText,
-                user,
-                group: activeGroup,
+                user: buildMessageUser(),
+                group: buildMessageGroup(),
                 timestamp: serverTimestamp(),
                 isPrivateMention: false,
                 mentionEmails: uniqueMentions,
                 ...(replyData || {}),
                 ...(supportRouting.isPrivateForward ? { allowedUsers: supportRouting.allowedUsers || [] } : {}),
+                ...(externalLinks.length ? { externalLinks } : {}),
             }));
             logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, supportRouting.isPrivateForward ? `Private SUPPORT: ${(supportRouting.allowedUsers || []).join(', ')}` : (uniqueMentions.length ? `Mentions: ${uniqueMentions.join(', ')}` : "Public"));
         }
@@ -253,6 +451,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     const reactToMessageDB = async (msgId, emoji) => {
+        if (!hasOrgContext('react to messages')) return;
         const msg = messages.find(m => m.id === msgId);
         if(!msg) return;
         let updatedReactions = { ...msg.reactions };
@@ -267,8 +466,17 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     const uploadAndSendFileDB = async (pf, onProgress, replyingTo = null) => {
-    const { file, customName, caption } = pf;
+    const { file, customName, caption, securePdf = false, secureRecipients = [] } = pf;
     const safeCaption = caption || ""; // Prevents .trim() crashes
+
+    if (!orgId) throw new Error('Organization context is required before uploading files.');
+    if (!activeGroup?.id) throw new Error('Select a group before uploading files.');
+
+    const supportRouting = buildSupportRoutingPayload(replyingTo);
+    if (supportRouting.blockedTopLevelSupportPost) {
+        addToast?.('Reply to a SUPPORT broadcast to upload privately to support.', 'warning');
+        return;
+    }
 
     if (file.size > maxFileSizeMb * 1024 * 1024) throw new Error(`File too large. Max ${maxFileSizeMb} MB.`);
 
@@ -289,31 +497,38 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         } 
     } catch (e) {}
 
-    const storageRef = ref(storage, `chat_uploads/${Date.now()}_${customName}`);
+    const groupPathSegment = sanitizeStoragePathSegment(activeGroup.id, 'group');
+    const storedFileName = sanitizeStoragePathSegment(processedFile.name || customName, 'attachment');
+    const secureFileId = createUploadId();
+    const storagePath = `organizations/${orgId}/uploads/chat/${groupPathSegment}/${Date.now()}_${secureFileId}_${storedFileName}`;
+    const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, processedFile);
 
     return new Promise((resolve, reject) => {
         uploadTask.on('state_changed', 
-            (snapshot) => onProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+            (snapshot) => {
+                if (onProgress) onProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            },
             reject,
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 const replyData = replyingTo ? { replyToId: replyingTo.id, originalText: replyingTo.text || replyingTo.fileName || 'Attachment', originalSender: (replyingTo.sender||'').split('@')[0] } : {};
-                const supportRouting = buildSupportRoutingPayload(replyingTo);
-                if (supportRouting.blockedTopLevelSupportPost) {
-                    addToast?.('Reply to a SUPPORT broadcast to upload privately to support.', 'warning');
-                    resolve();
-                    return;
-                }
                 const buildPayload = supportRouting.isPrivateForward ? buildPrivateSupportReplyPayload : buildPublicMessagePayload;
                 await addDoc(orgCollection("messages"), buildPayload({
                     text: safeCaption.trim(),
-                    user,
-                    group: activeGroup,
+                    user: buildMessageUser(),
+                    group: buildMessageGroup(),
                     timestamp: serverTimestamp(),
                     fileUrl: downloadURL,
+                    storagePath: uploadTask.snapshot.ref.fullPath,
                     fileName: customName,
+                    storedFileName,
                     fileType: processedFile.type,
+                    fileSize: processedFile.size,
+                    originalFileSize: file.size,
+                    uploadedBy: user.uid,
+                    uploadedAt: serverTimestamp(),
+                    ...(securePdf ? { secureDownload: true, secureFileId, secureRecipients: [...new Set(secureRecipients)], secureDownloadStatus: "otp_required" } : {}),
                     ...replyData,
                     ...(supportRouting.isPrivateForward ? { allowedUsers: supportRouting.allowedUsers || [] } : {}),
                 }));
@@ -323,23 +538,48 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     });
 };
     const scheduleMessageDB = async (text, dt, isTask, taskData) => {
+        if (!hasOrgContext('schedule messages') || !activeGroup?.id) return;
         const scheduledDate = new Date(dt);
-        const payload = { text, senderEmail: user.email, senderUid: user.uid, groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp(), allowedUsers: [], isPrivateForward: false };
+        const messageUser = buildMessageUser();
+        const messageGroup = buildMessageGroup();
+        const payload = {
+            text,
+            senderEmail: messageUser.email,
+            senderUid: messageUser.uid,
+            senderName: messageUser.name,
+            senderAvatar: messageUser.profilePicUrl,
+            groupId: messageGroup.id,
+            groupName: messageGroup.name,
+            groupAvatar: messageGroup.profilePicUrl,
+            scheduledFor: scheduledDate.toISOString(),
+            scheduledAt: scheduledDate,
+            timeZone: 'Asia/Kolkata',
+            status: "pending",
+            retryCount: 0,
+            isTask,
+            createdAt: serverTimestamp(),
+            allowedUsers: [],
+            isPrivateForward: false,
+            ...(isTask && taskData ? buildTaskDisplayFields(taskData, text) : {}),
+        };
         if (isTask && taskData) { payload.taskData = taskData; payload.taskDeadline = taskData.deadline; payload.taskAssignees = taskData.assignees; }
         await addDoc(orgCollection("scheduled_messages"), payload);
     };
 
     const editMessageDB = async (msgId, originalText, newText) => {
+        if (!hasOrgContext('edit messages')) return;
         await updateDoc(orgDoc("messages", msgId), { text: newText, isEdited: true });
         logImmutableAction("MESSAGE_EDIT", `Original: "${originalText}" | Edited: "${newText}"`, `Message ID: ${msgId}`);
     };
 
     const deleteMessageDB = async (msg) => {
+        if (!hasOrgContext('delete messages')) return;
         await deleteDoc(orgDoc("messages", msg.id));
         logImmutableAction("MESSAGE_DELETE", `Deleted content: "${msg.text || msg.fileName}"`, `Message ID: ${msg.id}`);
     };
 
     const togglePinDB = async (msgId, isPinned) => {
+        if (!hasOrgContext('pin messages')) return;
         const userEmail = (user?.email || '').toLowerCase();
         const canManagePins =
             userEmail === GLOBAL_SUPER_ADMIN_EMAIL ||
@@ -352,14 +592,15 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
     
     const toggleBookmarkDB = async (msgId, bookmarkedBy) => {
+        if (!hasOrgContext('bookmark messages')) return;
         let bookmarks = bookmarkedBy || [];
         if (bookmarks.includes(user.email)) bookmarks = bookmarks.filter(e => e !== user.email); else bookmarks.push(user.email);
         await updateDoc(orgDoc("messages", msgId), { bookmarkedBy: bookmarks });
     };
 
     return {
-        messages, typingStatus, isOnline, offlineDrafts,
-        logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
+        messages, typingStatus, isOnline, offlineDrafts, isLoadingOlderMessages, hasOlderMessages, loadOlderMessages,
+        logImmutableAction, triggerTypingEvent, clearTypingEvent, sendMessageToDB, reactToMessageDB,
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     };
