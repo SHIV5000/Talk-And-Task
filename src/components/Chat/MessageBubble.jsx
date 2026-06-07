@@ -94,9 +94,10 @@ const MessageBubble = React.memo(({
   const mentionsMe = (msg.mentionEmails || []).includes(userEmail);
 
   const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
-  const liveSenderName = useUserDisplayName(senderUser.uid || msg.senderUid, senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0]);
-  const senderName = liveSenderName || senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
-  const senderAvatar = senderUser.profilePicUrl || null;
+  const denormalizedSenderName = msg.senderName || senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
+  const liveSenderName = useUserDisplayName(msg.senderName ? null : (senderUser.uid || msg.senderUid), denormalizedSenderName);
+  const senderName = msg.senderName || liveSenderName || denormalizedSenderName;
+  const senderAvatar = msg.senderAvatar || senderUser.profilePicUrl || null;
   const getUserName = (email) => dbUsers?.find(u => u.email === email)?.name || (email || '').split('@')[0] || 'Unknown';
   const sortedGroupUsers = [...(dbUsers || [])]
     .filter(u => !activeGroup?.members || activeGroup.members.includes(u.email))

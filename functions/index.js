@@ -306,6 +306,17 @@ const formatIstMessageParts = (date = new Date()) => ({
   }).format(date),
 });
 
+const normalizeTaskDisplayFields = (taskData = {}, text = '') => ({
+  taskTitle: taskData.title || taskData.taskTitle || text || undefined,
+  taskStatus: taskData.status || undefined,
+  taskPriority: taskData.priority || undefined,
+  taskDeadline: taskData.deadline || undefined,
+  taskAssigneeEmails: uniqueStrings(taskData.assignees || []),
+  taskAssigneeNames: Array.isArray(taskData.assigneeNames) ? uniqueStrings(taskData.assigneeNames) : undefined,
+  taskAssigneeCount: Array.isArray(taskData.assignees) ? taskData.assignees.length : 0,
+  taskMasterReviewerEmail: taskData.masterReviewerEmail || undefined,
+});
+
 const buildScheduledMessagePayload = (scheduleData = {}, deliveredAt = new Date()) => {
   const senderEmail = scheduleData.senderEmail || '';
   if (!scheduleData.senderUid || !senderEmail || !scheduleData.groupId) {
@@ -318,8 +329,10 @@ const buildScheduledMessagePayload = (scheduleData = {}, deliveredAt = new Date(
     senderUid: scheduleData.senderUid || '',
     senderEmail,
     senderName: scheduleData.senderName || (senderEmail ? senderEmail.split('@')[0] : undefined),
+    senderAvatar: scheduleData.senderAvatar || null,
     groupId: scheduleData.groupId || '',
     groupName: scheduleData.groupName || 'Scheduled',
+    groupAvatar: scheduleData.groupAvatar || null,
     timestamp: serverTimestamp(),
     ...formatIstMessageParts(deliveredAt),
     isTask: scheduleData.isTask === true,
@@ -332,6 +345,7 @@ const buildScheduledMessagePayload = (scheduleData = {}, deliveredAt = new Date(
   };
 
   if (scheduleData.isTask === true) {
+    Object.assign(commonPayload, normalizeTaskDisplayFields(scheduleData.taskData || {}, scheduleData.text || ''));
     commonPayload.taskData = scheduleData.taskData || {};
     if (scheduleData.taskDeadline) commonPayload.taskDeadline = scheduleData.taskDeadline;
     if (scheduleData.taskAssignees) commonPayload.taskAssignees = scheduleData.taskAssignees;

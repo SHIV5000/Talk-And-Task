@@ -1149,6 +1149,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 ackBy: {},
                 requireProof: requireProof,
                 escalated: false,
+                assigneeNames: finalAssignees.map(email => dbUsers.find(x => x.email === email)?.name || (email || '').split('@')[0]),
                 assigneeStates: Object.fromEntries(finalAssignees.map(e => [e, "assigned"])),
                 masterReviewerEmail: user.email,
                 visibleTo: [...new Set([user.email, ...finalAssignees])],
@@ -1158,8 +1159,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
             await setDoc(orgDocRef("messages", selectedMessage.id), buildTaskMessagePayload({
                 text: sanitizedTaskTitle,
-                group: { id: selectedMessage.groupId, name: selectedMessage.groupName || activeGroup?.name || 'Task' },
-                user: { uid: selectedMessage.senderUid || user.uid, email: selectedMessage.senderEmail || user.email, name: selectedMessage.senderName || selectedMessage.sender },
+                group: { id: selectedMessage.groupId, name: selectedMessage.groupName || activeGroup?.name || 'Task', profilePicUrl: selectedMessage.groupAvatar || activeGroup?.profilePicUrl || null },
+                user: { uid: selectedMessage.senderUid || user.uid, email: selectedMessage.senderEmail || user.email, name: selectedMessage.senderName || selectedMessage.sender, profilePicUrl: selectedMessage.senderAvatar || effectiveCurrentUserData?.profilePicUrl || user.photoURL || null },
                 taskData,
                 allowedUsers: selectedMessage.allowedUsers || [],
                 isPrivateForward: selectedMessage.isPrivateForward === true,

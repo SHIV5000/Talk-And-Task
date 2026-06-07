@@ -71,6 +71,31 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}/${id}.`);
         return doc(db, "organizations", orgId, collectionName, id);
     }, [orgId]);
+    const buildMessageUser = useCallback((overrides = {}) => ({
+        ...user,
+        uid: overrides.uid || user?.uid,
+        email: overrides.email || user?.email,
+        name: overrides.name || currentUserData?.name || user?.displayName || user?.email?.split('@')[0],
+        profilePicUrl: overrides.profilePicUrl || currentUserData?.profilePicUrl || currentUserData?.photoURL || user?.photoURL || null,
+    }), [currentUserData?.name, currentUserData?.photoURL, currentUserData?.profilePicUrl, user]);
+
+    const buildMessageGroup = useCallback((group = activeGroup) => ({
+        id: group?.id,
+        name: group?.name,
+        profilePicUrl: group?.profilePicUrl || null,
+    }), [activeGroup]);
+
+    const buildTaskDisplayFields = useCallback((taskData = {}, text = '') => ({
+        taskTitle: taskData.title || taskData.taskTitle || text || undefined,
+        taskStatus: taskData.status || undefined,
+        taskPriority: taskData.priority || undefined,
+        taskDeadline: taskData.deadline || undefined,
+        taskAssigneeEmails: Array.isArray(taskData.assignees) ? [...new Set(taskData.assignees)] : [],
+        taskAssigneeNames: Array.isArray(taskData.assigneeNames) ? [...new Set(taskData.assigneeNames)] : undefined,
+        taskAssigneeCount: Array.isArray(taskData.assignees) ? taskData.assignees.length : 0,
+        taskMasterReviewerEmail: taskData.masterReviewerEmail || undefined,
+    }), []);
+
     const isGlobalSupportAdmin = (user?.email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
     const isSupportGroup = activeGroup?.isSupport === true || activeGroup?.id === 'support' || activeGroup?.name === 'SUPPORT';
 
@@ -256,8 +281,8 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                     try {
                         await addDoc(orgCollection("messages"), buildPublicMessagePayload({
                             text: `[Recovered Draft] ${draft.text}`,
-                            user,
-                            group: { id: draft.groupId, name: draft.groupName || activeGroup?.name || 'Recovered Draft' },
+                            user: buildMessageUser(),
+                            group: buildMessageGroup({ id: draft.groupId, name: draft.groupName || activeGroup?.name || 'Recovered Draft' }),
                             timestamp: serverTimestamp(),
                             deliveredTo: [user.email],
                             isPinned: false,
@@ -321,8 +346,8 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             const buildPayload = supportRouting.isPrivateForward ? buildPrivateSupportReplyPayload : buildPublicMessagePayload;
             groupMsgRef = await addDoc(orgCollection("messages"), buildPayload({
                 text: messageText,
-                user,
-                group: activeGroup,
+                user: buildMessageUser(),
+                group: buildMessageGroup(),
                 timestamp: serverTimestamp(),
                 isPrivateMention: false,
                 mentionEmails: uniqueMentions,
@@ -415,8 +440,8 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                 const buildPayload = supportRouting.isPrivateForward ? buildPrivateSupportReplyPayload : buildPublicMessagePayload;
                 await addDoc(orgCollection("messages"), buildPayload({
                     text: safeCaption.trim(),
-                    user,
-                    group: activeGroup,
+                    user: buildMessageUser(),
+                    group: buildMessageGroup(),
                     timestamp: serverTimestamp(),
                     fileUrl: downloadURL,
                     storagePath: uploadTask.snapshot.ref.fullPath,
@@ -438,7 +463,28 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     const scheduleMessageDB = async (text, dt, isTask, taskData) => {
         if (!hasOrgContext('schedule messages') || !activeGroup?.id) return;
         const scheduledDate = new Date(dt);
-        const payload = { text, senderEmail: user.email, senderUid: user.uid, senderName: currentUserData?.name || user.email.split('@')[0], groupId: activeGroup.id, groupName: activeGroup.name, scheduledFor: scheduledDate.toISOString(), scheduledAt: scheduledDate, timeZone: 'Asia/Kolkata', status: "pending", retryCount: 0, isTask, createdAt: serverTimestamp(), allowedUsers: [], isPrivateForward: false };
+        const messageUser = buildMessageUser();
+        const messageGroup = buildMessageGroup();
+        const payload = {
+            text,
+            senderEmail: messageUser.email,
+            senderUid: messageUser.uid,
+            senderName: messageUser.name,
+            senderAvatar: messageUser.profilePicUrl,
+            groupId: messageGroup.id,
+            groupName: messageGroup.name,
+            groupAvatar: messageGroup.profilePicUrl,
+            scheduledFor: scheduledDate.toISOString(),
+            scheduledAt: scheduledDate,
+            timeZone: 'Asia/Kolkata',
+            status: "pending",
+            retryCount: 0,
+            isTask,
+            createdAt: serverTimestamp(),
+            allowedUsers: [],
+            isPrivateForward: false,
+            ...(isTask && taskData ? buildTaskDisplayFields(taskData, text) : {}),
+        };
         if (isTask && taskData) { payload.taskData = taskData; payload.taskDeadline = taskData.deadline; payload.taskAssignees = taskData.assignees; }
         await addDoc(orgCollection("scheduled_messages"), payload);
     };
