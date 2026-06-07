@@ -4,7 +4,8 @@ import {
   signInWithEmailAndPassword, setPersistence, inMemoryPersistence
 } from 'firebase/auth';
 import {
-  getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
+  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, setDoc, getDocs, where, deleteDoc
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -40,8 +41,21 @@ if (!appCheckSiteKey) {
   console.warn('Firebase App Check is not initialized because VITE_FIREBASE_APPCHECK_SITE_KEY is missing.');
 }
 
+const createFirestoreInstance = () => {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch (error) {
+    console.warn('Firestore persistent local cache is unavailable; falling back to default in-memory cache.', error);
+    return getFirestore(app);
+  }
+};
+
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = createFirestoreInstance();
 export const storage = getStorage(app);
 const functions = getFunctions(app);
 
