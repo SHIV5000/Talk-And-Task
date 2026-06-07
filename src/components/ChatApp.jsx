@@ -19,7 +19,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 // Utils & Firebase Core
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
-import { buildPrivateSupportReplyPayload, buildPublicMessagePayload, buildTaskMessagePayload } from '../utils/messagePayload.js';
+import { buildTaskMessagePayload } from '../utils/messagePayload.js';
+import { richTextToPlainText, richTextToSafeHtml } from '../utils/richText.js';
 import { compressImage } from '../utils/imageUtils.js';
 import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
@@ -29,6 +30,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 const stripHtml = (html) => html ? String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') : '';
 const formatNotificationTime = (value) => { const date = value?.toDate ? value.toDate() : value ? new Date(value) : null; if (!date || Number.isNaN(date.getTime())) return ''; const diff = Date.now() - date.getTime(); if (diff < 60000) return 'Just now'; if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`; return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 const getSnoozeDate = (mode) => { const date = new Date(); if (mode === '15m') date.setMinutes(date.getMinutes() + 15); else if (mode === '1h') date.setHours(date.getHours() + 1); else { date.setHours(17, 0, 0, 0); if (date <= new Date()) date.setDate(date.getDate() + 1); } return date; };
+const formatIstDateTime = (value) => new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(value));
 const GLOBAL_SUPER_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const THEME_ACCENTS = {
   indigo: '#4f46e5',
@@ -401,6 +403,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                 dbUsers={dbUsers}
                 groups={groups}
                 currentUserData={currentUserData}
+                orgId={orgId}
                 MAX_FILE_SIZE_MB={5}
                 handleSendPendingFiles={handleSend}
                 composerVariant="reply"
@@ -459,7 +462,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [activeTaskSidebar, setActiveTaskSidebar] = useState(null);
     const [maxFileSizeMb, setMaxFileSizeMb] = useState(() => Number(localStorage.getItem("maxFileSizeMb") || 5));
-    const [viewMode, setViewMode] = useState("chat");
+    const [viewMode, setViewMode] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.viewMode || "chat"; } catch { return "chat"; } });
     const [showNotifications, setShowNotifications] = useState(false);
     const [alertPulseActive, setAlertPulseActive] = useState(false);
     const lastNotificationTotalRef = useRef(0);
@@ -476,9 +479,9 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [dismissedBroadcastId, setDismissedBroadcastId] = useState(null);
 
     const [sidebarSearch, setSidebarSearch] = useState("");
-    const [chatFilter, setChatFilter] = useState("all");
+    const [chatFilter, setChatFilter] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.chatFilter || "all"; } catch { return "all"; } });
     const [showFilterMenu, setShowFilterMenu] = useState(false);
-    const [chatDateFilter, setChatDateFilter] = useState("");
+    const [chatDateFilter, setChatDateFilter] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.chatDateFilter || ""; } catch { return ""; } });
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessageId, setEditingMessageId] = useState(null);
@@ -505,6 +508,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [isUploading, setIsUploading] = useState(false);
     const [pendingFiles, setPendingFiles] = useState([]);
     const [showFileRename, setShowFileRename] = useState(false);
+    const [profilePhotoDraft, setProfilePhotoDraft] = useState(null);
     const [trailFileUploading, setTrailFileUploading] = useState(false);
     const [profileUploadProgress, setProfileUploadProgress] = useState(0);
     const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
@@ -525,6 +529,22 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
     }, []);
     const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
+    const ensureOrgContext = useCallback((action = 'continue') => {
+        if (orgId) return true;
+        addToast(`Organization context is required to ${action}. Please wait for your workspace to finish loading.`, 'warning');
+        return false;
+    }, [orgId, addToast]);
+
+    const orgCollectionRef = useCallback((collectionName) => {
+        if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}.`);
+        return collection(db, "organizations", orgId, collectionName);
+    }, [orgId]);
+
+    const orgDocRef = useCallback((collectionName, documentId) => {
+        if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}/${documentId}.`);
+        return doc(db, "organizations", orgId, collectionName, documentId);
+    }, [orgId]);
 
     const messagesEndRef = useRef(null);
     const chatContainerRef = useRef(null);
@@ -591,6 +611,26 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         roles: isGlobalSuperAdmin ? Array.from(new Set([...(currentUserData?.roles || []), 'Super Admin'])) : currentUserData?.roles,
     }), [currentUserData, isGlobalSuperAdmin]);
 
+    useEffect(() => {
+        if (!user?.uid) return;
+        const state = { activeGroupId: activeGroup?.id || null, viewMode, chatFilter, chatDateFilter, scrollTop: chatContainerRef.current?.scrollTop || 0 };
+        localStorage.setItem(`talkTaskUiState:${user.uid}`, JSON.stringify(state));
+    }, [activeGroup?.id, chatDateFilter, chatFilter, user?.uid, viewMode]);
+
+    useEffect(() => {
+        if (!user?.uid || activeGroup || groups.length === 0) return;
+        try {
+            const saved = JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || '{}');
+            const savedGroup = groups.find((group) => group.id === saved.activeGroupId);
+            if (savedGroup) {
+                setActiveGroup(savedGroup);
+                setTimeout(() => {
+                    if (chatContainerRef.current && Number.isFinite(Number(saved.scrollTop))) chatContainerRef.current.scrollTop = Number(saved.scrollTop);
+                }, 150);
+            }
+        } catch (error) {}
+    }, [activeGroup, groups, user?.uid]);
+
     const featureFlags = useMemo(() => normalizeFeatureFlags(currentUserData?.featureFlags), [currentUserData?.featureFlags]);
     const shouldLoadChatData = viewMode === 'chat' && !isWorkspaceLoading && featureFlags.chat !== false;
 
@@ -607,7 +647,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [currentUserData?.themeFont, currentUserData?.displayMode, currentUserData?.fontScale, profileForm.themeFont, profileForm.displayMode, profileForm.fontScale, toolPreferences?.darkMode]);
 
     const {
-        messages, typingStatus, isOnline, offlineDrafts,
+        messages, typingStatus, isOnline, offlineDrafts, isLoadingOlderMessages, hasOlderMessages, loadOlderMessages,
         logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
@@ -667,10 +707,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [globalAnnouncement?.isActive, globalAnnouncement?.id, dismissedBroadcastId, playMelody]);
 
     const handleAckBroadcast = async () => {
-        if (!globalAnnouncement || !orgId) return;
+        if (!globalAnnouncement || !ensureOrgContext('acknowledge broadcasts')) return;
         setDismissedBroadcastId(globalAnnouncement.id);
         try {
-            await addDoc(collection(db, "organizations", orgId, "broadcast_acks"), {
+            await addDoc(orgCollectionRef("broadcast_acks"), {
                 broadcastId: globalAnnouncement.id,
                 userEmail: user.email,
                 userName: currentUserData?.name || user.email.split('@')[0],
@@ -739,13 +779,13 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             const now = new Date();
             const dueTasks = messages.filter(m => m.isTask && m.taskData?.status !== "Completed" && !m.taskData?.deadlineAlerted && m.taskData?.deadline && new Date(m.taskData.deadline) <= now);
             dueTasks.forEach(async (task) => {
-                await updateDoc(doc(db, "organizations", orgId, "messages", task.id), { "taskData.deadlineAlerted": true });
+                await updateDoc(orgDocRef("messages", task.id), { "taskData.deadlineAlerted": true });
                 const involved = new Set();
                 if (task.senderEmail) involved.add(task.senderEmail);
                 (task.taskData.assignees || []).forEach(a => involved.add(a));
                 involved.forEach(email => {
                     const u = dbUsers.find(u => u.email === email);
-                    if (u) addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: "task", text: `⏰ DUE NOW: "${task.text}"`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                    if (u) addDoc(orgCollectionRef("notifications"), { userId: u.uid, type: "task", text: `⏰ DUE NOW: "${task.text}"`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
                 });
             });
 
@@ -755,51 +795,25 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 const notifyEmails = [...new Set([...pendingAssignees, task.senderEmail].filter(Boolean))];
                 for (const email of notifyEmails) {
                     const u = dbUsers.find(x => x.email === email);
-                    if (u) await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: "task", text: `Kindly Ack the Task ${task.id} Allotted to You - Thanks.`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+                    if (u) await addDoc(orgCollectionRef("notifications"), { userId: u.uid, type: "task", text: `Kindly Ack the Task ${task.id} Allotted to You - Thanks.`, messageId: task.id, groupId: task.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
                 }
-                await updateDoc(doc(db, "organizations", orgId, "messages", task.id), { "taskData.ackReminderSent": true }).catch(()=>{});
+                await updateDoc(orgDocRef("messages", task.id), { "taskData.ackReminderSent": true }).catch(()=>{});
             }
 
             const dueReminders = (activeReminders || []).filter(r => !r.isTriggered && r.remindAt && new Date(r.remindAt) <= now);
             for (const rem of dueReminders) {
                 try {
-                    await updateDoc(doc(db, "organizations", orgId, "reminders", rem.id), { isTriggered: true });
-                    await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
+                    await updateDoc(orgDocRef("reminders", rem.id), { isTriggered: true });
+                    await addDoc(orgCollectionRef("notifications"), { userId: user.uid, type: "reminder", text: `⏰ REMINDER: "${rem.messageText}"`, messageId: rem.messageId, timestamp: serverTimestamp(), isRead: false });
                     playMelody('taskCreated');
                     setActiveReminderAlert(rem);
                 } catch(e) {}
             }
 
-            try {
-                const q = query(collection(db, "organizations", orgId, "scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
-                const snap = await getDocs(q);
-                for (const document of snap.docs) {
-                    const data = document.data();
-                    const scheduledMs = data.scheduledAt?.toMillis?.() || new Date(data.scheduledFor).getTime();
-                    if (scheduledMs <= now.getTime()) {
-                        const isExplicitlyPrivate = data.isPrivateForward === true || (Array.isArray(data.allowedUsers) && data.allowedUsers.length > 0);
-                        const payloadBuilder = data.isTask ? buildTaskMessagePayload : (isExplicitlyPrivate ? buildPrivateSupportReplyPayload : buildPublicMessagePayload);
-                        const payload = payloadBuilder({
-                            text: data.text,
-                            group: { id: data.groupId, name: data.groupName || 'Scheduled' },
-                            user: { uid: user.uid, email: user.email, name: currentUserData?.name || user.email.split('@')[0] },
-                            timestamp: serverTimestamp(),
-                            dateString: new Date().toISOString().split('T')[0],
-                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            ...(data.isTask ? { taskData: data.taskData || {} } : {}),
-                            isPrivateForward: isExplicitlyPrivate,
-                            allowedUsers: isExplicitlyPrivate ? (data.allowedUsers || []) : []
-                        });
-                        await addDoc(collection(db, "organizations", orgId, "messages"), payload);
-                        await updateDoc(doc(db, "organizations", orgId, "scheduled_messages", document.id), { status: "sent", sentAt: serverTimestamp(), retryCount: data.retryCount || 0 });
-                        playMelody('messageSent');
-                    }
-                }
-            } catch(e) { console.error(e); }
 
         }, 15000);
         return () => clearInterval(checkerInterval);
-    }, [orgId, messages, dbUsers, activeReminders, user.uid, user.email, currentUserData, playMelody, addToast]);
+    }, [orgId, messages, dbUsers, activeReminders, user.uid, playMelody, orgCollectionRef, orgDocRef]);
 
     const myGroups = useMemo(() => {
         // Implicitly include default departments and the tenant-wide SUPPORT department for every signed-in member.
@@ -965,7 +979,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [activeGroup, groups, messages]);
 
     const handleSendOfflineAware = async () => {
-        if (!inputText.trim() || inputText === '<br>' || !activeGroup) return;
+        if (!inputText.trim() || inputText === '<br>' || !activeGroup || !ensureOrgContext('send messages')) return;
         if (!isOnline) {
             await saveOfflineDraft(inputText.trim(), activeGroup.id, activeGroup.name);
             setInputText(""); alert("📥 You are offline. Message saved as draft and will be sent when you reconnect."); return;
@@ -983,7 +997,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     }, [triggerTypingEvent, currentUserData?.name]);
 
     const handleSendMessage = async () => {
-        if (!inputText.trim() || !activeGroup) return;
+        if (!inputText.trim() || !activeGroup || !ensureOrgContext('send messages')) return;
         const msgText = inputText.trim();
         await sendMessageToDB(msgText, replyingTo);
         playMelody('messageSent');
@@ -993,7 +1007,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         const otherMembers = (activeGroup.members || []).filter(email => email !== user.email);
         const uidsToNotify = dbUsers.filter(u => otherMembers.includes(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
-            addDoc(collection(db, "organizations", orgId, "notifications"), {
+            addDoc(orgCollectionRef("notifications"), {
                 userId: uid, type: "message",
                 text: `New Message in ${activeGroup.name}: "${stripHtml(msgText).substring(0,40)}..."`,
                 groupId: activeGroup.id, timestamp: serverTimestamp(), isRead: false
@@ -1014,7 +1028,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     };
 
     const handleSendPendingFiles = async () => {
-        if (pendingFiles.length === 0) return;
+        if (pendingFiles.length === 0 || !ensureOrgContext('upload files')) return;
         const currentText = inputText.trim();
         const filesToProcess = [...pendingFiles];
         setPendingFiles([]); setShowFileRename(false); setIsUploading(true); setUploadProgress(0); setInputText("");
@@ -1025,7 +1039,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             if (i === 0 && currentText && currentText !== '<br>') finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText;
             pf.caption = finalCaption; pf.text = finalCaption;
 
-            try { await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); }
+            try { if (pf.securePdf && !(pf.secureRecipients || []).length) throw new Error("Select at least one secure PDF recipient."); await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); }
         }
         playMelody('fileUpload');
         setIsUploading(false); setUploadProgress(0);
@@ -1061,10 +1075,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     const handleScheduleMessage = async (isTask = false, taskData = null) => {
         const text = pendingScheduledText || inputText.trim();
-        if (!text || text === '<br>' || !scheduleDateTime || !activeGroup) return alert("Enter message text and a future date/time.");
+        if (!text || text === '<br>' || !scheduleDateTime || !activeGroup || !ensureOrgContext('schedule messages')) return alert("Enter message text and a future date/time.");
         if (new Date(scheduleDateTime) <= new Date()) return alert("Scheduled time must be in the future.");
         try {
-            const scheduledLabel = new Date(scheduleDateTime).toLocaleString();
+            const scheduledLabel = formatIstDateTime(scheduleDateTime);
             setInputText(""); setPendingScheduledText(""); setScheduleDateTime(""); setActiveModal(null);
             if(chatInputRef.current) chatInputRef.current.innerHTML = '';
             addToast(`✅ Scheduled for ${scheduledLabel}`, 'success');
@@ -1080,7 +1094,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         involved.delete(user.email);
         const uidsToNotify = dbUsers.filter(u => involved.has(u.email)).map(u => u.uid);
         for (const uid of uidsToNotify) {
-            try { await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: uid, type: "task", text: `"${stripHtml(taskMsg.text).substring(0,30)}..." - ${(user.email || "").split('@')[0]} updated ✅`, messageId: taskMsg.id, groupId: taskMsg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
+            try { if (ensureOrgContext('send task notifications')) await addDoc(orgCollectionRef("notifications"), { userId: uid, type: "task", text: `"${stripHtml(taskMsg.text).substring(0,30)}..." - ${(user.email || "").split('@')[0]} updated ✅`, messageId: taskMsg.id, groupId: taskMsg.groupId, timestamp: serverTimestamp(), isRead: false }); } catch (e) {}
         }
     };
 
@@ -1088,16 +1102,18 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     useEffect(() => {
         const migrateAssigneeStates = async () => {
+            if (!orgId) return;
             const candidates = messages.filter(m => m.isTask && m.taskData?.assignees?.length && (!m.taskData?.assigneeStates || !m.taskData?.masterReviewerEmail || !m.taskData?.visibleTo));
             for (const m of candidates.slice(0, 20)) {
                 const states = Object.fromEntries((m.taskData.assignees || []).map(e => [e, 'assigned']));
-                await updateDoc(doc(db, "organizations", orgId, "messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "", "taskData.visibleTo": m.taskData?.visibleTo || [...new Set([m.senderEmail, m.taskData?.masterReviewerEmail, ...(m.taskData?.assignees || [])].filter(Boolean))], "taskData.ackBy": m.taskData?.ackBy || {} }).catch(() => {});
+                await updateDoc(orgDocRef("messages", m.id), { "taskData.assigneeStates": m.taskData?.assigneeStates || states, "taskData.masterReviewerEmail": m.taskData?.masterReviewerEmail || m.senderEmail || "", "taskData.visibleTo": m.taskData?.visibleTo || [...new Set([m.senderEmail, m.taskData?.masterReviewerEmail, ...(m.taskData?.assignees || [])].filter(Boolean))], "taskData.ackBy": m.taskData?.ackBy || {} }).catch(() => {});
             }
         };
         migrateAssigneeStates();
-    }, [messages]);
+    }, [messages, orgId, orgDocRef]);
 
     const convertToTask = async () => {
+        if (!ensureOrgContext('convert messages to tasks')) return;
         if (!featureFlags.taskCards) return alert("Task cards are not enabled for your account.");
         if (!selectedMessage || !taskDeadline || taskAssignees.length === 0) return alert("Please select Assignees, Priority, and Deadline.");
         try {
@@ -1132,7 +1148,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
             const finalAssignees = Array.from(new Set([...(taskAssignees || [])]));
 
-            const sanitizedTaskTitle = stripHtml(selectedMessage.text || "").replace(/ |&nbsp;/g, " ").trim() || "Task";
+            const sanitizedTaskTitle = richTextToSafeHtml(selectedMessage.text || "") || richTextToPlainText(selectedMessage.text || "") || "Task";
 
             const taskData = {
                 deadline: taskDeadline,
@@ -1155,6 +1171,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 ackBy: {},
                 requireProof: requireProof,
                 escalated: false,
+                assigneeNames: finalAssignees.map(email => dbUsers.find(x => x.email === email)?.name || (email || '').split('@')[0]),
                 assigneeStates: Object.fromEntries(finalAssignees.map(e => [e, "assigned"])),
                 masterReviewerEmail: user.email,
                 visibleTo: [...new Set([user.email, ...finalAssignees])],
@@ -1162,10 +1179,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 deletedAt: null
             };
 
-            await setDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), buildTaskMessagePayload({
+            await setDoc(orgDocRef("messages", selectedMessage.id), buildTaskMessagePayload({
                 text: sanitizedTaskTitle,
-                group: { id: selectedMessage.groupId, name: selectedMessage.groupName || activeGroup?.name || 'Task' },
-                user: { uid: selectedMessage.senderUid || user.uid, email: selectedMessage.senderEmail || user.email, name: selectedMessage.senderName || selectedMessage.sender },
+                group: { id: selectedMessage.groupId, name: selectedMessage.groupName || activeGroup?.name || 'Task', profilePicUrl: selectedMessage.groupAvatar || activeGroup?.profilePicUrl || null },
+                user: { uid: selectedMessage.senderUid || user.uid, email: selectedMessage.senderEmail || user.email, name: selectedMessage.senderName || selectedMessage.sender, profilePicUrl: selectedMessage.senderAvatar || effectiveCurrentUserData?.profilePicUrl || user.photoURL || null },
                 taskData,
                 allowedUsers: selectedMessage.allowedUsers || [],
                 isPrivateForward: selectedMessage.isPrivateForward === true,
@@ -1177,7 +1194,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 if (email !== user.email) {
                     const assigneeUser = dbUsers.find(u => u.email === email);
                     if (assigneeUser) {
-                        addDoc(collection(db, "organizations", orgId, "notifications"), {
+                        addDoc(orgCollectionRef("notifications"), {
                             userId: assigneeUser.uid,
                             type: "task",
                             text: `"${stripHtml(selectedMessage.text).substring(0,30)}..." - Assigned to You 🕒`,
@@ -1201,10 +1218,16 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         } catch (error) { alert("Failed to create task."); }
     };
 
+    const canManageSelectedTask = useCallback((taskMessage) => {
+        if (!taskMessage?.isTask || taskMessage.taskData?.status === 'Completed') return false;
+        const reviewerEmail = taskMessage.taskData?.masterReviewerEmail || taskMessage.senderEmail;
+        return effectiveIsVipAdmin || effectiveCurrentUserData?.isAdmin || reviewerEmail === user.email || taskMessage.senderEmail === user.email;
+    }, [effectiveCurrentUserData?.isAdmin, effectiveIsVipAdmin, user.email]);
+
     const handleSaveTaskTitle = async () => {
-        if (!newTaskTitle.trim() || !selectedMessage) return;
+        if (!newTaskTitle.trim() || !selectedMessage || !canManageSelectedTask(selectedMessage) || !ensureOrgContext('edit task titles')) return;
         try {
-            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { text: newTaskTitle });
+            await updateDoc(orgDocRef("messages", selectedMessage.id), { text: newTaskTitle });
             setSelectedMessage(prev => ({...prev, text: newTaskTitle}));
             playMelody('taskUpdated');
             setIsEditingTaskTitle(false);
@@ -1212,35 +1235,35 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     };
 
     const handleDelegateTask = async () => {
-        if (!selectedMessage || delegateAssignees.length === 0) return;
+        if (!selectedMessage || delegateAssignees.length === 0 || !ensureOrgContext('delegate tasks')) return;
         try {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Delegated", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: delegateAssignees.map(email => {   const u = dbUsers.find(x => x.email === email);
     return u ? u.name : (email||"").split('@')[0];}).join(', ') }];
-            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
+            await updateDoc(orgDocRef("messages", selectedMessage.id), { "taskData.assignees": delegateAssignees, "taskData.status": "In Progress", "taskData.trail": updatedTrail, "taskData.dismissedBy": [] });
             playMelody('taskUpdated');
             setActiveModal(null); setDelegateAssignees([]); setShowDelegateDropdown(false);
         } catch (error) {}
     };
 
     const handleCompleteTask = async () => {
-        if (!selectedMessage) return;
+        if (!selectedMessage || !ensureOrgContext('complete tasks')) return;
         try {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Marked Completed", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: "System" }];
-            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
+            await updateDoc(orgDocRef("messages", selectedMessage.id), { "taskData.status": "Completed", "taskData.trail": updatedTrail });
             playMelody('taskUpdated');
             setActiveModal(null);
         } catch (error) {}
     };
 
     const handleAddComment = async (closeModal = false) => {
-        if (!selectedMessage || !trailComment.trim()) return;
+        if (!selectedMessage || !trailComment.trim() || !ensureOrgContext('add task comments')) return;
         try {
             const now = new Date();
             const updatedTrail = [...selectedMessage.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: trailComment }];
             const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
-            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            await updateDoc(orgDocRef("messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
             setTrailComment("");
             setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
             playMelody('taskUpdated');
@@ -1250,7 +1273,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     const handleTrailFileUpload = async (e) => {
         const file = e.target.files[0];
-        if (!file || !selectedMessage) return;
+        if (!file || !selectedMessage || !canManageSelectedTask(selectedMessage) || !ensureOrgContext('upload task files')) return;
         setTrailFileUploading(true);
         const uniqueFileName = `${Date.now()}_${file.name}`;
         const uploadTask = uploadBytesResumable(ref(storage, `task_updates/${uniqueFileName}`), file);
@@ -1260,7 +1283,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                 const now = new Date();
                 const updatedTrail = [...selectedMessage.taskData.trail, { action: "File Uploaded", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
                 const newStatus = selectedMessage.taskData.status === 'Pending' ? 'In Progress' : selectedMessage.taskData.status;
-                await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+                await updateDoc(orgDocRef("messages", selectedMessage.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
                 setSelectedMessage(prev => ({...prev, taskData: {...prev.taskData, trail: updatedTrail, status: newStatus}}));
                 playMelody('taskFileUpload');
             } catch(e) {} finally { setTrailFileUploading(false); if(trailFileInputRef.current) trailFileInputRef.current.value = ""; }
@@ -1268,10 +1291,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     };
 
     const setReminder = async () => {
-        if (!selectedMessage || !reminderDateTime || !orgId) return;
+        if (!selectedMessage || !reminderDateTime || !ensureOrgContext('set reminders')) return;
         try {
-            await addDoc(collection(db, "organizations", orgId, "reminders"), { userId: user.uid, userEmail: user.email, messageId: selectedMessage.id, messageText: stripHtml(selectedMessage.text) || selectedMessage.fileName || "File Attachment", remindAt: reminderDateTime, isTriggered: false });
-            await updateDoc(doc(db, "organizations", orgId, "messages", selectedMessage.id), { hasReminder: true });
+            await addDoc(orgCollectionRef("reminders"), { userId: user.uid, userEmail: user.email, messageId: selectedMessage.id, messageText: stripHtml(selectedMessage.text) || selectedMessage.fileName || "File Attachment", remindAt: reminderDateTime, isTriggered: false });
+            await updateDoc(orgDocRef("messages", selectedMessage.id), { hasReminder: true });
             setActiveModal(null); setReminderDateTime("");
             addToast("Reminder set successfully!", "success");
         } catch (error) { alert("Failed to save reminder."); }
@@ -1284,24 +1307,25 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     };
 
     const handleAddInlineComment = async (targetMsg, commentText) => {
-        if (!targetMsg || !commentText.trim()) return;
+        if (!targetMsg || !commentText.trim() || !ensureOrgContext('add task comments')) return;
         try {
             const now = new Date();
             const updatedTrail = [...targetMsg.taskData.trail, { action: "Update Added", by: user.email, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: commentText }];
             const newStatus = targetMsg.taskData.status === 'Pending' ? 'In Progress' : targetMsg.taskData.status;
-            await updateDoc(doc(db, "organizations", orgId, "messages", targetMsg.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
+            await updateDoc(orgDocRef("messages", targetMsg.id), { "taskData.trail": updatedTrail, "taskData.status": newStatus });
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
             playMelody('taskUpdated');
         } catch (error) {}
     };
 
     const handleReactionIntercept = async (msgId, tagLabel) => {
+        if (!ensureOrgContext('react to messages')) return;
         await reactToMessageDB(msgId, tagLabel);
         const msg = messages.find(m => m.id === msgId);
         if (msg && msg.senderEmail !== user.email) {
             const sender = dbUsers.find(u => u.email === msg.senderEmail);
             if (sender) {
-                addDoc(collection(db, "organizations", orgId, "notifications"), {
+                addDoc(orgCollectionRef("notifications"), {
                     userId: sender.uid, type: "reaction",
                     text: `${currentUserData?.name || user.email.split('@')[0]} affixed ${tagLabel} to your message.`,
                     messageId: msgId, groupId: activeGroup?.id || '', timestamp: serverTimestamp(), isRead: false
@@ -1311,12 +1335,13 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     };
 
     const handleWipeAllTasks = async () => {
+        if (!ensureOrgContext('wipe tasks')) return;
         if (!window.confirm("🚨 WARNING: This will permanently delete ALL tasks across all groups. Proceed?")) return;
         try {
-            const q = query(collection(db, "organizations", orgId, "messages"), where("isTask", "==", true));
+            const q = query(orgCollectionRef("messages"), where("isTask", "==", true));
             const snapshot = await getDocs(q);
             if (snapshot.empty) return alert("No tasks found! You are already clean.");
-            await Promise.all(snapshot.docs.map(document => deleteDoc(doc(db, "organizations", orgId, "messages", document.id))));
+            await Promise.all(snapshot.docs.map(document => deleteDoc(orgDocRef("messages", document.id))));
             alert(`🧹 Successfully wiped ${snapshot.docs.length} tasks! Clean slate ready.`);
         } catch (error) { alert("Failed to clean database."); }
     };
@@ -1340,7 +1365,8 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         e.preventDefault();
         try {
             const finalMembers = [...new Set([...groupForm.members, ...(activeGroup?.admins || [])])];
-            await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), { members: finalMembers });
+            if (!ensureOrgContext('update group members')) return;
+            await updateDoc(orgDocRef("groups", activeGroup.id), { members: finalMembers });
             setActiveModal(null);
             setActiveGroup(prev => ({...prev, members: finalMembers}));
         } catch (error) {
@@ -1354,14 +1380,15 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         try {
             const finalMembers = [...new Set([...groupForm.members, user.email])];
             const groupData = { name: groupForm.name, members: finalMembers, profilePicUrl: groupForm.profilePicUrl };
-            if (editingGroup) await updateDoc(doc(db, "organizations", orgId, "groups", editingGroup.id), groupData);
-            else await addDoc(collection(db, "organizations", orgId, "groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
+            if (!ensureOrgContext('save groups')) return;
+            if (editingGroup) await updateDoc(orgDocRef("groups", editingGroup.id), groupData);
+            else await addDoc(orgCollectionRef("groups"), { ...groupData, admins: [user.email], createdBy: user.email, createdAt: serverTimestamp(), isArchived: false });
             setActiveModal(null); setEditingGroup(null); setGroupForm({name: "", members: [], admins: [], profilePicUrl: null});
         } catch (error) { alert("Failed to save department."); }
     };
 
     const onGroupUpdate = useCallback(async (updates) => {
-        if (!activeGroup || !activeGroup.id) return;
+        if (!activeGroup || !activeGroup.id || !ensureOrgContext('update groups')) return;
         if (updates.profilePicFile) {
             const file = updates.profilePicFile;
             const uniqueFileName = `group_${Date.now()}.webp`;
@@ -1370,7 +1397,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             const uploadTask = uploadBytesResumable(ref(storage, `group_avatars/${uniqueFileName}`), groupFile);
             uploadTask.on('state_changed', null, null, async () => {
                 const url = await getDownloadURL(uploadTask.snapshot.ref);
-                await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), { profilePicUrl: url });
+                await updateDoc(orgDocRef("groups", activeGroup.id), { profilePicUrl: url });
                 setActiveGroup(prev => ({ ...prev, profilePicUrl: url }));
                 setActiveModal(null);
             });
@@ -1381,13 +1408,13 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         if (updates.members) { cleanUpdates.members = updates.members; cleanUpdates.admins = updates.admins || activeGroup.admins.filter(a => updates.members.includes(a)); }
         if (Object.keys(cleanUpdates).length === 0) return;
         setActiveGroup(prev => ({ ...prev, ...cleanUpdates }));
-        await updateDoc(doc(db, "organizations", orgId, "groups", activeGroup.id), cleanUpdates);
+        await updateDoc(orgDocRef("groups", activeGroup.id), cleanUpdates);
         setActiveModal(null);
-    }, [activeGroup, orgId, storage, db, setActiveModal]);
+    }, [activeGroup, orgId, storage, db, setActiveModal, ensureOrgContext, orgDocRef]);
 
     const handleProfileSubmit = async (e) => {
         e.preventDefault();
-        const file = profilePicInputRef.current?.files[0];
+        const file = profilePhotoDraft?.file || profilePicInputRef.current?.files[0];
         try {
             let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily, themeFont: profileForm.themeFont || 'Inter', displayMode: profileForm.displayMode || 'light', fontScale: profileForm.fontScale || 'normal' };
             if (file) {
@@ -1407,7 +1434,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             }
             await updateDoc(doc(db, "users", user.uid), updateData);
             setProfileForm(prev => ({ ...prev, name: updateData.name, themeFont: updateData.themeFont, displayMode: updateData.displayMode, fontScale: updateData.fontScale }));
-            setActiveModal(null); setProfileUploadProgress(0);
+            setActiveModal(null); setProfilePhotoDraft(null); setProfileUploadProgress(0);
         } catch (error) { alert("Profile update failed."); setProfileUploadProgress(0); }
     };
 
@@ -1434,6 +1461,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         featureFlags,
         setReplyingTo, chatInputRef, currentUserData, profileForm,
         setProfileForm, profilePicInputRef, profileUploadProgress,
+        profilePhotoDraft, setProfilePhotoDraft,
         setProfileUploadProgress, handleProfileSubmit, toolPreferences,
         setToolPreferences, user, groupForm, setGroupForm, editingGroup,
         handleGroupSubmit, groupPicInputRef, handleGroupPicUpload,
@@ -1489,7 +1517,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
 
             {globalAnnouncement?.isActive && globalAnnouncement.id !== dismissedBroadcastId && (
-                <div className={`flex items-center justify-between px-4 py-3 shrink-0 shadow-md relative z-[100] ${
+                <div className={`flex items-center justify-between px-4 py-3 shrink-0 shadow-md relative z-[var(--z-header)] ${
                     globalAnnouncement.type === 'emergency' ? 'bg-rose-600 text-white border-b-4 border-rose-800' :
                     globalAnnouncement.type === 'warning' ? 'bg-amber-500 text-white border-b-4 border-amber-600' :
                     'bg-indigo-600 text-white border-b-4 border-indigo-800'
@@ -1513,7 +1541,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
             <div className="flex-1 flex overflow-hidden relative">
                 {activeReminderAlert && (
-                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm rounded-3xl border border-indigo-200 bg-white text-slate-800 shadow-2xl z-[100] p-6 animate-in slide-in-from-top-10 duration-700 dark:border-indigo-500/30 dark:bg-slate-900 dark:text-slate-100">
+                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm rounded-3xl border border-indigo-200 bg-white text-slate-800 shadow-2xl z-[var(--z-header)] p-6 animate-in slide-in-from-top-10 duration-700 dark:border-indigo-500/30 dark:bg-slate-900 dark:text-slate-100">
                         <div className="flex items-center gap-4 mb-4">
                             <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-inner relative">
                                 <span className="absolute inset-0 rounded-full bg-indigo-400 opacity-20 animate-ping"></span>
@@ -1632,7 +1660,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                         </div>
 
                                         {isSearchFocused && globalSearchResults && (
-                                            <div className="absolute top-[110%] left-0 right-0 md:right-auto w-full md:w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                            <div className="absolute top-[110%] left-0 right-0 md:right-auto w-full md:w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[var(--z-header)] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
                                                 <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
                                                     <span>Messages & Tasks Search</span>
                                                     <span>{globalSearchResults.messages.length} Found</span>
@@ -1674,7 +1702,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                     </div>
 
                                     <div className="flex items-center gap-1 shrink-0 relative">
-                                      <div className="relative"><button onClick={() => setShowFilterMenu(v => !v)} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-[11px] font-black" title="Filter"><i className="fa-solid fa-filter mr-2"></i>Filter <i className="fa-solid fa-chevron-down ml-2 text-[9px]"></i></button>{showFilterMenu && (<div className="absolute top-full right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[140] p-2">{universalTaskFilters.map((f) => (<button key={f.key} onClick={() => { setChatFilter(f.key); setShowFilterMenu(false); if (f.key === 'date-range' && !chatDateFilter) setChatDateFilter(new Date().toISOString().split('T')[0]); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold ${chatFilter === f.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><i className={`fa-solid ${f.icon} w-4 mr-2`}></i>{f.label}</button>))}{chatFilter === 'date-range' && <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="modern-date-input mt-2" />}</div>)}</div>
+                                      <div className="relative"><button onClick={() => setShowFilterMenu(v => !v)} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-[11px] font-black" title="Filter"><i className="fa-solid fa-filter mr-2"></i>Filter <i className="fa-solid fa-chevron-down ml-2 text-[9px]"></i></button>{showFilterMenu && (<div className="absolute top-full right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[var(--z-dropdown)] p-2">{universalTaskFilters.map((f) => (<button key={f.key} onClick={() => { setChatFilter(f.key); setShowFilterMenu(false); if (f.key === 'date-range' && !chatDateFilter) setChatDateFilter(new Date().toISOString().split('T')[0]); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold ${chatFilter === f.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><i className={`fa-solid ${f.icon} w-4 mr-2`}></i>{f.label}</button>))}{chatFilter === 'date-range' && <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="modern-date-input mt-2" />}</div>)}</div>
                                       <button onClick={() => setViewMode('advanced')} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-black" title="Advanced Search"><i className="fa-solid fa-magnifying-glass-chart md:mr-2"></i><span className="hidden md:inline">Advanced Search</span></button>
 
                                       <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
@@ -1688,10 +1716,10 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                         </button>
 
                                         {showNotifications && (
-                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200 dark:border-slate-700">
+                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl z-[var(--z-dropdown)] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200 dark:border-slate-700">
                                             <div className="p-3 bg-white dark:bg-slate-900 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
                                               <span className="text-[13px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Alerts</span>
-                                              <button onClick={() => genericNotifications.map(n => deleteDoc(doc(db, "organizations", orgId, "notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
+                                              <button onClick={() => genericNotifications.map(n => ensureOrgContext('clear notifications') && deleteDoc(orgDocRef("notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
                                             </div>
                                             <div className="max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
                                               {totalNotifications === 0 ? <div className="p-5 text-center text-[13px] font-medium text-slate-400">No new activity</div> : (
@@ -1700,14 +1728,14 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                                     <div key={task.id} onClick={() => { setShowNotifications(false); navigateToMessageFromNotification(task.id, task.groupId); }} className="p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-[12px] text-slate-700 dark:text-slate-200">
                                                       <div className="font-black text-rose-600">Pending Task</div>
                                                       <div className="line-clamp-2">{stripHtml(task.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(task.timestamp)}</div>
-                                                      <button onClick={(e)=>{ e.stopPropagation(); updateDoc(doc(db, "organizations", orgId, "messages", task.id), { 'taskData.dismissedBy': [...(task.taskData?.dismissedBy || []), user.uid] }); }} className="mt-1 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
+                                                      <button onClick={(e)=>{ e.stopPropagation(); ensureOrgContext('dismiss tasks') && updateDoc(orgDocRef("messages", task.id), { 'taskData.dismissedBy': [...(task.taskData?.dismissedBy || []), user.uid] }); }} className="mt-1 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                     </div>
                                                   ))}
                                                   {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => (
                                                     <div key={n.id} onClick={() => { setShowNotifications(false); if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-[12px] text-slate-700 dark:text-slate-200 relative pr-12">
-                                                      <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, "organizations", orgId, "notifications", n.id)); }} className="absolute top-2 right-3 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
+                                                      <button onClick={(e) => { e.stopPropagation(); ensureOrgContext('clear notifications') && deleteDoc(orgDocRef("notifications", n.id)); }} className="absolute top-2 right-3 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                       <div className="font-black text-indigo-600">{n.type === 'reply' ? 'Reply' : n.type === 'message' ? 'Message' : n.type === 'mention' ? 'Mention' : n.type === 'reminder' ? 'Reminder' : n.type === 'task' ? 'Task' : 'Alert'}</div>
-                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; updateDoc(doc(db, "organizations", orgId, "notifications", n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 bg-white dark:bg-slate-950 dark:text-slate-100"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
+                                                      <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; ensureOrgContext('snooze notifications') && updateDoc(orgDocRef("notifications", n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 bg-white dark:bg-slate-950 dark:text-slate-100"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
                                                     </div>
                                                   ))}
                                                 </>
@@ -1738,11 +1766,11 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                   )}
                                 </div>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="fixed bottom-24 right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Bottom">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="fixed bottom-[calc(var(--safe-area-inset-bottom)+7rem)] right-4 md:right-6 z-[var(--z-floating-action)] bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Bottom">
                                     <i className="fa-solid fa-arrow-down"></i>
                                 </button>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-36 right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Top">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-[calc(var(--safe-area-inset-bottom)+10.25rem)] right-4 md:right-6 z-[var(--z-floating-action)] bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Top">
                                     <i className="fa-solid fa-arrow-up"></i>
                                 </button>
 
@@ -1762,6 +1790,9 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                     setActiveTaskSidebar={setActiveTaskSidebar}
                                     sendMessageToDB={sendMessageToDB}
                                     featureFlags={featureFlags}
+                                    isLoadingOlderMessages={isLoadingOlderMessages}
+                                    hasOlderMessages={hasOlderMessages}
+                                    loadOlderMessages={loadOlderMessages}
                                 />
 
                                 <InputArea

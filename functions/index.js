@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onObjectDeleted, onObjectFinalized } = require('firebase-functions/v2/storage');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 
@@ -18,6 +19,7 @@ const TENANT_COLLECTIONS = [
 const DEFAULT_APP_VERSION = '1.0.0';
 const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const SUPPORT_GROUP_ID = 'support';
+const TENANT_UPLOAD_PREFIX = /^organizations\/([^/]+)\/uploads\//;
 const DEFAULT_PACKAGES = {
   starter: {
     name: 'Starter',
@@ -259,6 +261,180 @@ const logAuditEvent = async (type, adminId, target, details = {}) => db.collecti
   timestamp: admin.firestore.FieldValue.serverTimestamp(),
 });
 
+const getOrgIdFromTenantUploadPath = (filePath = '') => {
+  const match = String(filePath || '').match(TENANT_UPLOAD_PREFIX);
+  return match?.[1] || null;
+};
+
+const updateTenantUploadUsage = async (object, direction) => {
+  const filePath = object?.name || '';
+  const orgId = getOrgIdFromTenantUploadPath(filePath);
+  const size = Number(object?.size || 0);
+  if (!orgId || !Number.isFinite(size) || size <= 0) return;
+
+  const deltaBytes = direction === 'delete' ? -size : size;
+  const update = {
+    storageUsedBytes: admin.firestore.FieldValue.increment(deltaBytes),
+    storageLastUpdatedAt: serverTimestamp(),
+  };
+  const orgRef = db.collection('organizations').doc(orgId);
+  await orgRef.set(update, { merge: true });
+  await orgRef.collection('org_details').doc('details').set(update, { merge: true });
+};
+
+const uniqueStrings = (values = []) => Array.from(new Set((Array.isArray(values) ? values : [])
+  .map((value) => String(value || '').trim())
+  .filter(Boolean)));
+
+const scheduledSourceToOrgId = (scheduleRef) => {
+  const segments = scheduleRef.path.split('/');
+  return segments[0] === 'organizations' && segments[2] === 'scheduled_messages' ? segments[1] : null;
+};
+
+const formatIstMessageParts = (date = new Date()) => ({
+  dateString: new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date),
+  time: new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date),
+});
+
+const normalizeTaskDisplayFields = (taskData = {}, text = '') => ({
+  taskTitle: taskData.title || taskData.taskTitle || text || undefined,
+  taskStatus: taskData.status || undefined,
+  taskPriority: taskData.priority || undefined,
+  taskDeadline: taskData.deadline || undefined,
+  taskAssigneeEmails: uniqueStrings(taskData.assignees || []),
+  taskAssigneeNames: Array.isArray(taskData.assigneeNames) ? uniqueStrings(taskData.assigneeNames) : undefined,
+  taskAssigneeCount: Array.isArray(taskData.assignees) ? taskData.assignees.length : 0,
+  taskMasterReviewerEmail: taskData.masterReviewerEmail || undefined,
+});
+
+const buildScheduledMessagePayload = (scheduleData = {}, deliveredAt = new Date()) => {
+  const senderEmail = scheduleData.senderEmail || '';
+  if (!scheduleData.senderUid || !senderEmail || !scheduleData.groupId) {
+    throw new Error('Scheduled message is missing senderUid, senderEmail, or groupId.');
+  }
+  const allowedUsers = uniqueStrings(scheduleData.allowedUsers || []);
+  const isPrivateForward = scheduleData.isPrivateForward === true || allowedUsers.length > 0;
+  const commonPayload = {
+    text: scheduleData.text || '',
+    senderUid: scheduleData.senderUid || '',
+    senderEmail,
+    senderName: scheduleData.senderName || (senderEmail ? senderEmail.split('@')[0] : undefined),
+    senderAvatar: scheduleData.senderAvatar || null,
+    groupId: scheduleData.groupId || '',
+    groupName: scheduleData.groupName || 'Scheduled',
+    groupAvatar: scheduleData.groupAvatar || null,
+    timestamp: serverTimestamp(),
+    ...formatIstMessageParts(deliveredAt),
+    isTask: scheduleData.isTask === true,
+    allowedUsers: isPrivateForward ? allowedUsers : [],
+    isPrivateForward,
+    seenBy: uniqueStrings(scheduleData.seenBy || (senderEmail ? [senderEmail] : [])),
+    reactions: scheduleData.reactions && typeof scheduleData.reactions === 'object' && !Array.isArray(scheduleData.reactions) ? scheduleData.reactions : {},
+    deliveredTo: uniqueStrings(scheduleData.deliveredTo || (senderEmail ? [senderEmail] : [])),
+    scheduledMessageId: scheduleData.id || null,
+  };
+
+  if (scheduleData.isTask === true) {
+    Object.assign(commonPayload, normalizeTaskDisplayFields(scheduleData.taskData || {}, scheduleData.text || ''));
+    commonPayload.taskData = scheduleData.taskData || {};
+    if (scheduleData.taskDeadline) commonPayload.taskDeadline = scheduleData.taskDeadline;
+    if (scheduleData.taskAssignees) commonPayload.taskAssignees = scheduleData.taskAssignees;
+  }
+
+  return Object.fromEntries(Object.entries(commonPayload).filter(([, value]) => value !== undefined));
+};
+
+const lockScheduledMessage = async (scheduleRef, invocationId, nowTimestamp) => db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(scheduleRef);
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  const leaseExpiresAt = data.processingLeaseExpiresAt?.toMillis?.() || 0;
+  const canProcess = data.status === 'pending' || (data.status === 'processing' && leaseExpiresAt <= nowTimestamp.toMillis());
+  if (!canProcess) return null;
+
+  transaction.update(scheduleRef, {
+    status: 'processing',
+    processingStartedAt: nowTimestamp,
+    processingLeaseExpiresAt: admin.firestore.Timestamp.fromMillis(nowTimestamp.toMillis() + 5 * 60 * 1000),
+    processedBy: invocationId,
+    retryCount: admin.firestore.FieldValue.increment(data.status === 'processing' ? 1 : 0),
+  });
+  return { id: snap.id, ref: scheduleRef, data: { ...data, id: snap.id } };
+});
+
+const markScheduledMessageFailed = async (scheduleRef, invocationId, error) => {
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(scheduleRef);
+    if (!snap.exists) return;
+    const data = snap.data() || {};
+    if (data.status !== 'processing' || data.processedBy !== invocationId) return;
+    transaction.update(scheduleRef, {
+      status: 'failed',
+      failedAt: serverTimestamp(),
+      lastError: String(error?.message || error || 'Unknown scheduled delivery error').slice(0, 1000),
+      processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
+    });
+  });
+};
+
+const deliverScheduledMessage = async (lockedSchedule, invocationId) => {
+  const orgId = scheduledSourceToOrgId(lockedSchedule.ref);
+  if (!orgId) throw new Error(`Scheduled message ${lockedSchedule.ref.path} is not under organizations/{orgId}.`);
+
+  const messageRef = db.collection('organizations').doc(orgId).collection('messages').doc(`scheduled_${lockedSchedule.id}`);
+  const deliveredAt = new Date();
+  const payload = buildScheduledMessagePayload(lockedSchedule.data, deliveredAt);
+
+  await db.runTransaction(async (transaction) => {
+    const [scheduleSnap, messageSnap] = await Promise.all([
+      transaction.get(lockedSchedule.ref),
+      transaction.get(messageRef),
+    ]);
+    if (!scheduleSnap.exists) return;
+    const scheduleData = scheduleSnap.data() || {};
+    if (scheduleData.status !== 'processing' || scheduleData.processedBy !== invocationId) return;
+
+    if (!messageSnap.exists) {
+      transaction.set(messageRef, payload);
+    }
+    transaction.update(lockedSchedule.ref, {
+      status: 'sent',
+      sentAt: serverTimestamp(),
+      messageId: messageRef.id,
+      messagePath: messageRef.path,
+      processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
+      lastError: admin.firestore.FieldValue.delete(),
+    });
+  });
+};
+
+const fetchDueScheduledMessages = async (nowTimestamp) => {
+  const pendingSnap = await db.collectionGroup('scheduled_messages')
+    .where('status', '==', 'pending')
+    .where('scheduledAt', '<=', nowTimestamp)
+    .limit(100)
+    .get();
+  const staleProcessingSnap = await db.collectionGroup('scheduled_messages')
+    .where('status', '==', 'processing')
+    .where('processingLeaseExpiresAt', '<=', nowTimestamp)
+    .limit(100)
+    .get();
+
+  const byPath = new Map();
+  pendingSnap.docs.concat(staleProcessingSnap.docs).forEach((docSnap) => byPath.set(docSnap.ref.path, docSnap.ref));
+  return Array.from(byPath.values());
+};
+
 const getMergedPermissions = async (uid) => {
   const userSnap = await db.collection('users').doc(uid).get();
   const user = userSnap.data() || {};
@@ -374,6 +550,30 @@ const setOnboardingClaims = async (uid, profile) => {
   await admin.auth().setCustomUserClaims(uid, customClaims);
   return customClaims;
 };
+
+exports.trackTenantUploadCreated = onObjectFinalized(async (event) => {
+  try {
+    await updateTenantUploadUsage(event.data, 'create');
+  } catch (error) {
+    logger.error('Failed to increment tenant upload usage.', {
+      path: event.data?.name,
+      size: event.data?.size,
+      error: error?.message || error,
+    });
+  }
+});
+
+exports.trackTenantUploadDeleted = onObjectDeleted(async (event) => {
+  try {
+    await updateTenantUploadUsage(event.data, 'delete');
+  } catch (error) {
+    logger.error('Failed to decrement tenant upload usage.', {
+      path: event.data?.name,
+      size: event.data?.size,
+      error: error?.message || error,
+    });
+  }
+});
 
 exports.resolveAuthOnboarding = onCall(async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -577,6 +777,41 @@ exports.forceLogoutAllUsers = onCall(async (request) => {
   await batch.commit();
   await logAuditEvent('FORCE_LOGOUT_ALL', request.auth.uid, 'all-sessions', { count: uids.length, affectedUsers: uids });
   return { ok: true, count: uids.length };
+});
+
+exports.processScheduledMessages = onSchedule({
+  schedule: 'every 1 minutes',
+  timeZone: 'Asia/Kolkata',
+}, async (event) => {
+  const nowTimestamp = admin.firestore.Timestamp.now();
+  const invocationId = event.id || `processScheduledMessages_${Date.now()}`;
+  const scheduleRefs = await fetchDueScheduledMessages(nowTimestamp);
+  let sent = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const scheduleRef of scheduleRefs) {
+    const lockedSchedule = await lockScheduledMessage(scheduleRef, invocationId, nowTimestamp);
+    if (!lockedSchedule) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      await deliverScheduledMessage(lockedSchedule, invocationId);
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      logger.error('Failed to deliver scheduled message.', {
+        path: scheduleRef.path,
+        error: error?.message || error,
+      });
+      await markScheduledMessageFailed(scheduleRef, invocationId, error);
+    }
+  }
+
+  logger.info('Processed scheduled messages.', { sent, failed, skipped, scanned: scheduleRefs.length });
+  return { sent, failed, skipped, scanned: scheduleRefs.length };
 });
 
 exports.retentionCleanup = onSchedule('every day 02:00', async () => {
@@ -1104,5 +1339,126 @@ exports.toggleUserArchiveStatus = onCall(async (request) => {
   } catch (error) {
     logger.error('Failed to toggle user archive status', { uid, error });
     throw new HttpsError('internal', error.message || 'Failed to update user status.');
+  }
+});
+
+const getDayKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
+const PDF_DAILY_LIMIT = 5;
+
+const assertSecurePdfAccess = async (request, orgId, messageId) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  if (!orgId || !messageId) throw new HttpsError('invalid-argument', 'orgId and messageId are required.');
+  const userSnap = await db.collection('users').doc(request.auth.uid).get();
+  const user = userSnap.data() || {};
+  const email = normalizeEmail(request.auth.token?.email || user.email);
+  const messageRef = db.collection('organizations').doc(orgId).collection('messages').doc(messageId);
+  const messageSnap = await messageRef.get();
+  if (!messageSnap.exists) throw new HttpsError('not-found', 'Secure PDF message was not found.');
+  const message = messageSnap.data() || {};
+  const allowed = uniqueStrings(message.secureRecipients || []).map(normalizeEmail);
+  const isSender = message.senderUid === request.auth.uid || normalizeEmail(message.senderEmail) === email;
+  if (message.secureDownload !== true) throw new HttpsError('failed-precondition', 'This file is not a secure PDF.');
+  if (!isSender && !allowed.includes(email)) throw new HttpsError('permission-denied', 'You are not authorized to download this secure PDF.');
+  return { user, email, messageRef, message };
+};
+
+const incrementDailyCounter = async (orgId, collectionName, uid, dayKey, limit) => db.runTransaction(async (transaction) => {
+  const ref = db.collection('organizations').doc(orgId).collection(collectionName).doc(`${dayKey}_${uid}`);
+  const snap = await transaction.get(ref);
+  const count = snap.exists ? Number(snap.data().count || 0) : 0;
+  if (count >= limit) throw new HttpsError('resource-exhausted', `Daily limit of ${limit} reached.`);
+  transaction.set(ref, { uid, dayKey, count: count + 1, updatedAt: serverTimestamp() }, { merge: true });
+  return count + 1;
+});
+
+exports.requestPdfOtp = onCall(async (request) => {
+  const { orgId, messageId } = request.data || {};
+  const { email, message } = await assertSecurePdfAccess(request, orgId, messageId);
+  const dayKey = getDayKey();
+  await incrementDailyCounter(orgId, 'secure_pdf_otp_daily', request.auth.uid, dayKey, PDF_DAILY_LIMIT);
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000);
+  await db.collection('organizations').doc(orgId).collection('secure_pdf_otps').doc(`${request.auth.uid}_${messageId}`).set({
+    uid: request.auth.uid,
+    email,
+    messageId,
+    otp,
+    attempts: 0,
+    expiresAt,
+    createdAt: serverTimestamp(),
+  });
+  await db.collection('mail').add({
+    to: [email],
+    message: {
+      subject: `Talk & Task secure PDF OTP: ${message.fileName || 'Secure PDF'}`,
+      text: `Your OTP is ${otp}. It expires in 5 minutes. File: ${message.fileName || 'Secure PDF'}.`,
+      html: `<p>Your secure PDF OTP is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p><p>File: ${message.fileName || 'Secure PDF'}</p>`,
+    },
+    createdAt: serverTimestamp(),
+  });
+  return { success: true };
+});
+
+exports.verifyPdfOtpAndDownload = onCall(async (request) => {
+  const { orgId, messageId, otp } = request.data || {};
+  const { email, message } = await assertSecurePdfAccess(request, orgId, messageId);
+  const otpRef = db.collection('organizations').doc(orgId).collection('secure_pdf_otps').doc(`${request.auth.uid}_${messageId}`);
+  const otpSnap = await otpRef.get();
+  if (!otpSnap.exists) throw new HttpsError('not-found', 'Request a new OTP.');
+  const otpData = otpSnap.data() || {};
+  if ((otpData.expiresAt?.toMillis?.() || 0) < Date.now()) {
+    await otpRef.delete();
+    throw new HttpsError('deadline-exceeded', 'OTP expired. Request a new OTP.');
+  }
+  if (Number(otpData.attempts || 0) >= 3) throw new HttpsError('resource-exhausted', 'Too many OTP attempts.');
+  if (String(otpData.otp) !== String(otp || '').trim()) {
+    await otpRef.set({ attempts: admin.firestore.FieldValue.increment(1), lastFailedAt: serverTimestamp() }, { merge: true });
+    throw new HttpsError('permission-denied', 'Invalid OTP.');
+  }
+  const dayKey = getDayKey();
+  const downloadRef = db.collection('organizations').doc(orgId).collection('userDownloads').doc(`${request.auth.uid}_${messageId}`);
+  if ((await downloadRef.get()).exists) throw new HttpsError('already-exists', 'This secure PDF was already downloaded by you.');
+  await incrementDailyCounter(orgId, 'secure_pdf_download_daily', request.auth.uid, dayKey, PDF_DAILY_LIMIT);
+  await otpRef.delete();
+  await downloadRef.set({ uid: request.auth.uid, email, messageId, downloadedAt: serverTimestamp(), fileName: message.fileName || null });
+  await db.collection('organizations').doc(orgId).collection('downloadSummaries').doc(message.senderUid || 'system').collection('pending').add({
+    messageId,
+    fileName: message.fileName || 'Secure PDF',
+    downloadedBy: email,
+    downloadedAt: serverTimestamp(),
+    senderUid: message.senderUid || null,
+  });
+  const bucket = admin.storage().bucket();
+  const [downloadUrl] = await bucket.file(message.storagePath).getSignedUrl({ action: 'read', expires: Date.now() + 2 * 60 * 1000 });
+  return { success: true, downloadUrl, stamped: false, note: 'Secure audit recorded; signed one-time URL issued.' };
+});
+
+exports.sendSecurePdfDownloadSummaries = onSchedule({ schedule: 'every day 15:00', timeZone: 'Asia/Kolkata' }, async () => {
+  const orgs = await db.collection('organizations').get();
+  for (const orgSnap of orgs.docs) {
+    const summaryUsers = await orgSnap.ref.collection('downloadSummaries').listDocuments();
+    for (const senderRef of summaryUsers) {
+      const pendingSnap = await senderRef.collection('pending').limit(50).get();
+      if (pendingSnap.empty) continue;
+      const lines = pendingSnap.docs.map((docSnap) => {
+        const data = docSnap.data() || {};
+        return `Your file ${data.fileName} was downloaded by ${data.downloadedBy}.`;
+      });
+      await orgSnap.ref.collection('messages').add({
+        text: lines.join('\n'),
+        senderUid: 'system',
+        senderEmail: 'system@talk-task.local',
+        senderName: 'Talk & Task Secure PDF Bot',
+        groupId: 'secure-pdf-summary',
+        groupName: 'Secure PDF Summary',
+        timestamp: serverTimestamp(),
+        isTask: false,
+        allowedUsers: [],
+        isPrivateForward: false,
+        seenBy: [],
+        reactions: {},
+      });
+      await Promise.all(pendingSnap.docs.map((docSnap) => docSnap.ref.delete()));
+    }
   }
 });
