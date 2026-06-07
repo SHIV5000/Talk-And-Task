@@ -1833,3 +1833,35 @@ exports.sendSecurePdfDownloadSummaries = onSchedule({ schedule: 'every day 15:00
     }
   }
 });
+
+exports.deleteExpiredAuditLogs = onSchedule({ schedule: '0 3 1 * *', timeZone: 'Asia/Kolkata', timeoutSeconds: 300, maxInstances: 1 }, async () => {
+  const threshold = admin.firestore.Timestamp.fromMillis(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  let deleted = 0;
+
+  const deleteQueryPage = async (queryRef) => {
+    const snap = await queryRef.where('timestamp', '<', threshold).limit(450).get();
+    if (snap.empty) return 0;
+    const batch = db.batch();
+    snap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+    await batch.commit();
+    return snap.size;
+  };
+
+  let rootDeleted = 0;
+  do {
+    rootDeleted = await deleteQueryPage(db.collection('audit_logs'));
+    deleted += rootDeleted;
+  } while (rootDeleted > 0);
+
+  const orgs = await db.collection('organizations').select().get();
+  for (const orgSnap of orgs.docs) {
+    let orgDeleted = 0;
+    do {
+      orgDeleted = await deleteQueryPage(orgSnap.ref.collection('audit_logs'));
+      deleted += orgDeleted;
+    } while (orgDeleted > 0);
+  }
+
+  logger.info('Expired audit log TTL cleanup completed.', { deleted, threshold: threshold.toDate().toISOString() });
+  return { deleted };
+});

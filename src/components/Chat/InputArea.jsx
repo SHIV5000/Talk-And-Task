@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../firebase.js';
-import { doc, deleteDoc } from 'firebase/firestore';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import { EMOJI_LIST, lockExtension } from '../../utils/helpers.js';
 
 export default function InputArea({
   inputText, setInputText, isOnline, isUploading, activeGroup, replyingTo, setReplyingTo,
-  handleSendOfflineAware, handleTypingEvent, handlePaste, chatInputRef, fileInputRef,
+  handleSendOfflineAware, handleTypingEvent, clearTypingEvent, handlePaste, chatInputRef, fileInputRef,
   handleFileUpload, emojiPickerOpen, setEmojiPickerOpen, emojiPickerRef,
   pendingFiles, setPendingFiles, showFileRename, setShowFileRename,
   uploadFileDirectly, setActiveModal, setPendingScheduledText,
@@ -29,9 +27,7 @@ export default function InputArea({
   const mentionQuery = lastWord.startsWith('@') ? lastWord.substring(1).toLowerCase() : null;
 
   const clearTypingIndicator = () => {
-    if (orgId && activeGroup?.id && user?.uid) {
-      deleteDoc(doc(db, 'organizations', orgId, 'typing', `${activeGroup.id}_${user.uid}`)).catch(() => {});
-    }
+    clearTypingEvent?.();
   };
 
   const handleInput = ({ notifyTyping = true } = {}) => {
@@ -299,7 +295,7 @@ export default function InputArea({
             onMouseUp={checkSelection}
             onKeyUp={checkSelection}
             onPaste={handlePaste}
-            onBlur={() => { if (orgId && activeGroup?.id && user?.uid) deleteDoc(doc(db, 'organizations', orgId, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
+            onBlur={clearTypingIndicator}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
             className="custom-wysiwyg bg-transparent min-w-0 flex-1 outline-none text-[15px] text-slate-800 dark:text-slate-100 py-3 px-4 w-full max-w-full resize-y overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words [overflow-wrap:anywhere] [word-break:break-word] [word-wrap:break-word]"

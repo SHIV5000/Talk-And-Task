@@ -69,6 +69,7 @@ const MessageBubble = React.memo(({
   const [inlineReplyText, setInlineReplyText] = useState('');
   const [replyFormatOpen, setReplyFormatOpen] = useState(false);
   const [showAssigneeChips, setShowAssigneeChips] = useState(false);
+  const [reactionSummary, setReactionSummary] = useState(null);
   const inlineReplyRef = useRef(null);
 
   // NEW: per‑assignee review state for modern review panel
@@ -135,6 +136,15 @@ const MessageBubble = React.memo(({
   const hasCompletionEvidence = useMemo(() => (msg.taskData?.trail || []).some(t => t.fileUrl || t.comment || /delegat|update/i.test(t.action || '')), [msg.taskData]);
 
   const hasReactions = Object.keys(msg.reactions || {}).length > 0;
+  const openReactionSummary = (tagLabel, users = []) => {
+    setReactionSummary({
+      tagLabel,
+      users: users.map((email) => ({
+        email,
+        name: dbUsers?.find((dbUser) => dbUser.email === email)?.name || email.split('@')[0],
+      })),
+    });
+  };
 
   const isSecure = msg.secureDownload === true || (msg.fileName || '').startsWith('__SECURE__');
   const displayFileName = isSecure ? msg.fileName.replace('__SECURE__', '') : msg.fileName;
@@ -516,6 +526,23 @@ const MessageBubble = React.memo(({
               <i className="fa-solid fa-ellipsis-vertical text-[14px]"></i>
             </button>
             
+        {reactionSummary && (
+          <div className="absolute bottom-12 left-4 z-[var(--z-popover)] w-64 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-black text-slate-700">{reactionSummary.tagLabel} reactions</div>
+              <button onClick={() => setReactionSummary(null)} className="text-slate-400 hover:text-rose-500"><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {reactionSummary.users.map((item) => (
+                <div key={item.email} className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
+                  {item.name}<div className="text-[10px] font-semibold text-slate-400">{item.email}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 text-[10px] font-bold text-slate-400">Double-click the chip to toggle your reaction.</div>
+          </div>
+        )}
+
             {menuOpen && (
               <div ref={menuRef} className="absolute top-8 right-2 z-[var(--z-popover)] bg-white rounded-xl shadow-lg border-2 border-slate-300 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
                 {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setInlineReplyOpen(true); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply</button>}
@@ -894,7 +921,8 @@ const MessageBubble = React.memo(({
                     const titleText = `${tagLabel} affixed by: ${hoverNames}`;
                     if (isEmoji) {
                         return (
-                            <button key={tagLabel} title={titleText} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
+                            <button key={tagLabel} title={titleText} onClick={(e) => { e.stopPropagation(); openReactionSummary(tagLabel, users); }}
+                                onDoubleClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
                                 className={`flex items-center gap-1 px-2 py-1 rounded-lg border transition-colors shadow-sm ${isMe ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                             >
                                 <span className="text-[13px]" style={{fontFamily: '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif'}}>{tagLabel}</span>
@@ -904,7 +932,8 @@ const MessageBubble = React.memo(({
                     }
                     const tagObj = (customTags || []).find(t => t.label === tagLabel) || { bgClass: 'bg-slate-100', textClass: 'text-slate-600' };
                     return (
-                        <button key={tagLabel} title={titleText} onClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
+                        <button key={tagLabel} title={titleText} onClick={(e) => { e.stopPropagation(); openReactionSummary(tagLabel, users); }}
+                            onDoubleClick={(e) => { e.stopPropagation(); handleReaction(msg.id, tagLabel); }}
                             className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-colors shadow-sm ${isMe ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                         >
                             <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wide ${tagObj.bgClass} ${tagObj.textClass}`}>

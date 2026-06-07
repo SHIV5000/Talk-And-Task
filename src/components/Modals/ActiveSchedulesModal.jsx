@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase.js';
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 export default function ActiveSchedulesModal({ setActiveModal, user, activeReminders }) {
@@ -42,7 +42,7 @@ export default function ActiveSchedulesModal({ setActiveModal, user, activeRemin
   const cancelReminder = async (id) => { if (!orgId) return; try { await deleteDoc(orgDocRef("reminders", id)); } catch(e) {} };
   const cancelScheduled = async (id) => {
       if (!orgId) return;
-      try { await deleteDoc(orgDocRef("scheduled_messages", id)); setScheduledMsgs(prev => prev.filter(m => m.id !== id)); } catch(e) {}
+      try { await updateDoc(orgDocRef("scheduled_messages", id), { status: 'cancelled', cancelledAt: serverTimestamp(), cancelledBy: user.uid }); setScheduledMsgs(prev => prev.filter(m => m.id !== id)); } catch(e) {}
   };
 
   const saveEdit = async (id, isReminder) => {

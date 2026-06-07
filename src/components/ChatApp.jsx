@@ -385,6 +385,7 @@ const RepliesSidebar = ({ activeReplies, setActiveReplies, messages, user, curre
                 setReplyingTo={() => {}}
                 handleSendOfflineAware={handleSend}
                 handleTypingEvent={() => {}}
+                clearTypingEvent={() => {}}
                 handlePaste={handleThreadPaste}
                 chatInputRef={threadInputRef}
                 fileInputRef={threadFileRef}
@@ -462,7 +463,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [activeTaskSidebar, setActiveTaskSidebar] = useState(null);
     const [maxFileSizeMb, setMaxFileSizeMb] = useState(() => Number(localStorage.getItem("maxFileSizeMb") || 5));
-    const [viewMode, setViewMode] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.viewMode || "chat"; } catch { return "chat"; } });
+    const [viewMode, setViewMode] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${orgId || 'no-org'}:${user.uid}`) || "{}")?.viewMode || "chat"; } catch { return "chat"; } });
     const [showNotifications, setShowNotifications] = useState(false);
     const [alertPulseActive, setAlertPulseActive] = useState(false);
     const lastNotificationTotalRef = useRef(0);
@@ -479,9 +480,9 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [dismissedBroadcastId, setDismissedBroadcastId] = useState(null);
 
     const [sidebarSearch, setSidebarSearch] = useState("");
-    const [chatFilter, setChatFilter] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.chatFilter || "all"; } catch { return "all"; } });
+    const [chatFilter, setChatFilter] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${orgId || 'no-org'}:${user.uid}`) || "{}")?.chatFilter || "all"; } catch { return "all"; } });
     const [showFilterMenu, setShowFilterMenu] = useState(false);
-    const [chatDateFilter, setChatDateFilter] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.chatDateFilter || ""; } catch { return ""; } });
+    const [chatDateFilter, setChatDateFilter] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${orgId || 'no-org'}:${user.uid}`) || "{}")?.chatDateFilter || ""; } catch { return ""; } });
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessageId, setEditingMessageId] = useState(null);
@@ -614,13 +615,13 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     useEffect(() => {
         if (!user?.uid) return;
         const state = { activeGroupId: activeGroup?.id || null, viewMode, chatFilter, chatDateFilter, scrollTop: chatContainerRef.current?.scrollTop || 0 };
-        localStorage.setItem(`talkTaskUiState:${user.uid}`, JSON.stringify(state));
-    }, [activeGroup?.id, chatDateFilter, chatFilter, user?.uid, viewMode]);
+        localStorage.setItem(`talkTaskUiState:${orgId || 'no-org'}:${user.uid}`, JSON.stringify(state));
+    }, [activeGroup?.id, chatDateFilter, chatFilter, orgId, user?.uid, viewMode]);
 
     useEffect(() => {
         if (!user?.uid || activeGroup || groups.length === 0) return;
         try {
-            const saved = JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || '{}');
+            const saved = JSON.parse(localStorage.getItem(`talkTaskUiState:${orgId || 'no-org'}:${user.uid}`) || '{}');
             const savedGroup = groups.find((group) => group.id === saved.activeGroupId);
             if (savedGroup) {
                 setActiveGroup(savedGroup);
@@ -648,7 +649,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     const {
         messages, typingStatus, isOnline, offlineDrafts, isLoadingOlderMessages, hasOlderMessages, loadOlderMessages,
-        logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
+        logImmutableAction, triggerTypingEvent, clearTypingEvent, sendMessageToDB, reactToMessageDB,
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     } = useChatEngine({
@@ -976,7 +977,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         setActiveReplies(null);
         setShowRightSidebar(false);
         setTimeout(() => setPendingScrollTarget(msgId), 80);
-    }, [activeGroup, groups, messages]);
+    }, [activeGroup, groups, messages, orgId]);
 
     const handleSendOfflineAware = async (options = {}) => {
         const hasExternalLinks = Array.isArray(options.externalLinks) && options.externalLinks.length > 0;
@@ -1318,6 +1319,18 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             await notifyInvolvedInTask(targetMsg, `${(user.email||"").split('@')[0]} updated a task.`);
             playMelody('taskUpdated');
         } catch (error) {}
+    };
+
+    const openUniversalNotification = async (notification) => {
+        setShowNotifications(false);
+        if (notification.id && ensureOrgContext('open notifications')) {
+            updateDoc(orgDocRef("notifications", notification.id), { isRead: true, openedAt: serverTimestamp() }).catch(() => {});
+        }
+        if (notification.ticketId) {
+            setActiveModal('support_tickets');
+            return;
+        }
+        if (notification.messageId) navigateToMessageFromNotification(notification.messageId, notification.groupId || activeGroup?.id);
     };
 
     const handleReactionIntercept = async (msgId, tagLabel) => {
@@ -1720,7 +1733,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                         {showNotifications && (
                                           <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl z-[var(--z-dropdown)] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200 dark:border-slate-700">
                                             <div className="p-3 bg-white dark:bg-slate-900 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
-                                              <span className="text-[13px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Alerts</span>
+                                              <span className="text-[13px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Universal Alerts</span>
                                               <button onClick={() => genericNotifications.map(n => ensureOrgContext('clear notifications') && deleteDoc(orgDocRef("notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
                                             </div>
                                             <div className="max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
@@ -1734,7 +1747,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                                     </div>
                                                   ))}
                                                   {[...genericNotifications].sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0)).map(n => (
-                                                    <div key={n.id} onClick={() => { setShowNotifications(false); if (n.messageId) navigateToMessageFromNotification(n.messageId, n.groupId || activeGroup?.id); }} className="p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-[12px] text-slate-700 dark:text-slate-200 relative pr-12">
+                                                    <div key={n.id} onClick={() => openUniversalNotification(n)} className="p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-[12px] text-slate-700 dark:text-slate-200 relative pr-12">
                                                       <button onClick={(e) => { e.stopPropagation(); ensureOrgContext('clear notifications') && deleteDoc(orgDocRef("notifications", n.id)); }} className="absolute top-2 right-3 text-[10px] font-bold text-slate-400 hover:text-rose-500">Clear</button>
                                                       <div className="font-black text-indigo-600">{n.type === 'reply' ? 'Reply' : n.type === 'message' ? 'Message' : n.type === 'mention' ? 'Mention' : n.type === 'reminder' ? 'Reminder' : n.type === 'task' ? 'Task' : 'Alert'}</div>
                                                       <div className="line-clamp-2">{stripHtml(n.text)}</div><div className="text-[10px] text-slate-400 font-bold mt-1">{formatNotificationTime(n.timestamp)}</div><select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (!e.target.value) return; ensureOrgContext('snooze notifications') && updateDoc(orgDocRef("notifications", n.id), { snoozeUntil: Timestamp.fromDate(getSnoozeDate(e.target.value)) }); e.target.value=''; }} className="mt-2 text-[10px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 bg-white dark:bg-slate-950 dark:text-slate-100"><option value="">Snooze</option><option value="15m">15 min</option><option value="1h">1 hour</option><option value="5pm">Until 5:00 PM</option></select>
@@ -1800,7 +1813,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                 <InputArea
                                     inputText={inputText} setInputText={setInputText} isOnline={isOnline} isUploading={isUploading} activeGroup={activeGroup}
                                     replyingTo={replyingTo} setReplyingTo={setReplyingTo} handleSendOfflineAware={handleSendOfflineAware}
-                                    handleTypingEvent={handleTypingEvent} handlePaste={handlePaste} chatInputRef={chatInputRef} fileInputRef={fileInputRef}
+                                    handleTypingEvent={handleTypingEvent} clearTypingEvent={clearTypingEvent} handlePaste={handlePaste} chatInputRef={chatInputRef} fileInputRef={fileInputRef}
                                     handleFileUpload={handleFileUpload} emojiPickerOpen={emojiPickerOpen} setEmojiPickerOpen={setEmojiPickerOpen}
                                     emojiPickerRef={emojiPickerRef} pendingFiles={pendingFiles} setPendingFiles={setPendingFiles} showFileRename={showFileRename}
                                     setShowFileRename={setShowFileRename}

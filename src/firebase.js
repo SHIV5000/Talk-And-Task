@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getDatabase, ref as rtdbRef, set as rtdbSet, onValue, onDisconnect, remove as rtdbRemove, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getPerformance, trace } from 'firebase/performance';
 
@@ -18,6 +19,7 @@ const firebaseConfig = {
   authDomain: "niltask.firebaseapp.com",
   projectId: "niltask",
   storageBucket: "niltask.firebasestorage.app",
+  databaseURL: "https://niltask-default-rtdb.firebaseio.com",
   messagingSenderId: "868641827920",
   appId: "1:868641827920:web:70d9db79a361a76468f555"
 };
@@ -58,6 +60,7 @@ const createFirestoreInstance = () => {
 export const auth = getAuth(app);
 export const db = createFirestoreInstance();
 export const storage = getStorage(app);
+export const realtimeDb = getDatabase(app);
 const functions = getFunctions(app);
 export const performance = typeof window !== 'undefined' ? getPerformance(app) : null;
 
@@ -67,5 +70,6 @@ export {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, setDoc, getDocs, where, deleteDoc,
   ref, uploadBytesResumable, getDownloadURL,
-  functions, httpsCallable, trace
+  functions, httpsCallable, trace,
+  rtdbRef, rtdbSet, onValue, onDisconnect, rtdbRemove, rtdbServerTimestamp
 };

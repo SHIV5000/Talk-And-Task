@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { db, storage } from '../firebase.js';
+import { db, storage, realtimeDb, rtdbRef, rtdbSet, onValue, onDisconnect, rtdbRemove, rtdbServerTimestamp } from '../firebase.js';
 import { collection, addDoc, onSnapshot, query, where, orderBy, limit, getDocs, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../utils/imageUtils.js';
@@ -190,14 +190,24 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         const unsubNonTasks = onSnapshot(latestNonTaskQuery, cacheSnapshotChanges);
         const unsubTasks = onSnapshot(latestTaskQuery, cacheSnapshotChanges);
 
-        const unsubTyping = onSnapshot(orgCollection("typing"), (snapshot) => {
-            const typingData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            const currentTyping = typingData.filter(t => t.groupId === activeGroup?.id && t.name && Date.now() - t.timestamp < 3000);
+        return () => { unsubNonTasks(); unsubTasks(); };
+    }, [shouldLoadChatData, orgId, user?.uid, user?.email, activeGroup?.id, cacheSnapshotChanges, orgCollection]);
+
+    useEffect(() => {
+        setTypingStatus([]);
+        if (!orgId || !activeGroup?.id || !user?.uid) return undefined;
+        const typingListRef = rtdbRef(realtimeDb, `typing/${orgId}/${activeGroup.id}`);
+        const unsubscribe = onValue(typingListRef, (snapshot) => {
+            const data = snapshot.val() || {};
+            const now = Date.now();
+            const currentTyping = Object.entries(data)
+                .map(([id, value]) => ({ id, ...(value || {}) }))
+                .filter((entry) => entry.userId !== user.uid && entry.name && now - Number(entry.clientTimestamp || 0) < 3000);
             setTypingStatus(currentTyping);
         });
+        return () => unsubscribe();
+    }, [activeGroup?.id, orgId, user?.uid]);
 
-        return () => { unsubNonTasks(); unsubTasks(); unsubTyping(); };
-    }, [shouldLoadChatData, orgId, user?.uid, user?.email, activeGroup?.id, cacheSnapshotChanges, orgCollection]);
 
     const loadOlderMessages = useCallback(async () => {
         if (isLoadingOlderMessages || !shouldLoadChatData || !orgId || !user?.uid || !user?.email) return;
@@ -315,14 +325,38 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         try { await addDoc(orgCollection("audit_logs"), { type: actionType, user: user.email, content, target, groupId: activeGroup.id, groupName: activeGroup.name, timestamp: serverTimestamp() }); } catch(e) {}
     };
 
+    const typingRtdbPath = useCallback(() => {
+        if (!orgId || !activeGroup?.id || !user?.uid) return null;
+        return `typing/${orgId}/${activeGroup.id}/${user.uid}`;
+    }, [activeGroup?.id, orgId, user?.uid]);
+
+    const clearTypingEvent = useCallback(() => {
+        const path = typingRtdbPath();
+        if (!path) return;
+        try { rtdbRemove(rtdbRef(realtimeDb, path)); } catch (e) {}
+    }, [typingRtdbPath]);
+
     const triggerTypingEvent = (userName) => {
         if(!activeGroup || !user?.uid || !hasOrgContext('update typing status')) return;
-        try { setDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, userId: user.uid, userEmail: user.email, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
+        const path = typingRtdbPath();
+        if (!path) return;
+        try {
+            const currentTypingRef = rtdbRef(realtimeDb, path);
+            onDisconnect(currentTypingRef).remove().catch(() => {});
+            rtdbSet(currentTypingRef, {
+                groupId: activeGroup.id,
+                userId: user.uid,
+                userEmail: user.email,
+                name: userName || user.email.split('@')[0],
+                timestamp: rtdbServerTimestamp(),
+                clientTimestamp: Date.now(),
+            });
+        } catch (e) {}
     };
 
     const sendMessageToDB = async (messageText, replyingTo, attachments = [], uploadProgressCb = null, options = {}) => {
         if (!hasOrgContext('send messages') || !activeGroup?.id || !user?.uid) return;
-        try { deleteDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`)); } catch(e) {}
+        clearTypingEvent();
 
         const mentions = [];
         dbUsers.forEach(u => { if (messageText.toLowerCase().includes(`@${(u.name || "").toLowerCase()}`)) mentions.push(u.email); });
@@ -527,7 +561,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 
     return {
         messages, typingStatus, isOnline, offlineDrafts, isLoadingOlderMessages, hasOlderMessages, loadOlderMessages,
-        logImmutableAction, triggerTypingEvent, sendMessageToDB, reactToMessageDB,
+        logImmutableAction, triggerTypingEvent, clearTypingEvent, sendMessageToDB, reactToMessageDB,
         deleteMessageDB, editMessageDB, togglePinDB, toggleBookmarkDB,
         uploadAndSendFileDB, scheduleMessageDB, saveOfflineDraft, deleteOfflineDraft
     };
