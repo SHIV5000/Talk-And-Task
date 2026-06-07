@@ -19,7 +19,7 @@ const firebaseConfig = {
   authDomain: "niltask.firebaseapp.com",
   projectId: "niltask",
   storageBucket: "niltask.firebasestorage.app",
-  databaseURL: "https://niltask-default-rtdb.firebaseio.com",
+ databaseURL: "https://niltask-default-rtdb.asia-southeast1.firebasedatabase.app",
   messagingSenderId: "868641827920",
   appId: "1:868641827920:web:70d9db79a361a76468f555"
 };
