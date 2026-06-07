@@ -167,7 +167,7 @@ service cloud.firestore {
     }
 
     function taskMessageIsCompleted() {
-      return resource.data.isTask == true && resource.data.taskData.status == 'Completed';
+      return resource.data.isTask == true && (resource.data.taskData.status == 'Completed' || resource.data.taskData.status == 'completed');
     }
 
     function taskManagerCanEdit(orgId) {

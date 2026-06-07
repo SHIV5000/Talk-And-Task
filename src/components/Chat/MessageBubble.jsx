@@ -99,7 +99,8 @@ const MessageBubble = React.memo(({
 
   const isTaskParticipant = msg.isTask && (msg.senderEmail === userEmail || msg.taskData?.assignees?.includes(userEmail));
   const isAssignee = msg.isTask && msg.taskData?.assignees?.includes(userEmail);
-  const isTaskCompleted = msg.isTask && msg.taskData?.status === 'Completed';
+  const normalizedTaskStatus = String(msg.taskData?.status || '').toLowerCase();
+  const isTaskCompleted = msg.isTask && normalizedTaskStatus === 'completed';
   const assigneeStates = msg.taskData?.assigneeStates || {};
   const masterReviewerEmail = msg.taskData?.masterReviewerEmail || msg.senderEmail;
   const isCreator = masterReviewerEmail === userEmail;
@@ -481,7 +482,7 @@ const MessageBubble = React.memo(({
   };
 
   return (
-    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted || mentionsMe ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-[120]' : 'relative z-[1]'}`}>
+    <div id={`msg-${msg.id}`} className={`w-full flex ${msg.isMine ? 'justify-end' : 'justify-start'} ${isThreadView ? 'mb-4' : 'msg-row-spacing'} transform-gpu group/msg ${isUnreadHighlight || isHighlighted || mentionsMe ? 'highlight-flash' : ''} ${menuOpen ? 'relative z-[var(--z-popover)]' : 'relative z-[var(--z-base)]'}`}>
       
       <MemoizedAvatar uid={msg.senderUid || 'anon'} url={senderAvatar} name={senderName} sizeClass="w-8 h-8 shrink-0 mt-1" extraClasses={msg.isMine ? 'ml-3 order-last' : 'mr-3'} />
       <div className={`self-stretch flex items-center ${msg.isMine ? 'order-first mr-2' : 'order-last ml-2'}`}><span className={`text-[9px] font-black tracking-widest ${msg.isTask ? 'text-amber-600' : 'text-slate-400'}`} style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>{msg.isTask ? 'TASK' : 'MESSAGE'}</span></div>
@@ -500,7 +501,7 @@ const MessageBubble = React.memo(({
             </button>
             
             {menuOpen && (
-              <div ref={menuRef} className="absolute top-8 right-2 z-[120] bg-white rounded-xl shadow-lg border-2 border-slate-300 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
+              <div ref={menuRef} className="absolute top-8 right-2 z-[var(--z-popover)] bg-white rounded-xl shadow-lg border-2 border-slate-300 py-2 w-48 animate-in fade-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
                 {!msg.isTask && !isThreadView && <button onClick={() => { setMenuOpen(false); setInlineReplyOpen(true); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"><i className="fa-solid fa-reply w-5"></i> Reply</button>}
                 {!msg.isTask && featureFlags.taskCards !== false && <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('task_convert'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"><i className="fa-regular fa-square-check w-5"></i> Convert to Task</button>}
                 <button onClick={() => { setMenuOpen(false); setSelectedMessage(msg); setActiveModal('reminder'); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-600"><i className="fa-regular fa-clock w-5"></i> Set Reminder</button>
@@ -548,7 +549,7 @@ const MessageBubble = React.memo(({
                       ) : (
                         <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskCompleted ? 'text-slate-500' : 'text-slate-800'}`}>
                           <span dangerouslySetInnerHTML={renderSafeRichText(msg.text)}></span>
-                          {canEditTask && isTaskParticipant && <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer ml-2 opacity-0 group-hover/title:opacity-100 transition-opacity" onClick={(e)=>{e.stopPropagation(); setIsEditingTitle(true);}}></i>}
+                          {canEditTask && isTaskParticipant && <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer ml-2 opacity-0 group-hover/title:opacity-100 transition-opacity" onClick={(e)=>{e.stopPropagation(); if (!isTaskCompleted) setIsEditingTitle(true);}}></i>}
                         </p>
                       )}
 
@@ -886,7 +887,7 @@ const MessageBubble = React.memo(({
                         </button>
                         
                         {tagPickerOpen && (
-                            <div className="absolute bottom-full left-0 mb-1 z-[130] bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-300 dark:border-slate-700 p-3 w-56 max-h-72 overflow-y-auto custom-sidebar-scroll scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 animate-in fade-in zoom-in-95" onClick={e=>e.stopPropagation()}>
+                            <div className="absolute bottom-full left-0 mb-1 z-[var(--z-dropdown)] bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-300 dark:border-slate-700 p-3 w-56 max-h-72 overflow-y-auto custom-sidebar-scroll scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 animate-in fade-in zoom-in-95" onClick={e=>e.stopPropagation()}>
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1"><i className="fa-solid fa-bolt mr-1"></i> Frequent</div>
                                 <div className="flex flex-col gap-1.5 mb-3">
                                     {(toolPreferences?.quickTags || ['#Approved', '#Reviewing', '#ActionRequired', '#Noted']).map(tagLabel => {

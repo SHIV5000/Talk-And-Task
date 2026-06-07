@@ -285,7 +285,7 @@ export default function ChatView({
           </div>
         )}
 
-        <div className="text-center mb-6 mt-4 relative z-[1]">
+        <div className="text-center mb-6 mt-4 relative z-[var(--z-base)]">
           <span className="text-[12.5px] text-slate-500 dark:text-slate-300 bg-slate-200/50 dark:bg-slate-800/80 px-4 py-1.5 rounded-lg shadow-sm font-medium border border-slate-200 dark:border-slate-700">
             <i className="fa-solid fa-lock mr-1.5 text-[10px]"></i> Messages and tasks are end-to-server encrypted.
           </span>
@@ -293,7 +293,7 @@ export default function ChatView({
 
         {pinnedMessages.length > 0 && (
           <div
-            className="sticky top-2 z-10 bg-white dark:bg-slate-900 shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border border-slate-100 dark:border-slate-700 pinned-banner-glow relative overflow-hidden"
+            className="sticky top-2 z-[var(--z-sticky)] bg-white dark:bg-slate-900 shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border border-slate-100 dark:border-slate-700 pinned-banner-glow relative overflow-hidden"
             onClick={() => scrollToVirtualMessage(pinnedMessages[0].id)}
           >
             <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-300 font-medium mb-1">
@@ -316,7 +316,7 @@ export default function ChatView({
           </div>
         )}
 
-        <div className="relative z-[1] flex flex-col justify-end">
+        <div className="relative z-[var(--z-base)] flex flex-col justify-end">
           {hasOlderMessages && (
             <div className="mb-4 flex justify-center">
               <button
@@ -390,7 +390,7 @@ export default function ChatView({
         </div>
 
         {typingStatus.length > 0 && (
-          <div className="flex items-start mt-2 relative z-[1]">
+          <div className="flex items-start mt-2 relative z-[var(--z-base)]">
             <div className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 border border-indigo-500/10 dark:border-indigo-400/20">
               <div className="flex -space-x-2">
                 {typingStatus.map(t => {

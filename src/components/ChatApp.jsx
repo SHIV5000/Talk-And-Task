@@ -1495,7 +1495,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 overflow-hidden relative transition-opacity duration-700 ease-out opacity-100 dark:bg-slate-900" style={{ fontFamily: 'var(--app-font-family)', fontSize: 'var(--app-font-size)' }}>
 
             {globalAnnouncement?.isActive && globalAnnouncement.id !== dismissedBroadcastId && (
-                <div className={`flex items-center justify-between px-4 py-3 shrink-0 shadow-md relative z-[100] ${
+                <div className={`flex items-center justify-between px-4 py-3 shrink-0 shadow-md relative z-[var(--z-header)] ${
                     globalAnnouncement.type === 'emergency' ? 'bg-rose-600 text-white border-b-4 border-rose-800' :
                     globalAnnouncement.type === 'warning' ? 'bg-amber-500 text-white border-b-4 border-amber-600' :
                     'bg-indigo-600 text-white border-b-4 border-indigo-800'
@@ -1519,7 +1519,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
             <div className="flex-1 flex overflow-hidden relative">
                 {activeReminderAlert && (
-                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm rounded-3xl border border-indigo-200 bg-white text-slate-800 shadow-2xl z-[100] p-6 animate-in slide-in-from-top-10 duration-700 dark:border-indigo-500/30 dark:bg-slate-900 dark:text-slate-100">
+                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm rounded-3xl border border-indigo-200 bg-white text-slate-800 shadow-2xl z-[var(--z-header)] p-6 animate-in slide-in-from-top-10 duration-700 dark:border-indigo-500/30 dark:bg-slate-900 dark:text-slate-100">
                         <div className="flex items-center gap-4 mb-4">
                             <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-inner relative">
                                 <span className="absolute inset-0 rounded-full bg-indigo-400 opacity-20 animate-ping"></span>
@@ -1638,7 +1638,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                         </div>
 
                                         {isSearchFocused && globalSearchResults && (
-                                            <div className="absolute top-[110%] left-0 right-0 md:right-auto w-full md:w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                            <div className="absolute top-[110%] left-0 right-0 md:right-auto w-full md:w-[550px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[var(--z-header)] max-h-[70vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
                                                 <div className="p-3 bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-widest flex justify-between">
                                                     <span>Messages & Tasks Search</span>
                                                     <span>{globalSearchResults.messages.length} Found</span>
@@ -1680,7 +1680,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                     </div>
 
                                     <div className="flex items-center gap-1 shrink-0 relative">
-                                      <div className="relative"><button onClick={() => setShowFilterMenu(v => !v)} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-[11px] font-black" title="Filter"><i className="fa-solid fa-filter mr-2"></i>Filter <i className="fa-solid fa-chevron-down ml-2 text-[9px]"></i></button>{showFilterMenu && (<div className="absolute top-full right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[140] p-2">{universalTaskFilters.map((f) => (<button key={f.key} onClick={() => { setChatFilter(f.key); setShowFilterMenu(false); if (f.key === 'date-range' && !chatDateFilter) setChatDateFilter(new Date().toISOString().split('T')[0]); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold ${chatFilter === f.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><i className={`fa-solid ${f.icon} w-4 mr-2`}></i>{f.label}</button>))}{chatFilter === 'date-range' && <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="modern-date-input mt-2" />}</div>)}</div>
+                                      <div className="relative"><button onClick={() => setShowFilterMenu(v => !v)} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-[11px] font-black" title="Filter"><i className="fa-solid fa-filter mr-2"></i>Filter <i className="fa-solid fa-chevron-down ml-2 text-[9px]"></i></button>{showFilterMenu && (<div className="absolute top-full right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[var(--z-dropdown)] p-2">{universalTaskFilters.map((f) => (<button key={f.key} onClick={() => { setChatFilter(f.key); setShowFilterMenu(false); if (f.key === 'date-range' && !chatDateFilter) setChatDateFilter(new Date().toISOString().split('T')[0]); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold ${chatFilter === f.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><i className={`fa-solid ${f.icon} w-4 mr-2`}></i>{f.label}</button>))}{chatFilter === 'date-range' && <input type="date" value={chatDateFilter} onChange={(e) => setChatDateFilter(e.target.value)} className="modern-date-input mt-2" />}</div>)}</div>
                                       <button onClick={() => setViewMode('advanced')} className="px-3 h-9 md:h-10 rounded-full flex items-center justify-center transition-colors bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-black" title="Advanced Search"><i className="fa-solid fa-magnifying-glass-chart md:mr-2"></i><span className="hidden md:inline">Advanced Search</span></button>
 
                                       <button onClick={() => setActiveModal('active_schedules')} className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors text-indigo-500 hover:bg-indigo-50`} title="Scheduled & Reminders">
@@ -1694,7 +1694,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                         </button>
 
                                         {showNotifications && (
-                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl z-[130] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200 dark:border-slate-700">
+                                          <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl z-[var(--z-dropdown)] overflow-hidden animate-in slide-in-from-top-2 border border-slate-200 dark:border-slate-700">
                                             <div className="p-3 bg-white dark:bg-slate-900 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
                                               <span className="text-[13px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Alerts</span>
                                               <button onClick={() => genericNotifications.map(n => ensureOrgContext('clear notifications') && deleteDoc(orgDocRef("notifications", n.id)))} className="text-[11px] text-indigo-600 font-bold hover:underline">Clear All</button>
@@ -1744,11 +1744,11 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                                   )}
                                 </div>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="fixed bottom-24 right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Bottom">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })} className="fixed bottom-[calc(var(--safe-area-inset-bottom)+7rem)] right-4 md:right-6 z-[var(--z-floating-action)] bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Bottom">
                                     <i className="fa-solid fa-arrow-down"></i>
                                 </button>
 
-                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-36 right-4 md:right-6 z-40 bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Top">
+                                <button onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-[calc(var(--safe-area-inset-bottom)+10.25rem)] right-4 md:right-6 z-[var(--z-floating-action)] bg-indigo-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 transition-all opacity-90 hover:opacity-100" title="Scroll to Top">
                                     <i className="fa-solid fa-arrow-up"></i>
                                 </button>
 

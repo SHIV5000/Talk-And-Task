@@ -25,7 +25,13 @@ export default function InputArea({
   const lastWord = rawText.trim() ? rawText.split(/\s/).pop() : '';
   const mentionQuery = lastWord.startsWith('@') ? lastWord.substring(1).toLowerCase() : null;
 
-  const handleInput = () => {
+  const clearTypingIndicator = () => {
+    if (orgId && activeGroup?.id && user?.uid) {
+      deleteDoc(doc(db, 'organizations', orgId, 'typing', `${activeGroup.id}_${user.uid}`)).catch(() => {});
+    }
+  };
+
+  const handleInput = ({ notifyTyping = true } = {}) => {
       if (chatInputRef.current) {
           let html = chatInputRef.current.innerHTML
             .replace(/&lt;(\/?(?:b|strong|i|em|u))&gt;/gi, '<$1>')
@@ -33,7 +39,7 @@ export default function InputArea({
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
           if (html !== chatInputRef.current.innerHTML) chatInputRef.current.innerHTML = html;
           setInputText(html);
-          handleTypingEvent?.();
+          if (notifyTyping) handleTypingEvent?.();
       }
   };
 
@@ -78,40 +84,41 @@ export default function InputArea({
     }
     setInputText('');
     setReplyingTo?.(null);
+    clearTypingIndicator();
   };
 
   return (
-    <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-3 safe-bottom'} shrink-0 z-40 flex flex-col gap-2 w-full relative ${containerClassName}`}>
+    <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-3 safe-bottom'} shrink-0 z-[var(--z-composer)] flex flex-col gap-2 w-full max-w-full min-w-0 relative ${containerClassName}`}>
       <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }.mention-chip{display:inline-block;background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:0 6px;font-weight:800;}`}</style>
 
       {replyingTo && (
         <div className="bg-gray-50 px-4 py-2 flex items-center justify-between rounded-lg border border-gray-100 animate-in slide-in-from-bottom-1">
-          <div className="flex flex-col overflow-hidden">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <div className="text-sm font-semibold text-primary">{(replyingTo.sender||"").split('@')[0]}</div>
-            <div className="text-xs text-text-secondary truncate">"{replyingTo.text || replyingTo.fileName}"</div>
+            <div className="text-xs text-text-secondary whitespace-normal break-words [overflow-wrap:anywhere]">"{replyingTo.text || replyingTo.fileName}"</div>
           </div>
           <button onClick={()=>setReplyingTo(null)} className="text-primary hover:text-primary-hover"><i className="fa-solid fa-xmark"></i></button>
         </div>
       )}
 
       {/* Permanent compact rich-text toolbar */}
-      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/90 px-2 py-1 shadow-sm input-toolbar">
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg font-bold text-sm transition-colors" title="Bold">B</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg italic font-serif text-sm transition-colors" title="Italic">I</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg underline text-sm transition-colors" title="Underline">U</button>
+      <div className="sticky top-0 z-[var(--z-composer-toolbar)] flex w-full max-w-full flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/95 px-2 py-1 shadow-sm backdrop-blur input-toolbar">
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false, null); handleInput({ notifyTyping: false }); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg font-bold text-sm transition-colors" title="Bold">B</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false, null); handleInput({ notifyTyping: false }); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg italic font-serif text-sm transition-colors" title="Italic">I</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false, null); handleInput({ notifyTyping: false }); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg underline text-sm transition-colors" title="Underline">U</button>
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Superscript">x²</button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput(); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Subscript">x₂</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('superscript', false, null); handleInput({ notifyTyping: false }); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Superscript">x²</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('subscript', false, null); handleInput({ notifyTyping: false }); }} className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg text-xs transition-colors" title="Subscript">x₂</button>
         <div className="w-px h-5 bg-slate-200 mx-1"></div>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput(); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#800000' }} title="Maroon"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput(); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#006400' }} title="Dark Green"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput(); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#1d4ed8' }} title="Dark Blue"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#cc5500'); handleInput(); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#cc5500' }} title="Dark Orange"></button>
-        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput(); }} className="ml-auto px-2 h-7 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#800000'); handleInput({ notifyTyping: false }); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#800000' }} title="Maroon"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#006400'); handleInput({ notifyTyping: false }); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#006400' }} title="Dark Green"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#1d4ed8'); handleInput({ notifyTyping: false }); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#1d4ed8' }} title="Dark Blue"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#cc5500'); handleInput({ notifyTyping: false }); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#cc5500' }} title="Dark Orange"></button>
+        <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput({ notifyTyping: false }); clearTypingIndicator(); }} className="ml-auto px-2 h-7 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
       </div>
 
       {mentionQuery !== null && (
-        <div className="absolute bottom-[100%] left-4 bg-white dark:bg-slate-900 shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 z-[130] py-2 mb-2 border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
+        <div className="absolute bottom-[100%] left-4 bg-white dark:bg-slate-900 shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 z-[var(--z-dropdown)] py-2 mb-2 border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
           <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Peers</div>
           {dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).length > 0 ? (
             dbUsers.filter(u => (u.name||"").toLowerCase().includes(mentionQuery)).map(u => (
@@ -202,7 +209,7 @@ export default function InputArea({
           )}
         </div>
 
-        <div className="flex-1 max-w-full bg-slate-50 dark:bg-slate-900 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 dark:border-slate-700 focus-within:border-indigo-500 focus-within:bg-white dark:focus-within:bg-slate-950 resize-y overflow-y-auto min-h-[46px] max-h-[34vh]">
+        <div className="min-w-0 flex-1 max-w-full bg-slate-50 dark:bg-slate-900 rounded-xl flex items-end shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all border border-slate-200 dark:border-slate-700 focus-within:border-indigo-500 focus-within:bg-white dark:focus-within:bg-slate-950 resize-y overflow-y-auto min-h-[46px] max-h-[34vh]">
           <div
             contentEditable
             ref={chatInputRef}
@@ -213,8 +220,8 @@ export default function InputArea({
             onBlur={() => { if (orgId && activeGroup?.id && user?.uid) deleteDoc(doc(db, 'organizations', orgId, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
-            className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 dark:text-slate-100 py-3 px-4 w-full max-w-full resize-y overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words [overflow-wrap:break-word] [word-wrap:break-word]"
-            style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordWrap: 'break-word' }}
+            className="custom-wysiwyg bg-transparent min-w-0 flex-1 outline-none text-[15px] text-slate-800 dark:text-slate-100 py-3 px-4 w-full max-w-full resize-y overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words [overflow-wrap:anywhere] [word-break:break-word] [word-wrap:break-word]"
+            style={{ minHeight: '46px', maxHeight: 'clamp(120px, 24vh, 260px)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word', wordWrap: 'break-word' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
