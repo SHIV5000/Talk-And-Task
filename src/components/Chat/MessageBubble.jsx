@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { formatMessageText } from '../../utils/helpers.js';
 import { validateMessagePayload } from '../../utils/messagePayload.js';
+import { renderSafeRichText, richTextToPlainText } from '../../utils/richText.js';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import useUserDisplayName from '../../hooks/useUserDisplayName.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -17,12 +17,6 @@ const formatTaskDateTime = (value) => { if (!value) return 'N/A'; const d = new 
 
 const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
-const normalizeBasicRichText = (value = '') => String(value)
-  .replace(/<\s*(b|strong)\s*>(.*?)<\s*\/\s*(b|strong)\s*>/gis, '*$2*')
-  .replace(/<\s*(i|em)\s*>(.*?)<\s*\/\s*(i|em)\s*>/gis, '_$2_')
-  .replace(/<\s*u\s*>(.*?)<\s*\/\s*u\s*>/gis, '$1');
-const renderBasicRichText = (value = '') => ({ __html: formatMessageText(normalizeBasicRichText(value)) });
-const plainTaskText = (value = '') => normalizeBasicRichText(value).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
 
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
@@ -40,6 +34,22 @@ const MessageBubble = React.memo(({
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [isTaskExpanded, setIsTaskExpanded] = useState(false);
   const { orgId } = useAuth();
+
+  const hasOrgContext = (action = 'continue') => {
+    if (orgId) return true;
+    console.warn(`Organization context is required to ${action}.`);
+    return false;
+  };
+
+  const orgCollectionRef = (collectionName) => {
+    if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}.`);
+    return collection(db, "organizations", orgId, collectionName);
+  };
+
+  const orgDocRef = (collectionName, documentId) => {
+    if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}/${documentId}.`);
+    return doc(db, "organizations", orgId, collectionName, documentId);
+  };
 
   // Task Inline Control States
   const [isAddingUpdate, setIsAddingUpdate] = useState(false);
@@ -78,9 +88,10 @@ const MessageBubble = React.memo(({
   const mentionsMe = (msg.mentionEmails || []).includes(userEmail);
 
   const senderUser = dbUsers?.find(u => u.email === msg.senderEmail) || {};
-  const liveSenderName = useUserDisplayName(senderUser.uid || msg.senderUid, senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0]);
-  const senderName = liveSenderName || senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
-  const senderAvatar = senderUser.profilePicUrl || null;
+  const denormalizedSenderName = msg.senderName || senderUser.name || (msg.sender || msg.senderEmail || '').split('@')[0];
+  const liveSenderName = useUserDisplayName(msg.senderName ? null : (senderUser.uid || msg.senderUid), denormalizedSenderName);
+  const senderName = msg.senderName || liveSenderName || denormalizedSenderName;
+  const senderAvatar = msg.senderAvatar || senderUser.profilePicUrl || null;
   const getUserName = (email) => dbUsers?.find(u => u.email === email)?.name || (email || '').split('@')[0] || 'Unknown';
   const sortedGroupUsers = [...(dbUsers || [])]
     .filter(u => !activeGroup?.members || activeGroup.members.includes(u.email))
@@ -110,7 +121,9 @@ const MessageBubble = React.memo(({
   const isGlobalSuperAdmin = normalizedUserEmail === GLOBAL_SUPER_ADMIN_EMAIL;
   const isGroupAdmin = (activeGroup?.admins || []).some((email) => (email || '').toLowerCase() === normalizedUserEmail);
   const isSuperAdmin = currentUserData?.isAdmin || isVipAdmin || isGlobalSuperAdmin;
-  const canEditTask = (!isTaskCompleted || isSuperAdmin) && isCreator;
+  const canManageOpenTask = msg.isTask && !isTaskCompleted && (isCreator || isSuperAdmin);
+  const canEditTask = canManageOpenTask;
+  const canAttachTaskFiles = canManageOpenTask;
   const canPinItem = isGlobalSuperAdmin || isGroupAdmin;
   const bubbleWidthClass = isThreadView ? 'w-full max-w-full' : 'w-[80%] max-w-[80%]';
   const taskShellClass = msg.isTask ? 'border-2 border-indigo-100 border-l-[6px] rounded-2xl' : '';
@@ -150,10 +163,12 @@ const MessageBubble = React.memo(({
   const playTaskSound = () => { try { const a = new Audio('https://firebasestorage.googleapis.com/v0/b/niltask.firebasestorage.app/o/sounds%2FBANNER.mp3?alt=media&token=b3463c11-1f70-4450-8efc-049e04f33a0a'); a.volume = 0.8; a.play().catch(()=>{}); } catch(_) {} };
 
   const logTaskAudit = async (action, previousState = "", newState = "") => {
-    try { await addDoc(collection(db, "organizations", orgId, "audit_logs"), { taskId: msg.id, groupId: msg.groupId, actor_email: userEmail, action, previous_state: previousState, new_state: newState, timestamp: serverTimestamp() }); } catch(_) {}
+    if (!hasOrgContext('write task audit logs')) return;
+    try { await addDoc(orgCollectionRef("audit_logs"), { taskId: msg.id, groupId: msg.groupId, actor_email: userEmail, action, previous_state: previousState, new_state: newState, timestamp: serverTimestamp() }); } catch(_) {}
   };
 
   const notifyTaskChange = async (actionText, eventType = "critical", routineKey = "") => {
+    if (!hasOrgContext('send task notifications')) return;
     const involved = new Set();
     if (msg.senderEmail) involved.add(msg.senderEmail);
     (msg.taskData?.assignees || []).forEach(a => involved.add(a));
@@ -167,9 +182,9 @@ const MessageBubble = React.memo(({
           const prev = Number(localStorage.getItem(key) || 0) + 1;
           localStorage.setItem(key, String(prev));
           if (prev % 3 !== 1) continue;
-          await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: uid, type: "task", text: `${prev} ${routineKey} update(s) by ${(currentUserData?.name || (userEmail||"").split("@")[0])}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
+          await addDoc(orgCollectionRef("notifications"), { userId: uid, type: "task", text: `${prev} ${routineKey} update(s) by ${(currentUserData?.name || (userEmail||"").split("@")[0])}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
         } else {
-          await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: uid, type: "task", text: `"${msg.text}" - ${actionText}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
+          await addDoc(orgCollectionRef("notifications"), { userId: uid, type: "task", text: `"${msg.text}" - ${actionText}`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false });
         }
       } catch (e) {}
     }
@@ -177,10 +192,11 @@ const MessageBubble = React.memo(({
 
   const handleAcknowledge = async (e) => {
     e.stopPropagation();
+    if (!hasOrgContext('acknowledge tasks')) return;
     if (!window.confirm('Acknowledge this task? This confirms you have seen and accepted it.')) return;
     try {
       await runTransaction(db, async (tx) => {
-        const ref = doc(db, "organizations", orgId, "messages", msg.id);
+        const ref = orgDocRef("messages", msg.id);
         const snap = await tx.get(ref);
         const data = snap.data() || {};
         const currentTrail = data.taskData?.trail || [];
@@ -202,16 +218,19 @@ const MessageBubble = React.memo(({
   };
 
   const handleInlineSaveTitle = async () => {
+    if (!canEditTask) return;
+    if (!hasOrgContext('edit task titles')) return;
     if (!tempTitle.trim()) return setIsEditingTitle(false);
-    try { await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { text: plainTaskText(tempTitle).trim() || "Task" }); setIsEditingTitle(false); } catch(e) {}
+    try { await updateDoc(orgDocRef("messages", msg.id), { text: richTextToPlainText(tempTitle).trim() || "Task" }); setIsEditingTitle(false); } catch(e) {}
   };
 
   const submitInlineUpdate = async () => {
+    if (!hasOrgContext('add task updates')) return;
     if (!inlineUpdateText.trim()) return setIsAddingUpdate(false);
     try {
         const now = new Date();
         const updatedTrail = [...(msg.taskData.trail || []), { action: "Update Added", by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: inlineUpdateText }];
-        await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.trail": updatedTrail });
+        await updateDoc(orgDocRef("messages", msg.id), { "taskData.trail": updatedTrail });
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} updated the task.`, "routine", "text");
       logTaskAudit("task_update");
       
@@ -220,32 +239,35 @@ const MessageBubble = React.memo(({
   };
 
   const handleInlineEditTrail = async (idx) => {
+    if (!hasOrgContext('edit task updates')) return;
     if (!trailEditText.trim()) return setEditingTrailIdx(null);
     try {
       const newTrail = [...msg.taskData.trail];
       newTrail[idx].comment = trailEditText;
       newTrail[idx].isEdited = true;
-      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.trail": newTrail });
+      await updateDoc(orgDocRef("messages", msg.id), { "taskData.trail": newTrail });
       setEditingTrailIdx(null);
     } catch(e) {}
   };
 
   const handleInlineDeleteTrail = async (idx) => {
+    if (!hasOrgContext('delete task updates')) return;
     if(!window.confirm("Delete this update from the task?")) return;
     try {
       const newTrail = msg.taskData.trail.filter((_, i) => i !== idx);
-      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.trail": newTrail });
+      await updateDoc(orgDocRef("messages", msg.id), { "taskData.trail": newTrail });
     } catch(e) {}
   };
 
   const handleInlineComplete = async (e) => {
     e.stopPropagation();
+    if (!hasOrgContext('submit task completion')) return;
     if (!isAssignee || isRevokedForMe) return alert("Only active assignees can submit completion.");
     try {
       const now = new Date();
       const newTrail = [...msg.taskData.trail, { action: `${getUserName(userEmail)} submitted completion for review to ${getUserName(masterReviewerEmail)}.`, by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: getUserName(masterReviewerEmail) }];
       await runTransaction(db, async (tx) => {
-        const ref = doc(db, "organizations", orgId, "messages", msg.id);
+        const ref = orgDocRef("messages", msg.id);
         const snap = await tx.get(ref);
         const data = snap.data() || {};
         const states = { ...(data.taskData?.assigneeStates || {}), [userEmail]: "submitted_completed" };
@@ -258,6 +280,7 @@ const MessageBubble = React.memo(({
   };
 
   const handleInlineDelegateSubmit = async () => {
+    if (!hasOrgContext('delegate tasks')) return;
     if (delegateSelection.length === 0) return setIsDelegating(false);
     if (!delegateComment || delegateComment.trim().length < 6) return alert("Delegate comment must be at least 6 characters.");
     try {
@@ -268,8 +291,8 @@ const MessageBubble = React.memo(({
       const nextAssignees = Array.from(new Set([...oldAssignees, ...delegateSelection]));
       const nextStates = { ...(msg.taskData?.assigneeStates || {}) };
       delegateSelection.forEach(e => { if (!nextStates[e] || ['revoked', 'transferred_out'].includes(nextStates[e])) nextStates[e] = 'assigned'; });
-      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.assignees": nextAssignees, "taskData.visibleTo": [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...nextAssignees].filter(Boolean))], "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
-      for (const em of delegateSelection) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: "task", text: `Delegated task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
+      await updateDoc(orgDocRef("messages", msg.id), { "taskData.assignees": nextAssignees, "taskData.visibleTo": [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...nextAssignees].filter(Boolean))], "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
+      for (const em of delegateSelection) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(orgCollectionRef("notifications"), { userId: u.uid, type: "task", text: `Delegated task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       notifyTaskChange(`${getUserName(userEmail)} delegated task support to ${toNames}.`);
       logTaskAudit("worker_delegate");
       playTaskSound();
@@ -279,7 +302,7 @@ const MessageBubble = React.memo(({
 
   const handleInlineFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file || !canAttachTaskFiles || !hasOrgContext('upload task files')) return;
     setTrailFileUploading(true);
     try {
       const uniqueFileName = `${Date.now()}_${file.name}`;
@@ -288,7 +311,7 @@ const MessageBubble = React.memo(({
         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
         const now = new Date();
         const newTrail = [...msg.taskData.trail, { action: `${getUserName(userEmail)} uploaded file: ${file.name}.`, by: userEmail, time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), comment: "Attached file via system", fileUrl: downloadURL, fileName: file.name }];
-        await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.trail": newTrail });
+        await updateDoc(orgDocRef("messages", msg.id), { "taskData.trail": newTrail });
         notifyTaskChange(`${currentUserData?.name || (userEmail||"").split('@')[0]} attached a file 📎`);
       playTaskSound();
         setTrailFileUploading(false); setTrailUploadProgress(100);
@@ -332,7 +355,7 @@ const MessageBubble = React.memo(({
 
   const handleReplyAttachmentUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (!file || msg.isTask) return;
+    if (!file || msg.isTask || !hasOrgContext('reply with attachments')) return;
     if (!sendMessageToDB) {
       if (msgReplyFileInputRef.current) msgReplyFileInputRef.current.value = '';
       return;
@@ -351,6 +374,7 @@ const MessageBubble = React.memo(({
   };
 
   const sendInlineReply = async () => {
+    if (!hasOrgContext('reply to messages')) return;
     const text = inlineReplyRef.current?.innerHTML || inlineReplyText;
     if (!text.replace(/<[^>]*>/g, '').trim() || !sendMessageToDB) return;
     await sendMessageToDB(text, buildInlineReplyTarget());
@@ -404,6 +428,7 @@ const MessageBubble = React.memo(({
   };
 
   const handleMarkDoneSubmit = async (assigneeEmail) => {
+    if (!hasOrgContext('accept task completion')) return;
     const state = reviewStates[assigneeEmail];
     if (!state || state.comment.trim().length < 6) return alert("Comment must be at least 6 characters.");
     try {
@@ -411,8 +436,8 @@ const MessageBubble = React.memo(({
       const now = new Date();
       const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} marked ${getUserName(assigneeEmail)}'s work as completed.`, by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: getUserName(assigneeEmail), comment: state.comment.trim() }];
       const nextStatus = activeAssignees.every(e => (e === assigneeEmail ? 'accepted_completed' : (nextStates[e] || 'assigned')) === 'accepted_completed') ? 'Completed' : 'In Progress';
-      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.assigneeStates": nextStates, "taskData.status": nextStatus, "taskData.trail": newTrail });
-      const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: "task", text: `Completion accepted: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+      await updateDoc(orgDocRef("messages", msg.id), { "taskData.assigneeStates": nextStates, "taskData.status": nextStatus, "taskData.trail": newTrail });
+      const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(orgCollectionRef("notifications"), { userId: u.uid, type: "task", text: `Completion accepted: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
       logTaskAudit("mark_done", "submitted_completed", "accepted_completed");
       closeReviewAction(assigneeEmail);
       playTaskSound();
@@ -420,14 +445,15 @@ const MessageBubble = React.memo(({
   };
 
   const handleReviewAgainSubmit = async (assigneeEmail) => {
+    if (!hasOrgContext('request task rework')) return;
     const state = reviewStates[assigneeEmail];
     if (!state || state.comment.trim().length < 6) return alert("Comment must be at least 6 characters.");
     try {
       const now = new Date();
       const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} requested rework from ${getUserName(assigneeEmail)}.`, by: userEmail, time: now.toLocaleTimeString([], {hour: "2-digit", minute:"2-digit"}) + ", " + now.toLocaleDateString(), to: getUserName(assigneeEmail), comment: state.comment.trim() }];
       const nextStates = { ...(msg.taskData?.assigneeStates || {}), [assigneeEmail]: "needs_review" };
-      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
-      const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: "task", text: `Review again requested: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
+      await updateDoc(orgDocRef("messages", msg.id), { "taskData.assigneeStates": nextStates, "taskData.status": "In Progress", "taskData.trail": newTrail });
+      const u = dbUsers.find(x => x.email === assigneeEmail); if (u) await addDoc(orgCollectionRef("notifications"), { userId: u.uid, type: "task", text: `Review again requested: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{});
       logTaskAudit("review_again", "submitted_completed", "needs_review");
       closeReviewAction(assigneeEmail);
       playTaskSound();
@@ -435,6 +461,7 @@ const MessageBubble = React.memo(({
   };
 
   const handleTransferSubmit = async (assigneeEmail) => {
+    if (!hasOrgContext('transfer tasks')) return;
     const state = reviewStates[assigneeEmail];
     if (!state || !state.transferTo.length) return alert("Select at least one assignee to transfer.");
     if (state.transferComment.trim().length < 6) return alert("Transfer comment must be at least 6 characters.");
@@ -446,8 +473,8 @@ const MessageBubble = React.memo(({
       const mergedAssignees = Array.from(new Set([...(msg.taskData?.assignees || []), ...state.transferTo]));
       const transferNames = state.transferTo.map(getUserName).join(', ');
       const newTrail = [...(msg.taskData?.trail || []), { action: `${getUserName(userEmail)} transferred task from ${getUserName(assigneeEmail)} to ${transferNames}.`, by: userEmail, time: now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ', ' + now.toLocaleDateString(), to: transferNames, comment: state.transferComment.trim() }];
-      await updateDoc(doc(db, "organizations", orgId, "messages", msg.id), { 'taskData.assignees': mergedAssignees, 'taskData.visibleTo': [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...mergedAssignees].filter(Boolean))], 'taskData.assigneeStates': nextStates, 'taskData.status': 'In Progress', 'taskData.trail': newTrail });
-      for (const em of [assigneeEmail, ...state.transferTo]) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(collection(db, "organizations", orgId, "notifications"), { userId: u.uid, type: 'task', text: em===assigneeEmail ? `Task transferred from you: "${msg.text}"` : `Transferred task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
+      await updateDoc(orgDocRef("messages", msg.id), { 'taskData.assignees': mergedAssignees, 'taskData.visibleTo': [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...mergedAssignees].filter(Boolean))], 'taskData.assigneeStates': nextStates, 'taskData.status': 'In Progress', 'taskData.trail': newTrail });
+      for (const em of [assigneeEmail, ...state.transferTo]) { const u = dbUsers.find(x => x.email === em); if (u) await addDoc(orgCollectionRef("notifications"), { userId: u.uid, type: 'task', text: em===assigneeEmail ? `Task transferred from you: "${msg.text}"` : `Transferred task assigned: "${msg.text}"`, messageId: msg.id, groupId: msg.groupId, timestamp: serverTimestamp(), isRead: false }).catch(()=>{}); }
       closeReviewAction(assigneeEmail);
       playTaskSound();
     } catch(e) { alert("Transfer failed."); }
@@ -520,7 +547,7 @@ const MessageBubble = React.memo(({
                         </div>
                       ) : (
                         <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskCompleted ? 'text-slate-500' : 'text-slate-800'}`}>
-                          <span dangerouslySetInnerHTML={renderBasicRichText(msg.text)}></span>
+                          <span dangerouslySetInnerHTML={renderSafeRichText(msg.text)}></span>
                           {canEditTask && isTaskParticipant && <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer ml-2 opacity-0 group-hover/title:opacity-100 transition-opacity" onClick={(e)=>{e.stopPropagation(); setIsEditingTitle(true);}}></i>}
                         </p>
                       )}
@@ -590,7 +617,7 @@ const MessageBubble = React.memo(({
                            ) : (
                               <>
                                  <button onClick={(e) => { e.stopPropagation(); setIsAddingUpdate(true); }} className="px-3 py-1.5 bg-white border-2 border-slate-300 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Update</button>
-                                 <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border-2 border-slate-300 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Attach</button>
+                                 {canAttachTaskFiles && <button onClick={(e) => { e.stopPropagation(); inlineFileInputRef.current.click(); }} className="px-3 py-1.5 bg-white border-2 border-slate-300 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Attach</button>}
                                  <button onClick={(e) => { e.stopPropagation(); setIsDelegating(true); }} className="px-3 py-1.5 bg-white border-2 border-slate-300 rounded-full text-[11px] font-bold text-slate-600 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all">Delegate</button>
                                  <button 
                                    onClick={handleInlineComplete} 
@@ -606,7 +633,7 @@ const MessageBubble = React.memo(({
                     )}
 
                     {/* ── MODERN REVIEW SECTION ── */}
-                    {isCreator && (msg.taskData?.assignees || []).filter(email => (assigneeStates[email] || 'assigned') === 'submitted_completed').map(assigneeEmail => {
+                    {canManageOpenTask && (msg.taskData?.assignees || []).filter(email => (assigneeStates[email] || 'assigned') === 'submitted_completed').map(assigneeEmail => {
                       const reviewState = reviewStates[assigneeEmail];
                       const mode = reviewState?.mode;
                       return (
@@ -744,7 +771,7 @@ const MessageBubble = React.memo(({
                                       <span className="text-[10px] font-bold text-slate-400">{t.time?.split(',')[0]}</span>
                                     </div>
                                     <div className="text-[13px] text-slate-600 leading-snug break-words">
-                                      <span className="font-semibold" dangerouslySetInnerHTML={renderBasicRichText(formatTrailAction(t))}></span>
+                                      <span className="font-semibold" dangerouslySetInnerHTML={renderSafeRichText(formatTrailAction(t))}></span>
                                       {t.fileUrl && (
                                           <div className="mt-2 flex items-center gap-2 p-1.5 border-2 border-slate-300 rounded-md bg-slate-50 cursor-pointer hover:bg-slate-100 relative" onClick={() => window.open(t.fileUrl, '_blank')}>
                                              <i className="fa-solid fa-file text-indigo-500 text-lg"></i>
@@ -772,7 +799,7 @@ const MessageBubble = React.memo(({
                        <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0"><i className="fa-solid fa-share-nodes text-[10px]"></i></div>
                        <span className="text-xs font-bold text-purple-700 leading-tight">Mentioned in {msg.forwardedFromGroupName}</span>
                      </div>
-                     <p className="text-[13px] text-slate-700 font-medium italic border-l-[3px] border-purple-300 pl-3 ml-1 break-words">"{msg.text?.replace('[Forwarded Private Mention] ', '')}"</p>
+                     <p className="text-[13px] text-slate-700 font-medium italic border-l-[3px] border-purple-300 pl-3 ml-1 break-words">"{richTextToPlainText(msg.text?.replace('[Forwarded Private Mention] ', '') || '')}"</p>
                   </div>
                 )}
 
@@ -780,7 +807,7 @@ const MessageBubble = React.memo(({
                   <div className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 mb-1 w-fit">@ Mentioned You</div>
                 )}
                 {!msg.isTask && !msg.isPrivateForward && msg.text && (
-                  <div className={`text-[14px] leading-snug break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={{ __html: msg.text }}></div>
+                  <div className={`text-[14px] leading-snug break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={renderSafeRichText(msg.text)}></div>
                 )}
                 
                 {!msg.isTask && !msg.isPrivateForward && msg.fileUrl && (
@@ -953,7 +980,7 @@ const MessageBubble = React.memo(({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-[11px] text-indigo-600">{replyName} <span className="text-[10px] text-slate-400 font-semibold ml-1">{reply.time}</span></div>
-                      <div className="text-[13px] text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: reply.text || '' }}></div>
+                      <div className="text-[13px] text-slate-700 break-words" dangerouslySetInnerHTML={renderSafeRichText(reply.text || '')}></div>
                       {reply.fileUrl && reply.fileName && (
                         <div className="inline-flex items-center gap-1 mt-1 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs text-slate-600 cursor-pointer hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); window.open(reply.fileUrl, '_blank'); }}>
                           <i className="fa-solid fa-paperclip text-indigo-500 text-[10px]"></i>

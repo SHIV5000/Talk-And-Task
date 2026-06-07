@@ -10,7 +10,7 @@ export default function InputArea({
   handleFileUpload, emojiPickerOpen, setEmojiPickerOpen, emojiPickerRef,
   pendingFiles, setPendingFiles, showFileRename, setShowFileRename,
   uploadFileDirectly, setActiveModal, setPendingScheduledText,
-  offlineDrafts, user, dbUsers, groups, currentUserData, MAX_FILE_SIZE_MB, uploadProgress = 0,
+  offlineDrafts, user, dbUsers, groups, currentUserData, orgId, MAX_FILE_SIZE_MB, uploadProgress = 0,
   handleSendPendingFiles,
   composerVariant = 'chat',
   containerClassName = '',
@@ -210,7 +210,7 @@ export default function InputArea({
             onMouseUp={checkSelection}
             onKeyUp={checkSelection}
             onPaste={handlePaste}
-            onBlur={() => { if (activeGroup?.id && user?.uid) deleteDoc(doc(db, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
+            onBlur={() => { if (orgId && activeGroup?.id && user?.uid) deleteDoc(doc(db, 'organizations', orgId, 'typing', `${activeGroup.id}_${user.uid}`)).catch(()=>{}); }}
             suppressContentEditableWarning={true}
             data-placeholder={placeholder || (isOnline ? "Type or Paste a message..." : "Offline - message will be queued")}
             className="custom-wysiwyg bg-transparent flex-1 outline-none text-[15px] text-slate-800 dark:text-slate-100 py-3 px-4 w-full max-w-full resize-y overflow-y-auto font-medium min-h-[46px] whitespace-pre-wrap break-words [overflow-wrap:break-word] [word-wrap:break-word]"
