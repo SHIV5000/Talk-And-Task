@@ -74,12 +74,13 @@ export default function App() {
 }
 
 function AppShell() {
-  const { user, authChecked, authError, login, loginWithEmailPassword, logout, appVersion, isPlatformOwner } = useAuth();
+  const { user, authChecked, authError, login, loginWithEmailPassword, logout, appVersion, isPlatformOwner, orgId } = useAuth();
   const [crash, setCrash] = useState(null);
   const [currentPath, setCurrentPath] = useState(() => window.location.pathname || '/');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isEmailLoginLoading, setIsEmailLoginLoading] = useState(false);
+  const [minimumSplashDone, setMinimumSplashDone] = useState(false);
 
   useEffect(() => {
     notifyRuntimeEvent('app-run', {
@@ -92,6 +93,23 @@ function AppShell() {
       source: deploymentInfo.source,
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinimumSplashDone(true), 4000);
+    return () => clearTimeout(timer);
+  }, []);
+
+
+  useEffect(() => {
+    if (!orgId || typeof window === 'undefined') return;
+    const previousOrgId = localStorage.getItem('talkTaskActiveOrgId');
+    if (previousOrgId && previousOrgId !== orgId && 'caches' in window) {
+      caches.keys()
+        .then((cacheNames) => Promise.all(cacheNames.filter((name) => name.includes('talk-task')).map((name) => caches.delete(name))))
+        .catch(() => {});
+    }
+    localStorage.setItem('talkTaskActiveOrgId', orgId);
+  }, [orgId]);
 
   const handleEmailLogin = async (event) => {
     event.preventDefault();
@@ -145,12 +163,12 @@ function AppShell() {
     return <FallbackScreen error={crash} />;
   }
 
-  if (!authChecked) {
+  if (!authChecked || !minimumSplashDone) {
     return (
       <>
         <div className="flex flex-col justify-center items-center h-screen bg-surface text-primary">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-          <span className="font-bold tracking-widest uppercase text-sm">Initializing Enterprise Portal...</span>
+          <span className="font-bold tracking-widest uppercase text-sm">Preparing Talk & Task workspace...</span>
         </div>
       </>
     );

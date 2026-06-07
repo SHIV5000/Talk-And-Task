@@ -42,6 +42,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
+        cacheId: 'talk-task-pwa',
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,

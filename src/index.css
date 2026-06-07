@@ -27,6 +27,16 @@
     --app-accent-soft: rgba(79,70,229,0.10);
     --app-font-family: 'Inter', 'Segoe UI', sans-serif;
     --app-font-size: 1rem;
+    --z-base: 1;
+    --z-sticky: 20;
+    --z-composer: 80;
+    --z-composer-toolbar: 90;
+    --z-floating-action: 110;
+    --z-header: 120;
+    --z-dropdown: 180;
+    --z-popover: 220;
+    --z-modal: 300;
+    --z-toast: 999;
 }
 html[data-theme="dark"] { color-scheme: dark; }
 body {
@@ -96,7 +106,7 @@ body {
     position: absolute; bottom: 100%; left: 0; margin-bottom: 8px;
     background: white; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.08);
     padding: 10px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px;
-    z-index: 130; width: 320px; max-width: 90vw; max-height: 260px; overflow-y: auto;
+    z-index: var(--z-dropdown); width: 320px; max-width: 90vw; max-height: 260px; overflow-y: auto;
 }
 .emoji-picker-popup button { font-size: 22px; padding: 6px; border-radius: 8px; cursor: pointer; background: transparent; border: none; transition: background 0.15s; line-height: 1; }
 .emoji-picker-popup button:hover { background: #f1f5f9; }
