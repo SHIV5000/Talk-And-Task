@@ -14,12 +14,50 @@ service cloud.firestore {
       return signedIn() && (request.auth.token.platformOwner == true || isGlobalSuperAdmin());
     }
 
+    function hasVerifiedEmail() {
+      return signedIn() && (request.auth.token.email_verified == true || isGlobalSuperAdmin());
+    }
+
     function hasOrgClaim() {
       return signedIn() && request.auth.token.orgId is string && request.auth.token.orgId.size() > 0;
     }
 
-    function sameOrg(orgId) {
+    function signedInUserPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function hasSignedInUserProfile() {
+      return signedIn() && exists(signedInUserPath());
+    }
+
+    function tokenMatchesOrg(orgId) {
       return hasOrgClaim() && request.auth.token.orgId == orgId;
+    }
+
+    function profileMatchesOrg(orgId) {
+      return hasSignedInUserProfile() && get(signedInUserPath()).data.orgId == orgId;
+    }
+
+    function sameOrg(orgId) {
+      return tokenMatchesOrg(orgId) || profileMatchesOrg(orgId);
+    }
+
+    function profileIsOrgAdmin() {
+      return hasSignedInUserProfile() && (
+        get(signedInUserPath()).data.isAdmin == true ||
+        get(signedInUserPath()).data.role == 'admin' ||
+        get(signedInUserPath()).data.role == 'owner' ||
+        (get(signedInUserPath()).data.roles is list && get(signedInUserPath()).data.roles.hasAny(['admin', 'owner', 'Super Admin']))
+      );
+    }
+
+    function isOrgAdmin(orgId) {
+      return sameOrg(orgId) && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'owner' ||
+        profileIsOrgAdmin()
+      );
     }
 
     function orgPath(orgId) {
@@ -37,15 +75,28 @@ service cloud.firestore {
       );
     }
 
+    function canReadOrg(orgId) {
+      return isPlatformOwner() || sameOrg(orgId);
+    }
+
+    function canWriteOrgAppData(orgId) {
+      return hasVerifiedEmail() && sameOrg(orgId) && orgExists(orgId) && !orgIsSuspended(orgId);
+    }
+
     function sameOrgProfile() {
       return signedIn() &&
-        resource.data.orgId is string &&
-        request.auth.token.orgId == resource.data.orgId;
+        resource.data.orgId is string && (
+          request.auth.token.orgId == resource.data.orgId ||
+          (hasSignedInUserProfile() && get(signedInUserPath()).data.orgId == resource.data.orgId)
+        );
     }
 
     function requestOwnProfileOrgIsValid() {
       return !request.resource.data.keys().hasAny(['orgId']) ||
-        (request.resource.data.orgId is string && request.auth.token.orgId == request.resource.data.orgId);
+        (request.resource.data.orgId is string && (
+          request.auth.token.orgId == request.resource.data.orgId ||
+          (hasSignedInUserProfile() && get(signedInUserPath()).data.orgId == request.resource.data.orgId)
+        ));
     }
 
     function protectedUserFieldsUnchanged() {
@@ -74,16 +125,36 @@ service cloud.firestore {
         request.resource.data.roles == null;
     }
 
-    function canWriteOrgAppData(orgId) {
-      return sameOrg(orgId) && orgExists(orgId) && !orgIsSuspended(orgId);
-    }
-
     function hasAuthedEmail() {
       return signedIn() && request.auth.token.email is string;
     }
 
     function authedEmail() {
       return request.auth.token.email;
+    }
+
+    function isOwnResource() {
+      return signedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.uid == request.auth.uid ||
+        resource.data.senderUid == request.auth.uid ||
+        resource.data.createdByUid == request.auth.uid ||
+        resource.data.userEmail == authedEmail() ||
+        resource.data.senderEmail == authedEmail() ||
+        resource.data.createdBy == authedEmail()
+      );
+    }
+
+    function requestIsOwnResource() {
+      return signedIn() && (
+        request.resource.data.userId == request.auth.uid ||
+        request.resource.data.uid == request.auth.uid ||
+        request.resource.data.senderUid == request.auth.uid ||
+        request.resource.data.createdByUid == request.auth.uid ||
+        request.resource.data.userEmail == authedEmail() ||
+        request.resource.data.senderEmail == authedEmail() ||
+        request.resource.data.createdBy == authedEmail()
+      );
     }
 
     function canReadTaskMessage() {
@@ -102,6 +173,160 @@ service cloud.firestore {
           request.resource.data.taskData.visibleTo is list &&
           request.resource.data.taskData.visibleTo.hasAll([request.resource.data.senderEmail]) &&
           request.resource.data.taskData.visibleTo.hasAll(request.resource.data.taskData.assignees)
+        );
+    }
+
+    function messageCreateIsSafe(orgId) {
+      return canWriteOrgAppData(orgId) &&
+        request.resource.data.senderUid == request.auth.uid &&
+        request.resource.data.senderEmail == authedEmail() &&
+        request.resource.data.groupId is string &&
+        request.resource.data.groupId.size() > 0 &&
+        (request.resource.data.groupId != 'support' || isOrgAdmin(orgId)) &&
+        !request.resource.data.keys().hasAny([
+          'orgId',
+          'status',
+          'sentAt',
+          'deliveredAt',
+          'deliveryStatus',
+          'processedAt',
+          'processedBy',
+          'platformOwner',
+          'isAdmin',
+          'roles'
+        ]) &&
+        taskMessageWriteIsScoped();
+    }
+
+    function taskMessageIsCompleted() {
+      return resource.data.isTask == true && (resource.data.taskData.status == 'Completed' || resource.data.taskData.status == 'completed');
+    }
+
+    function taskManagerCanEdit(orgId) {
+      return isOrgAdmin(orgId) ||
+        resource.data.senderEmail == authedEmail() ||
+        resource.data.taskData.masterReviewerEmail == authedEmail();
+    }
+
+    function taskUpdateIsAllowedForStatus(orgId) {
+      return resource.data.isTask != true ||
+        (
+          (
+            !taskMessageIsCompleted() ||
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'reactions',
+              'seenBy',
+              'deliveredTo',
+              'bookmarkedBy',
+              'isPinned',
+              'updatedAt'
+            ])
+          ) &&
+          (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'text',
+              'fileUrl',
+              'storagePath',
+              'fileName',
+              'storedFileName',
+              'fileType',
+              'fileSize',
+              'originalFileSize',
+              'uploadedBy',
+              'uploadedAt'
+            ]) ||
+            taskManagerCanEdit(orgId)
+          )
+        );
+    }
+
+    function messageUpdateIsSafe(orgId) {
+      return canWriteOrgAppData(orgId) &&
+        request.resource.data.senderUid == resource.data.senderUid &&
+        request.resource.data.senderEmail == resource.data.senderEmail &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'text',
+          'isEdited',
+          'editedAt',
+          'reactions',
+          'seenBy',
+          'deliveredTo',
+          'bookmarkedBy',
+          'isPinned',
+          'taskData',
+          'taskDeadline',
+          'taskAssignees',
+          'senderName',
+          'senderAvatar',
+          'groupName',
+          'groupAvatar',
+          'taskTitle',
+          'taskStatus',
+          'taskPriority',
+          'taskAssigneeEmails',
+          'taskAssigneeNames',
+          'taskAssigneeCount',
+          'taskMasterReviewerEmail',
+          'fileUrl',
+          'storagePath',
+          'fileName',
+          'storedFileName',
+          'fileType',
+          'fileSize',
+          'originalFileSize',
+          'uploadedBy',
+          'uploadedAt',
+          'externalLinks',
+          'updatedAt'
+        ]) &&
+        taskMessageWriteIsScoped() &&
+        taskUpdateIsAllowedForStatus(orgId);
+    }
+
+    function scheduledCreateIsSafe(orgId) {
+      return canWriteOrgAppData(orgId) &&
+        request.resource.data.senderUid == request.auth.uid &&
+        request.resource.data.senderEmail == authedEmail() &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.groupId is string &&
+        request.resource.data.groupId.size() > 0 &&
+        (request.resource.data.groupId != 'support' || isOrgAdmin(orgId)) &&
+        !request.resource.data.keys().hasAny(['sentAt', 'processedAt', 'processedBy', 'deliveredAt', 'deliveryStatus']);
+    }
+
+    function scheduledUpdateIsSafe(orgId) {
+      return canWriteOrgAppData(orgId) &&
+        resource.data.senderUid == request.auth.uid &&
+        request.resource.data.senderUid == resource.data.senderUid &&
+        resource.data.status == 'pending' &&
+        (
+          (
+            request.resource.data.status == 'pending' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'text',
+              'scheduledFor',
+              'scheduledAt',
+              'taskData',
+              'taskDeadline',
+              'taskAssignees',
+              'senderName',
+              'senderAvatar',
+              'groupName',
+              'groupAvatar',
+              'taskTitle',
+              'taskStatus',
+              'taskPriority',
+              'taskAssigneeEmails',
+              'taskAssigneeNames',
+              'taskAssigneeCount',
+              'taskMasterReviewerEmail',
+              'updatedAt'
+            ])
+          ) || (
+            request.resource.data.status == 'cancelled' &&
+            request.resource.data.cancelledBy == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'cancelledBy'])
+          )
         );
     }
 
@@ -127,26 +352,125 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId} {
-      allow read: if isPlatformOwner() || sameOrg(orgId);
+      allow get: if canReadOrg(orgId);
+      allow list: if isPlatformOwner();
       allow create, update, delete: if isPlatformOwner();
+
+      match /org_details/{detailsId} {
+        allow read: if canReadOrg(orgId);
+        allow write: if isPlatformOwner();
+      }
 
       match /messages/{messageId} {
         allow read: if isPlatformOwner() || (sameOrg(orgId) && canReadTaskMessage());
-        allow create, update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && taskMessageWriteIsScoped());
-        allow delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
+        allow create: if isPlatformOwner() || messageCreateIsSafe(orgId);
+        allow update: if isPlatformOwner() || messageUpdateIsSafe(orgId);
+        allow delete: if isPlatformOwner() || (canWriteOrgAppData(orgId) && (isOrgAdmin(orgId) || resource.data.senderUid == request.auth.uid));
       }
 
-      match /{collectionId}/{documentId} {
-        allow read: if isPlatformOwner() || sameOrg(orgId);
-        allow create, update, delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
+      match /scheduled_messages/{scheduleId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && (resource.data.senderUid == request.auth.uid || isOrgAdmin(orgId)));
+        allow create: if isPlatformOwner() || scheduledCreateIsSafe(orgId);
+        allow update: if isPlatformOwner() || scheduledUpdateIsSafe(orgId);
+        allow delete: if isPlatformOwner() || (canWriteOrgAppData(orgId) && resource.data.senderUid == request.auth.uid && resource.data.status == 'pending');
+      }
 
-        match /{nestedDocument=**} {
-          allow read: if isPlatformOwner() || sameOrg(orgId);
-          allow create, update, delete: if isPlatformOwner() || canWriteOrgAppData(orgId);
+      match /groups/{groupId} {
+        allow read: if canReadOrg(orgId);
+        allow create: if isPlatformOwner() || (canWriteOrgAppData(orgId) && request.resource.data.createdBy == authedEmail());
+        allow update: if isPlatformOwner() || canWriteOrgAppData(orgId);
+        allow delete: if isPlatformOwner() || (canWriteOrgAppData(orgId) && isOrgAdmin(orgId));
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && (resource.data.userId == request.auth.uid || isOrgAdmin(orgId)));
+        allow create: if isPlatformOwner() || canWriteOrgAppData(orgId);
+        allow update, delete: if isPlatformOwner() || (canWriteOrgAppData(orgId) && (resource.data.userId == request.auth.uid || isOrgAdmin(orgId)));
+      }
+
+      match /reminders/{reminderId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && (resource.data.userId == request.auth.uid || isOrgAdmin(orgId)));
+        allow create: if isPlatformOwner() || (canWriteOrgAppData(orgId) && request.resource.data.userId == request.auth.uid);
+        allow update, delete: if isPlatformOwner() || (canWriteOrgAppData(orgId) && (resource.data.userId == request.auth.uid || isOrgAdmin(orgId)));
+      }
+
+      match /workspace/{workspaceDocId} {
+        allow read: if canReadOrg(orgId);
+        allow write: if isPlatformOwner() || (canWriteOrgAppData(orgId) && isOrgAdmin(orgId));
+      }
+
+      match /workspace_tags/{tagId} {
+        allow read: if canReadOrg(orgId);
+        allow write: if isPlatformOwner() || (canWriteOrgAppData(orgId) && isOrgAdmin(orgId));
+      }
+
+      match /broadcast_acks/{ackId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow create: if isPlatformOwner() || (canWriteOrgAppData(orgId) && request.resource.data.userEmail == authedEmail());
+        allow update, delete: if false;
+      }
+
+      match /typing/{typingId} {
+        allow read: if canReadOrg(orgId);
+        allow create, update: if canWriteOrgAppData(orgId) && requestIsOwnResource();
+        allow delete: if canWriteOrgAppData(orgId) && isOwnResource();
+      }
+
+      match /audit_logs/{auditId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow write: if false;
+      }
+
+      match /abuse_logs/{abuseLogId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow write: if false;
+      }
+
+      match /roles/{roleId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow create, update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && isOrgAdmin(orgId));
+        allow delete: if false;
+      }
+
+      match /sessions/{sessionId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow write: if false;
+      }
+
+      match /retentionPolicies/{policyId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow create, update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && isOrgAdmin(orgId));
+        allow delete: if false;
+      }
+
+      match /retention_cleanup_logs/{cleanupId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow write: if false;
+      }
+
+      match /supportTickets/{ticketId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && (isOrgAdmin(orgId) || resource.data.createdByUid == request.auth.uid));
+        allow write: if false;
+
+        match /replies/{replyId} {
+          allow read: if isPlatformOwner() || (sameOrg(orgId) && (isOrgAdmin(orgId) || get(/databases/$(database)/documents/organizations/$(orgId)/supportTickets/$(ticketId)).data.createdByUid == request.auth.uid));
+          allow write: if false;
         }
       }
-    }
 
+      match /supportTicketWeeklyLimits/{limitId} {
+        allow read, write: if false;
+      }
+
+      match /systemSettings/{settingId} {
+        allow read: if isPlatformOwner() || sameOrg(orgId);
+        allow write: if false;
+      }
+
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
 
     // Legacy root app-data collections were migrated to organizations/{orgId}/...
     // Keep explicit deny rules so accidental root access is not hidden by the

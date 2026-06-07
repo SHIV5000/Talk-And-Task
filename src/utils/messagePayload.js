@@ -17,17 +17,30 @@ const uniqueStrings = (values = []) => Array.from(new Set((Array.isArray(values)
 const normalizeGroup = (group = {}) => ({
   groupId: group.groupId || group.id || '',
   groupName: group.groupName || group.name || '',
+  groupAvatar: group.groupAvatar || group.profilePicUrl || group.avatarUrl || undefined,
 });
 
 const normalizeUser = (user = {}) => ({
   senderUid: user.senderUid || user.uid || '',
   senderEmail: user.senderEmail || user.email || '',
-  senderName: user.senderName || user.name || undefined,
+  senderName: user.senderName || user.name || user.displayName || (user.email ? String(user.email).split('@')[0] : undefined),
+  senderAvatar: user.senderAvatar || user.profilePicUrl || user.photoURL || user.avatarUrl || undefined,
 });
 
 const normalizeReactions = (reactions = {}) => (
   reactions && typeof reactions === 'object' && !Array.isArray(reactions) ? reactions : {}
 );
+
+const normalizeTaskDisplayFields = (taskData = {}, text = '') => ({
+  taskTitle: taskData.title || taskData.taskTitle || text || undefined,
+  taskStatus: taskData.status || undefined,
+  taskPriority: taskData.priority || undefined,
+  taskDeadline: taskData.deadline || undefined,
+  taskAssigneeEmails: uniqueStrings(taskData.assignees || []),
+  taskAssigneeNames: Array.isArray(taskData.assigneeNames) ? uniqueStrings(taskData.assigneeNames) : undefined,
+  taskAssigneeCount: Array.isArray(taskData.assignees) ? taskData.assignees.length : 0,
+  taskMasterReviewerEmail: taskData.masterReviewerEmail || undefined,
+});
 
 const withoutUndefined = (object) => Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
 
@@ -46,12 +59,16 @@ const normalizeCommonMessageFields = ({
   const userFields = normalizeUser(user);
   const senderEmail = userFields.senderEmail;
 
+  const isTaskMessage = isTask === true;
+  const taskDisplayFields = isTaskMessage ? normalizeTaskDisplayFields(extra.taskData, extra.text) : {};
+
   return withoutUndefined({
     ...extra,
     ...userFields,
     ...groupFields,
+    ...taskDisplayFields,
     timestamp,
-    isTask: isTask === true,
+    isTask: isTaskMessage,
     allowedUsers: uniqueStrings(allowedUsers),
     isPrivateForward: isPrivateForward === true,
     seenBy: uniqueStrings(seenBy || (senderEmail ? [senderEmail] : [])),

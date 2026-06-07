@@ -7,6 +7,8 @@ import {
   signOut,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   setPersistence,
   inMemoryPersistence,
@@ -210,6 +212,26 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, [clearSession, hydrateSession]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (!isMounted || !result?.user) return;
+        await hydrateSession(result.user);
+        await notifyLoginSuccess(result.user, 'User authenticated with Google redirect successfully. Safe checkpoint for rollback mapping.');
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        console.error('Failed to complete Google redirect sign-in:', error);
+        setAuthError(error?.userMessage || 'Google Sign-In failed after redirect. Please try again.');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hydrateSession, notifyLoginSuccess]);
+
   const requestNotificationPermission = useCallback(() => {
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
@@ -241,10 +263,16 @@ export function AuthProvider({ children }) {
       await setPersistence(auth, inMemoryPersistence);
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      const result = await signInWithPopup(auth, provider);
-      const loggedInUser = result.user;
-      await hydrateSession(loggedInUser);
-      await notifyLoginSuccess(loggedInUser, 'User authenticated with Google successfully. Safe checkpoint for rollback mapping.');
+      const usePopup = import.meta.env.VITE_AUTH_USE_POPUP === 'true';
+      if (usePopup) {
+        const result = await signInWithPopup(auth, provider);
+        const loggedInUser = result.user;
+        await hydrateSession(loggedInUser);
+        await notifyLoginSuccess(loggedInUser, 'User authenticated with Google popup successfully. Safe checkpoint for rollback mapping.');
+        return;
+      }
+
+      await signInWithRedirect(auth, provider);
     } catch (err) {
       setAuthError(err?.userMessage || 'Google Sign-In Cancelled or Failed.');
     }
@@ -271,18 +299,18 @@ export function AuthProvider({ children }) {
     } catch (err) {
       const code = err?.code || '';
       if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(code)) {
-        setAuthError('Invalid email or password. Use the email and temporary password your admin created.');
+        setAuthError('Invalid email or password. Contact Your School Admin For This App.');
         return;
       }
       if (code === 'auth/too-many-requests') {
-        setAuthError('Too many failed login attempts. Please wait and try again.');
+        setAuthError('Invalid email or password. Contact Your School Admin For This App.');
         return;
       }
       if (code === 'auth/invalid-email') {
-        setAuthError('Please enter a valid email address.');
+        setAuthError('Invalid email or password. Contact Your School Admin For This App.');
         return;
       }
-      setAuthError(err?.userMessage || 'Email/password sign-in failed. Please try again.');
+      setAuthError('Invalid email or password. Contact Your School Admin For This App.');
     }
   }, [hydrateSession, notifyLoginSuccess, requestNotificationPermission]);
 
