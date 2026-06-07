@@ -126,7 +126,7 @@ const MessageBubble = React.memo(({
   const canEditTask = canManageOpenTask;
   const canAttachTaskFiles = canManageOpenTask;
   const canPinItem = isGlobalSuperAdmin || isGroupAdmin;
-  const bubbleWidthClass = isThreadView ? 'w-full max-w-full' : 'w-[80%] max-w-[80%]';
+  const bubbleWidthClass = isThreadView ? 'w-full max-w-full' : msg.isTask ? 'w-[78%] max-w-[78%]' : 'w-[72%] max-w-[72%]';
   const taskShellClass = msg.isTask ? 'border-2 border-indigo-100 border-l-[6px] rounded-2xl' : '';
   const taskVisibleTo = useMemo(() => [...new Set([msg.senderEmail, msg.taskData?.masterReviewerEmail, ...(msg.taskData?.assignees || [])].filter(Boolean))], [msg.senderEmail, msg.taskData?.masterReviewerEmail, msg.taskData?.assignees]);
   const activeAssignees = (msg.taskData?.assignees || []).filter(e => !['revoked', 'transferred_out'].includes(assigneeStates[e]));
@@ -543,6 +543,7 @@ const MessageBubble = React.memo(({
                             {msg.taskData.priority === 'High' ? '🔴' : msg.taskData.priority === 'Medium' ? '🟡' : '🟢'} {msg.taskData.priority || 'Medium'}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${statusBadgeClass}`}>{statusBadgeText === 'Completed' ? '🏁 ' : myAcked ? '✅ ' : '🟠 '}{statusBadgeText}</span>
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider bg-slate-50 text-slate-700 border-slate-200"><i className="fa-solid fa-crown mr-1 text-amber-500"></i>Creator: {getUserName(msg.taskData?.masterReviewerEmail || msg.senderEmail)}</span>
                           {msg.taskData.escalated && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 uppercase">🚨 Escalated</span>
                           )}
@@ -596,7 +597,10 @@ const MessageBubble = React.memo(({
                         </div>
                       </div>
                       {showAssigneeChips && (
-                        <div className="mt-3 flex flex-wrap gap-2 transition-all duration-200">{(msg.taskData.assignees || []).map((email) => <span key={email} className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[11px] font-bold text-indigo-700">{getUserName(email)}</span>)}</div>
+                        <div className="mt-3 flex flex-wrap gap-2 transition-all duration-200">
+                          <span className="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-100 text-[11px] font-bold text-amber-700">Creator · {getUserName(msg.taskData?.masterReviewerEmail || msg.senderEmail)}</span>
+                          {(msg.taskData.assignees || []).map((email) => <span key={email} className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[11px] font-bold text-indigo-700">Assignee · {getUserName(email)}</span>)}
+                        </div>
                       )}
                     </div>
 
@@ -827,6 +831,23 @@ const MessageBubble = React.memo(({
                   <div className={`text-[14px] leading-snug break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={renderSafeRichText(msg.text)}></div>
                 )}
                 
+                {Array.isArray(msg.externalLinks) && msg.externalLinks.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                    {msg.externalLinks.map((link, index) => (
+                      <a
+                        key={`${link.url || index}_${index}`}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700 hover:bg-indigo-100"
+                      >
+                        <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        {link.displayName || 'Open link'}
+                      </a>
+                    ))}
+                  </div>
+                )}
+
                 {!msg.isTask && !msg.isPrivateForward && msg.fileUrl && (
                   <div className="flex flex-col gap-1 my-1">
                     {msg.fileType?.startsWith('image/') ? (

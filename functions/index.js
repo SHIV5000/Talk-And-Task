@@ -1589,6 +1589,128 @@ exports.adminDeleteTaskMessage = onCall(ADMIN_FUNCTION_RUNTIME, async (request) 
   return { ok: true };
 });
 
+
+const addWorkingDaysSkippingUnavailable = (startDate, workingDays, unavailableDates = []) => {
+  const unavailable = new Set(unavailableDates || []);
+  const cursor = new Date(startDate);
+  let added = 0;
+  while (added < workingDays) {
+    cursor.setDate(cursor.getDate() + 1);
+    const day = cursor.getDay();
+    const iso = cursor.toISOString().split('T')[0];
+    if (day === 0 || day === 6 || unavailable.has(iso)) continue;
+    added += 1;
+  }
+  return admin.firestore.Timestamp.fromDate(cursor);
+};
+
+const getSupportRuntimeState = async (orgId) => {
+  const settingsRef = db.collection('organizations').doc(orgId).collection('systemSettings').doc('supportStatus');
+  const unavailableRef = db.collection('organizations').doc(orgId).collection('systemSettings').doc('developerUnavailability');
+  const [settingsSnap, unavailableSnap] = await Promise.all([settingsRef.get(), unavailableRef.get()]);
+  return {
+    statusRef: settingsRef,
+    isAcceptingTickets: settingsSnap.exists ? settingsSnap.data().isAcceptingTickets !== false : true,
+    pausedReason: settingsSnap.data()?.pausedReason || '',
+    unavailableDates: unavailableSnap.data()?.unavailableDates || [],
+  };
+};
+
+exports.createSupportTicket = onCall(FUNCTION_RUNTIME, async (request) => {
+  const { orgId, subject, category = 'General', priority = 'normal', description = '' } = request.data || {};
+  const cleanSubject = String(subject || '').trim();
+  const cleanDescription = String(description || '').trim();
+  if (!cleanSubject || !cleanDescription) throw new HttpsError('invalid-argument', 'Subject and description are required.');
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  await enforceCallableRateLimit(request, 'default', orgId);
+  const cleanOrgId = String(orgId || '').trim();
+  if (!cleanOrgId) throw new HttpsError('invalid-argument', 'orgId is required.');
+  const caller = await getCallerProfile(request);
+  if (String(caller.orgId || request.auth.token?.orgId || '') !== cleanOrgId) throw new HttpsError('permission-denied', 'Organization mismatch.');
+  const runtime = await getSupportRuntimeState(cleanOrgId);
+  if (!runtime.isAcceptingTickets) throw new HttpsError('failed-precondition', runtime.pausedReason || 'Support tickets are temporarily paused.');
+  const weekStart = new Date();
+  const weekday = weekStart.getDay() || 7;
+  weekStart.setDate(weekStart.getDate() - weekday + 1);
+  const weekKey = getDayKey(weekStart);
+  const weeklyRef = db.collection('organizations').doc(cleanOrgId).collection('supportTicketWeeklyLimits').doc(`${weekKey}_${request.auth.uid}`);
+  const ticketRef = db.collection('organizations').doc(cleanOrgId).collection('supportTickets').doc();
+  await db.runTransaction(async (transaction) => {
+    const weeklySnap = await transaction.get(weeklyRef);
+    if ((weeklySnap.data()?.count || 0) >= 1) throw new HttpsError('resource-exhausted', 'You can create only 1 support ticket per week.');
+    const estimatedResolution = addWorkingDaysSkippingUnavailable(new Date(), priority === 'urgent' ? 2 : 5, runtime.unavailableDates);
+    transaction.set(ticketRef, {
+      subject: cleanSubject.slice(0, 140),
+      category: String(category || 'General').trim().slice(0, 60),
+      priority: String(priority || 'normal').trim().slice(0, 20),
+      description: cleanDescription.slice(0, 4000),
+      status: 'open',
+      orgId: cleanOrgId,
+      createdByUid: request.auth.uid,
+      createdByEmail: caller.email || request.auth.token?.email || '',
+      createdByName: caller.name || request.auth.token?.name || caller.email || 'User',
+      estimatedResolution,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      auditTrail: [{ action: 'created', actorUid: request.auth.uid, actorEmail: caller.email || '', at: admin.firestore.Timestamp.now() }],
+    });
+    transaction.set(weeklyRef, { uid: request.auth.uid, weekKey, count: admin.firestore.FieldValue.increment(1), updatedAt: serverTimestamp() }, { merge: true });
+  });
+  await ticketRef.collection('replies').add({ text: cleanDescription, actorUid: request.auth.uid, actorEmail: caller.email || '', visibility: 'public', createdAt: serverTimestamp() });
+  await logOrgAuditEvent(cleanOrgId, 'SUPPORT_TICKET_CREATE', request.auth.uid, ticketRef.id, { subject, category, priority });
+  return { ok: true, ticketId: ticketRef.id };
+});
+
+exports.replySupportTicket = onCall(FUNCTION_RUNTIME, async (request) => {
+  const { orgId, ticketId, text, internal = false } = request.data || {};
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  await enforceCallableRateLimit(request, 'default', orgId);
+  const caller = await getCallerProfile(request);
+  const ticketRef = db.collection('organizations').doc(orgId).collection('supportTickets').doc(String(ticketId || '').trim());
+  const ticketSnap = await ticketRef.get();
+  if (!ticketSnap.exists) throw new HttpsError('not-found', 'Ticket not found.');
+  const ticket = ticketSnap.data() || {};
+  const isAdmin = caller.isAdmin || request.auth.token?.admin || caller.isPlatformOwner;
+  if (!isAdmin && ticket.createdByUid !== request.auth.uid) throw new HttpsError('permission-denied', 'Ticket access denied.');
+  await ticketRef.collection('replies').add({ text: String(text || '').trim().slice(0, 4000), actorUid: request.auth.uid, actorEmail: caller.email || '', visibility: internal && isAdmin ? 'internal' : 'public', createdAt: serverTimestamp() });
+  await ticketRef.set({ updatedAt: serverTimestamp(), lastReplyAt: serverTimestamp(), status: ticket.status === 'open' && isAdmin ? 'in-progress' : ticket.status }, { merge: true });
+  await logOrgAuditEvent(orgId, 'SUPPORT_TICKET_REPLY', request.auth.uid, ticketId, { internal: internal && isAdmin });
+  return { ok: true };
+});
+
+exports.updateSupportTicketStatus = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, ticketId, status } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const allowed = ['open', 'in-progress', 'resolved', 'closed'];
+  if (!allowed.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status.');
+  const update = { status, updatedAt: serverTimestamp() };
+  if (status === 'resolved') update.resolvedAt = serverTimestamp();
+  await db.collection('organizations').doc(orgId).collection('supportTickets').doc(String(ticketId || '').trim()).set(update, { merge: true });
+  await logOrgAuditEvent(orgId, 'SUPPORT_TICKET_STATUS', caller.uid, ticketId, { status });
+  return { ok: true };
+});
+
+exports.setSupportIntakeStatus = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, isAcceptingTickets, pausedReason = '' } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  await db.collection('organizations').doc(orgId).collection('systemSettings').doc('supportStatus').set({ isAcceptingTickets: isAcceptingTickets !== false, pausedReason: String(pausedReason || '').slice(0, 500), pausedAt: isAcceptingTickets === false ? serverTimestamp() : null, updatedAt: serverTimestamp(), updatedBy: caller.uid }, { merge: true });
+  await logOrgAuditEvent(orgId, 'SUPPORT_INTAKE_STATUS', caller.uid, 'supportStatus', { isAcceptingTickets, pausedReason });
+  return { ok: true };
+});
+
+exports.setDeveloperUnavailability = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, unavailableDates = [] } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const dates = [...new Set((Array.isArray(unavailableDates) ? unavailableDates : []).map((date) => String(date || '').slice(0, 10)).filter(Boolean))].sort();
+  await db.collection('organizations').doc(orgId).collection('systemSettings').doc('developerUnavailability').set({ unavailableDates: dates, updatedAt: serverTimestamp(), updatedBy: caller.uid }, { merge: true });
+  const openTickets = await db.collection('organizations').doc(orgId).collection('supportTickets').where('status', 'in', ['open', 'in-progress']).limit(200).get();
+  const batch = db.batch();
+  openTickets.docs.forEach((ticketSnap) => batch.set(ticketSnap.ref, { estimatedResolution: addWorkingDaysSkippingUnavailable(new Date(), 5, dates), updatedAt: serverTimestamp() }, { merge: true }));
+  if (!openTickets.empty) await batch.commit();
+  await logOrgAuditEvent(orgId, 'SUPPORT_UNAVAILABILITY_UPDATE', caller.uid, 'developerUnavailability', { unavailableDates: dates, recalculated: openTickets.size });
+  return { ok: true, recalculated: openTickets.size };
+});
+
 const getDayKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
 const PDF_DAILY_LIMIT = 5;
 

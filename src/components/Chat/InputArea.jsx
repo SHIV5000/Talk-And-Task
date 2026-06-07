@@ -20,6 +20,9 @@ export default function InputArea({
 }) {
 
   const [hasSelection, setHasSelection] = useState(false);
+  const [pendingLinks, setPendingLinks] = useState([]);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkForm, setLinkForm] = useState({ displayName: '', url: '' });
 
   const rawText = chatInputRef.current?.innerText || '';
   const lastWord = rawText.trim() ? rawText.split(/\s/).pop() : '';
@@ -83,8 +86,26 @@ export default function InputArea({
       chatInputRef.current.innerHTML = '';
     }
     setInputText('');
+    setPendingLinks([]);
     setReplyingTo?.(null);
     clearTypingIndicator();
+  };
+
+  const addExternalLink = () => {
+    const displayName = linkForm.displayName.trim();
+    const rawUrl = linkForm.url.trim();
+    if (!displayName) return alert('Enter a link display name.');
+    let parsedUrl;
+    try { parsedUrl = new URL(rawUrl); } catch (error) { return alert('Enter a valid URL including https://'); }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) return alert('Only http/https links are allowed.');
+    setPendingLinks(prev => [...prev, { id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, displayName, url: parsedUrl.href }]);
+    setLinkForm({ displayName: '', url: '' });
+    setLinkModalOpen(false);
+  };
+
+  const sendComposer = async () => {
+    await handleSendOfflineAware?.({ externalLinks: pendingLinks.map(({ displayName, url }) => ({ displayName, url })) });
+    setPendingLinks([]);
   };
 
   const isPdfFile = (file) => /pdf$/i.test(file?.name || '') || file?.type === 'application/pdf';
@@ -129,6 +150,31 @@ export default function InputArea({
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('foreColor', false, '#cc5500'); handleInput({ notifyTyping: false }); }} className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white shadow" style={{ backgroundColor: '#cc5500' }} title="Dark Orange"></button>
         <button onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat', false, null); handleInput({ notifyTyping: false }); clearTypingIndicator(); }} className="ml-auto px-2 h-7 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-white transition-colors" title="Clear formatting"><i className="fa-solid fa-eraser mr-1"></i>Clear</button>
       </div>
+
+      {linkModalOpen && (
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-black uppercase tracking-widest text-indigo-700"><i className="fa-solid fa-link mr-1"></i>Attach Link</div>
+            <button type="button" onClick={() => setLinkModalOpen(false)} className="text-slate-400 hover:text-rose-500"><i className="fa-solid fa-xmark"></i></button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr_auto] gap-2">
+            <input value={linkForm.displayName} onChange={(e) => setLinkForm(prev => ({ ...prev, displayName: e.target.value }))} placeholder="Display name" className="rounded-xl border border-indigo-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300" />
+            <input value={linkForm.url} onChange={(e) => setLinkForm(prev => ({ ...prev, url: e.target.value }))} placeholder="https://example.com/document" className="rounded-xl border border-indigo-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300" />
+            <button type="button" onClick={addExternalLink} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">Add</button>
+          </div>
+        </div>
+      )}
+
+      {pendingLinks.length > 0 && (
+        <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+          {pendingLinks.map((link) => (
+            <span key={link.id} className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-sm border border-indigo-100">
+              <i className="fa-solid fa-link"></i>{link.displayName}
+              <button type="button" onClick={() => setPendingLinks(prev => prev.filter(item => item.id !== link.id))} className="text-slate-400 hover:text-rose-500"><i className="fa-solid fa-xmark"></i></button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {mentionQuery !== null && (
         <div className="absolute bottom-[100%] left-4 bg-white dark:bg-slate-900 shadow-2xl rounded-xl w-72 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 z-[var(--z-dropdown)] py-2 mb-2 border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
@@ -228,6 +274,10 @@ export default function InputArea({
           <i className="fa-solid fa-plus text-xl"></i>
         </button>
 
+        <button type="button" onClick={() => setLinkModalOpen(true)} className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors shrink-0" title="Attach external link">
+          <i className="fa-solid fa-link text-lg"></i>
+        </button>
+
         <div className="relative shrink-0" ref={emojiPickerRef}>
           <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="w-[42px] h-[42px] flex items-center justify-center text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
             <i className="fa-regular fa-face-smile text-xl"></i>
@@ -257,7 +307,7 @@ export default function InputArea({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (inputText.trim() && inputText !== '<br>') handleSendOfflineAware();
+                if ((inputText.trim() && inputText !== '<br>') || pendingLinks.length > 0) sendComposer();
               }
             }}
           />
@@ -280,15 +330,15 @@ export default function InputArea({
           <button
             type="button"
             onClick={clearComposer}
-            disabled={!inputText.trim() || inputText === '<br>'}
-            className={`h-[42px] px-3 rounded-xl text-xs font-bold transition-colors ${inputText.trim() && inputText !== '<br>' ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700' : 'border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:border-slate-800 dark:bg-slate-900 dark:text-slate-600'}`}
+            disabled={(!inputText.trim() || inputText === '<br>') && pendingLinks.length === 0}
+            className={`h-[42px] px-3 rounded-xl text-xs font-bold transition-colors ${(inputText.trim() && inputText !== '<br>') || pendingLinks.length > 0 ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700' : 'border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:border-slate-800 dark:bg-slate-900 dark:text-slate-600'}`}
           >
             Cancel
           </button>
           <button
-            onClick={handleSendOfflineAware}
-            disabled={!inputText.trim() || inputText === '<br>'}
-            className={`min-w-[42px] h-[42px] px-3 flex justify-center items-center rounded-xl transition-colors ${inputText.trim() && inputText !== '<br>' ? 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-600'}`}
+            onClick={sendComposer}
+            disabled={(!inputText.trim() || inputText === '<br>') && pendingLinks.length === 0}
+            className={`min-w-[42px] h-[42px] px-3 flex justify-center items-center rounded-xl transition-colors ${(inputText.trim() && inputText !== '<br>') || pendingLinks.length > 0 ? 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-600'}`}
           >
             <i className="fa-solid fa-paper-plane text-[15px] ml-[-2px]"></i>
           </button>

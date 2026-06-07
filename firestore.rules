@@ -151,6 +151,7 @@ service cloud.firestore {
         request.resource.data.senderEmail == authedEmail() &&
         request.resource.data.groupId is string &&
         request.resource.data.groupId.size() > 0 &&
+        (request.resource.data.groupId != 'support' || isOrgAdmin(orgId)) &&
         !request.resource.data.keys().hasAny([
           'orgId',
           'status',
@@ -244,6 +245,7 @@ service cloud.firestore {
           'originalFileSize',
           'uploadedBy',
           'uploadedAt',
+          'externalLinks',
           'updatedAt'
         ]) &&
         taskMessageWriteIsScoped() &&
@@ -257,6 +259,7 @@ service cloud.firestore {
         request.resource.data.status == 'pending' &&
         request.resource.data.groupId is string &&
         request.resource.data.groupId.size() > 0 &&
+        (request.resource.data.groupId != 'support' || isOrgAdmin(orgId)) &&
         !request.resource.data.keys().hasAny(['sentAt', 'processedAt', 'processedBy', 'deliveredAt', 'deliveryStatus']);
     }
 
@@ -403,6 +406,25 @@ service cloud.firestore {
 
       match /retention_cleanup_logs/{cleanupId} {
         allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow write: if false;
+      }
+
+      match /supportTickets/{ticketId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && (isOrgAdmin(orgId) || resource.data.createdByUid == request.auth.uid));
+        allow write: if false;
+
+        match /replies/{replyId} {
+          allow read: if isPlatformOwner() || (sameOrg(orgId) && (isOrgAdmin(orgId) || get(/databases/$(database)/documents/organizations/$(orgId)/supportTickets/$(ticketId)).data.createdByUid == request.auth.uid));
+          allow write: if false;
+        }
+      }
+
+      match /supportTicketWeeklyLimits/{limitId} {
+        allow read, write: if false;
+      }
+
+      match /systemSettings/{settingId} {
+        allow read: if isPlatformOwner() || sameOrg(orgId);
         allow write: if false;
       }
 

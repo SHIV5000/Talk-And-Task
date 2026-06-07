@@ -978,13 +978,14 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         setTimeout(() => setPendingScrollTarget(msgId), 80);
     }, [activeGroup, groups, messages]);
 
-    const handleSendOfflineAware = async () => {
-        if (!inputText.trim() || inputText === '<br>' || !activeGroup || !ensureOrgContext('send messages')) return;
+    const handleSendOfflineAware = async (options = {}) => {
+        const hasExternalLinks = Array.isArray(options.externalLinks) && options.externalLinks.length > 0;
+        if (((!inputText.trim() || inputText === '<br>') && !hasExternalLinks) || !activeGroup || !ensureOrgContext('send messages')) return;
         if (!isOnline) {
             await saveOfflineDraft(inputText.trim(), activeGroup.id, activeGroup.name);
             setInputText(""); alert("📥 You are offline. Message saved as draft and will be sent when you reconnect."); return;
         }
-        await handleSendMessage();
+        await handleSendMessage(options);
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
     };
 
@@ -996,10 +997,11 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         }
     }, [triggerTypingEvent, currentUserData?.name]);
 
-    const handleSendMessage = async () => {
-        if (!inputText.trim() || !activeGroup || !ensureOrgContext('send messages')) return;
+    const handleSendMessage = async (options = {}) => {
+        const hasExternalLinks = Array.isArray(options.externalLinks) && options.externalLinks.length > 0;
+        if (((!inputText.trim() || inputText === '<br>') && !hasExternalLinks) || !activeGroup || !ensureOrgContext('send messages')) return;
         const msgText = inputText.trim();
-        await sendMessageToDB(msgText, replyingTo);
+        await sendMessageToDB(msgText, replyingTo, [], null, options);
         playMelody('messageSent');
         if(chatInputRef.current) chatInputRef.current.innerHTML = '';
         setInputText(""); setEmojiPickerOpen(false); setReplyingTo(null);
@@ -1458,7 +1460,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     // 👇 modalProps – ADD the new acknowledgment & proof states so they reach TaskConvertModal
     const modalProps = {
         activeModal, setActiveModal, selectedMessage, setSelectedMessage,
-        featureFlags,
+        featureFlags, orgId,
         setReplyingTo, chatInputRef, currentUserData, profileForm,
         setProfileForm, profilePicInputRef, profileUploadProgress,
         profilePhotoDraft, setProfilePhotoDraft,
@@ -1843,7 +1845,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
                               sidebarWidth={rightWidth}
                               showRightSidebar={showRightSidebar} setShowRightSidebar={setShowRightSidebar} tasksAssignedToMe={tasksAssignedToMe}
                               tasksAssignedByMe={tasksAssignedByMe} groups={groups} dbUsers={dbUsers} user={user} setActiveGroup={setActiveGroup}
-                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={effectiveCurrentUserData} appVersion={appVersion}
+                              navigateToMessageFromNotification={scrollToTaskInMainChat} archivedTasks={[]} messages={messages} currentUserData={effectiveCurrentUserData} appVersion={appVersion} orgId={orgId}
                             />
                           </>
                         ) : null}

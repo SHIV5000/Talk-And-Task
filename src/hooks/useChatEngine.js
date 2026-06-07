@@ -320,7 +320,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
         try { setDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`), { groupId: activeGroup.id, userId: user.uid, userEmail: user.email, name: userName || user.email.split('@')[0], timestamp: Date.now() }, { merge: true }); } catch (e) {}
     };
 
-    const sendMessageToDB = async (messageText, replyingTo, attachments = [], uploadProgressCb = null) => {
+    const sendMessageToDB = async (messageText, replyingTo, attachments = [], uploadProgressCb = null, options = {}) => {
         if (!hasOrgContext('send messages') || !activeGroup?.id || !user?.uid) return;
         try { deleteDoc(orgDoc("typing", `${activeGroup.id}_${user.uid}`)); } catch(e) {}
 
@@ -340,7 +340,8 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             return;
         }
 
-        const hasTextMessage = !!(messageText || '').replace(/<br\s*\/?>/gi, '').trim();
+        const externalLinks = Array.isArray(options.externalLinks) ? options.externalLinks.filter(link => link?.displayName && link?.url) : [];
+        const hasTextMessage = !!(messageText || '').replace(/<br\s*\/?>/gi, '').trim() || externalLinks.length > 0;
         let groupMsgRef = null;
         if (hasTextMessage) {
             const buildPayload = supportRouting.isPrivateForward ? buildPrivateSupportReplyPayload : buildPublicMessagePayload;
@@ -353,6 +354,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                 mentionEmails: uniqueMentions,
                 ...(replyData || {}),
                 ...(supportRouting.isPrivateForward ? { allowedUsers: supportRouting.allowedUsers || [] } : {}),
+                ...(externalLinks.length ? { externalLinks } : {}),
             }));
             logImmutableAction("MESSAGE_CREATE", `Sent message: "${messageText}"`, supportRouting.isPrivateForward ? `Private SUPPORT: ${(supportRouting.allowedUsers || []).join(', ')}` : (uniqueMentions.length ? `Mentions: ${uniqueMentions.join(', ')}` : "Public"));
         }
