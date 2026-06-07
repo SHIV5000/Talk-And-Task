@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { formatMessageText } from '../../utils/helpers.js';
 import { validateMessagePayload } from '../../utils/messagePayload.js';
+import { renderSafeRichText, richTextToPlainText } from '../../utils/richText.js';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import useUserDisplayName from '../../hooks/useUserDisplayName.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -17,12 +17,6 @@ const formatTaskDateTime = (value) => { if (!value) return 'N/A'; const d = new 
 
 const STANDARD_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥', '👀', '💯', '✅', '❌', '🙏', '🙌', '✨', '🤔', '😎', '🥳', '🚀', '💡', '📌', '🤝', '👌', '🎯'];
 
-const normalizeBasicRichText = (value = '') => String(value)
-  .replace(/<\s*(b|strong)\s*>(.*?)<\s*\/\s*(b|strong)\s*>/gis, '*$2*')
-  .replace(/<\s*(i|em)\s*>(.*?)<\s*\/\s*(i|em)\s*>/gis, '_$2_')
-  .replace(/<\s*u\s*>(.*?)<\s*\/\s*u\s*>/gis, '$1');
-const renderBasicRichText = (value = '') => ({ __html: formatMessageText(normalizeBasicRichText(value)) });
-const plainTaskText = (value = '') => normalizeBasicRichText(value).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
 
 const MessageBubble = React.memo(({
   msg, userEmail, currentUserData, activeGroup, isVipAdmin,
@@ -227,7 +221,7 @@ const MessageBubble = React.memo(({
     if (!canEditTask) return;
     if (!hasOrgContext('edit task titles')) return;
     if (!tempTitle.trim()) return setIsEditingTitle(false);
-    try { await updateDoc(orgDocRef("messages", msg.id), { text: plainTaskText(tempTitle).trim() || "Task" }); setIsEditingTitle(false); } catch(e) {}
+    try { await updateDoc(orgDocRef("messages", msg.id), { text: richTextToPlainText(tempTitle).trim() || "Task" }); setIsEditingTitle(false); } catch(e) {}
   };
 
   const submitInlineUpdate = async () => {
@@ -553,7 +547,7 @@ const MessageBubble = React.memo(({
                         </div>
                       ) : (
                         <p className={`text-sm font-semibold mb-3 leading-snug relative group/title ${isTaskCompleted ? 'text-slate-500' : 'text-slate-800'}`}>
-                          <span dangerouslySetInnerHTML={renderBasicRichText(msg.text)}></span>
+                          <span dangerouslySetInnerHTML={renderSafeRichText(msg.text)}></span>
                           {canEditTask && isTaskParticipant && <i className="fa-solid fa-pen text-slate-300 hover:text-indigo-600 cursor-pointer ml-2 opacity-0 group-hover/title:opacity-100 transition-opacity" onClick={(e)=>{e.stopPropagation(); setIsEditingTitle(true);}}></i>}
                         </p>
                       )}
@@ -777,7 +771,7 @@ const MessageBubble = React.memo(({
                                       <span className="text-[10px] font-bold text-slate-400">{t.time?.split(',')[0]}</span>
                                     </div>
                                     <div className="text-[13px] text-slate-600 leading-snug break-words">
-                                      <span className="font-semibold" dangerouslySetInnerHTML={renderBasicRichText(formatTrailAction(t))}></span>
+                                      <span className="font-semibold" dangerouslySetInnerHTML={renderSafeRichText(formatTrailAction(t))}></span>
                                       {t.fileUrl && (
                                           <div className="mt-2 flex items-center gap-2 p-1.5 border-2 border-slate-300 rounded-md bg-slate-50 cursor-pointer hover:bg-slate-100 relative" onClick={() => window.open(t.fileUrl, '_blank')}>
                                              <i className="fa-solid fa-file text-indigo-500 text-lg"></i>
@@ -805,7 +799,7 @@ const MessageBubble = React.memo(({
                        <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0"><i className="fa-solid fa-share-nodes text-[10px]"></i></div>
                        <span className="text-xs font-bold text-purple-700 leading-tight">Mentioned in {msg.forwardedFromGroupName}</span>
                      </div>
-                     <p className="text-[13px] text-slate-700 font-medium italic border-l-[3px] border-purple-300 pl-3 ml-1 break-words">"{msg.text?.replace('[Forwarded Private Mention] ', '')}"</p>
+                     <p className="text-[13px] text-slate-700 font-medium italic border-l-[3px] border-purple-300 pl-3 ml-1 break-words">"{richTextToPlainText(msg.text?.replace('[Forwarded Private Mention] ', '') || '')}"</p>
                   </div>
                 )}
 
@@ -813,7 +807,7 @@ const MessageBubble = React.memo(({
                   <div className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 mb-1 w-fit">@ Mentioned You</div>
                 )}
                 {!msg.isTask && !msg.isPrivateForward && msg.text && (
-                  <div className={`text-[14px] leading-snug break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={{ __html: msg.text }}></div>
+                  <div className={`text-[14px] leading-snug break-words font-medium text-slate-800 ${msg.fileUrl ? 'mb-2' : ''}`} dangerouslySetInnerHTML={renderSafeRichText(msg.text)}></div>
                 )}
                 
                 {!msg.isTask && !msg.isPrivateForward && msg.fileUrl && (
@@ -986,7 +980,7 @@ const MessageBubble = React.memo(({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-[11px] text-indigo-600">{replyName} <span className="text-[10px] text-slate-400 font-semibold ml-1">{reply.time}</span></div>
-                      <div className="text-[13px] text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: reply.text || '' }}></div>
+                      <div className="text-[13px] text-slate-700 break-words" dangerouslySetInnerHTML={renderSafeRichText(reply.text || '')}></div>
                       {reply.fileUrl && reply.fileName && (
                         <div className="inline-flex items-center gap-1 mt-1 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs text-slate-600 cursor-pointer hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); window.open(reply.fileUrl, '_blank'); }}>
                           <i className="fa-solid fa-paperclip text-indigo-500 text-[10px]"></i>

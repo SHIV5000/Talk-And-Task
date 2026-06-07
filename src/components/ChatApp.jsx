@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 // Utils & Firebase Core
 import { lockExtension, getNextWorkingDay9AM } from '../utils/helpers.js';
 import { buildTaskMessagePayload } from '../utils/messagePayload.js';
+import { richTextToPlainText, richTextToSafeHtml } from '../utils/richText.js';
 import { compressImage } from '../utils/imageUtils.js';
 import { auth, db, storage, signOut } from '../firebase.js';
 import { collection, addDoc, doc, updateDoc, setDoc, getDocs, query, where, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
@@ -1126,7 +1127,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
             const finalAssignees = Array.from(new Set([...(taskAssignees || [])]));
 
-            const sanitizedTaskTitle = stripHtml(selectedMessage.text || "").replace(/ |&nbsp;/g, " ").trim() || "Task";
+            const sanitizedTaskTitle = richTextToSafeHtml(selectedMessage.text || "") || richTextToPlainText(selectedMessage.text || "") || "Task";
 
             const taskData = {
                 deadline: taskDeadline,
