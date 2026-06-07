@@ -40,6 +40,10 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
         return doc(db, "organizations", orgId, collectionName, id);
     }, [orgId]);
 
+    const handleSnapshotError = useCallback((label) => (error) => {
+        console.warn(`Unable to listen for ${label}:`, error);
+    }, []);
+
     const verifyAdminStatus = useCallback(async () => {
         if (!auth.currentUser) return false;
         if (isGlobalSuperAdminEmail(auth.currentUser.email)) return true;
@@ -57,14 +61,14 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
         if (!orgId || !user?.uid) return;
 
         const qPersonal = query(orgCollection("reminders"), where("userId", "==", user.uid), where("isTriggered", "==", false), orderBy("remindAt", "asc"), limit(100));
-        const unsubPersonal = onSnapshot(qPersonal, (snapshot) => setActiveReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubPersonal = onSnapshot(qPersonal, (snapshot) => setActiveReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))), handleSnapshotError('personal reminders'));
 
         const qAlerts = query(orgCollection("notifications"), where("userId", "==", user.uid), where("isRead", "==", false), orderBy("timestamp", "desc"), limit(100));
         const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
             const now = Date.now();
             const sorted = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => !n.snoozeUntil || (n.snoozeUntil?.toMillis?.() || new Date(n.snoozeUntil).getTime() || 0) <= now).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
             setGenericNotifications(sorted);
-        });
+        }, handleSnapshotError('notifications'));
 
         const unsubTags = onSnapshot(orgCollection("workspace_tags"), (snapshot) => {
             if (snapshot.empty) {
@@ -77,7 +81,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
             } else {
                 setCustomTags(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)));
             }
-        });
+        }, handleSnapshotError('workspace tags'));
 
         const unsubAnnouncement = onSnapshot(orgDoc("workspace", "announcement"), (docSnap) => {
             if (docSnap.exists()) {
@@ -85,12 +89,12 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
             } else {
                 setGlobalAnnouncement(null);
             }
-        });
+        }, handleSnapshotError('workspace announcement'));
 
         let unsubAdmin = () => {}; let unsubAudit = () => {};
         if (currentUserData?.isAdmin || isVipAdmin) {
             const qAdmin = query(orgCollection("reminders"), orderBy("remindAt", "desc"), limit(200));
-            unsubAdmin = onSnapshot(qAdmin, (snapshot) => setAllAdminReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
+            unsubAdmin = onSnapshot(qAdmin, (snapshot) => setAllAdminReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))), handleSnapshotError('admin reminders'));
             const qAudit = query(orgCollection("audit_logs"), orderBy("timestamp", "desc"), limit(200));
             unsubAudit = onSnapshot(qAudit, (snapshot) => {
                 setImmutableAuditLogs(snapshot.docs.map(d => {
@@ -102,10 +106,10 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
                         dateString: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString().split('T')[0] : '' 
                     };
                 }));
-            });
+            }, handleSnapshotError('audit logs'));
         }
         return () => { unsubPersonal(); unsubAlerts(); unsubAdmin(); unsubAudit(); unsubTags(); unsubAnnouncement(); };
-    }, [orgId, user?.uid, currentUserData?.isAdmin, isVipAdmin, orgCollection, orgDoc]);
+    }, [orgId, user?.uid, currentUserData?.isAdmin, isVipAdmin, orgCollection, orgDoc, handleSnapshotError]);
 
     useEffect(() => {
         if (!orgId || !user?.uid) return;
@@ -138,7 +142,7 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
             } else {
                 setCurrentUserData(buildFallbackUserData(user));
             }
-        });
+        }, handleSnapshotError('current user profile'));
 
         const unsubUsers = onSnapshot(query(collection(db, "users"), where("orgId", "==", orgId), limit(500)), (snapshot) => {
             const fetchedUsers = snapshot.docs.map(document => document.data());
@@ -149,14 +153,14 @@ export default function useWorkspaceData(user, profileForm, setProfileForm, orgI
             
             // Hide archived users globally
             setDbUsers(fetchedUsers.filter(u => !u.isArchived));
-        });
+        }, handleSnapshotError('organization users'));
         
         const unsubGroups = onSnapshot(orgCollection("groups"), (snapshot) => {
             setGroups(snapshot.docs.map(document => ({ id: document.id, ...document.data() })));
-        });
+        }, handleSnapshotError('groups'));
 
         return () => { clearInterval(heartbeatInterval); unsubCurrent(); unsubUsers(); unsubGroups(); };
-    }, [orgId, user, currentUserData?.isAdmin, isVipAdmin, profileForm.name, setProfileForm, orgCollection]);
+    }, [orgId, user, currentUserData?.isAdmin, isVipAdmin, profileForm.name, setProfileForm, orgCollection, handleSnapshotError]);
 
     return {
         isVipAdmin, currentUserData, dbUsers, allUsers, groups,

@@ -187,8 +187,13 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             limit(CHAT_MESSAGE_PAGE_SIZE)
         );
 
-        const unsubNonTasks = onSnapshot(latestNonTaskQuery, cacheSnapshotChanges);
-        const unsubTasks = onSnapshot(latestTaskQuery, cacheSnapshotChanges);
+        const handleMessagesSnapshotError = (error) => {
+            console.warn('Unable to listen for chat messages:', error);
+            addToast?.('Unable to load chat messages. Please refresh after workspace permissions finish syncing.', 'warning');
+        };
+
+        const unsubNonTasks = onSnapshot(latestNonTaskQuery, cacheSnapshotChanges, handleMessagesSnapshotError);
+        const unsubTasks = onSnapshot(latestTaskQuery, cacheSnapshotChanges, handleMessagesSnapshotError);
 
         return () => { unsubNonTasks(); unsubTasks(); };
     }, [shouldLoadChatData, orgId, user?.uid, user?.email, activeGroup?.id, cacheSnapshotChanges, orgCollection]);
@@ -204,6 +209,9 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                 .map(([id, value]) => ({ id, ...(value || {}) }))
                 .filter((entry) => entry.userId !== user.uid && entry.name && now - Number(entry.clientTimestamp || 0) < 3000);
             setTypingStatus(currentTyping);
+        }, (error) => {
+            console.warn('Unable to listen for typing indicators:', error);
+            setTypingStatus([]);
         });
         return () => unsubscribe();
     }, [activeGroup?.id, orgId, user?.uid]);
@@ -333,7 +341,11 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     const clearTypingEvent = useCallback(() => {
         const path = typingRtdbPath();
         if (!path) return;
-        try { rtdbRemove(rtdbRef(realtimeDb, path)); } catch (e) {}
+        try {
+            rtdbRemove(rtdbRef(realtimeDb, path)).catch((error) => {
+                console.warn('Failed to clear typing indicator:', error);
+            });
+        } catch (e) {}
     }, [typingRtdbPath]);
 
     const triggerTypingEvent = (userName) => {
@@ -344,12 +356,15 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             const currentTypingRef = rtdbRef(realtimeDb, path);
             onDisconnect(currentTypingRef).remove().catch(() => {});
             rtdbSet(currentTypingRef, {
+                orgId,
                 groupId: activeGroup.id,
                 userId: user.uid,
-                userEmail: user.email,
-                name: userName || user.email.split('@')[0],
+                userEmail: user.email || '',
+                name: userName || user.email?.split('@')[0] || 'Someone',
                 timestamp: rtdbServerTimestamp(),
                 clientTimestamp: Date.now(),
+            }).catch((error) => {
+                console.warn('Failed to set typing indicator:', error);
             });
         } catch (e) {}
     };

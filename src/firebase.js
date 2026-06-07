@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
-  signInWithEmailAndPassword, setPersistence, inMemoryPersistence
+  signInWithRedirect, getRedirectResult, signInWithEmailAndPassword, setPersistence, inMemoryPersistence
 } from 'firebase/auth';
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
@@ -19,7 +19,7 @@ const firebaseConfig = {
   authDomain: "niltask.firebaseapp.com",
   projectId: "niltask",
   storageBucket: "niltask.firebasestorage.app",
- databaseURL: "https://niltask-default-rtdb.asia-southeast1.firebasedatabase.app",
+  databaseURL: "https://niltask-default-rtdb.firebaseio.com",
   messagingSenderId: "868641827920",
   appId: "1:868641827920:web:70d9db79a361a76468f555"
 };
@@ -66,7 +66,7 @@ export const performance = typeof window !== 'undefined' ? getPerformance(app) :
 
 export {
   onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
-  signInWithEmailAndPassword, setPersistence, inMemoryPersistence,
+  signInWithRedirect, getRedirectResult, signInWithEmailAndPassword, setPersistence, inMemoryPersistence,
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, setDoc, getDocs, where, deleteDoc,
   ref, uploadBytesResumable, getDownloadURL,

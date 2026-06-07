@@ -22,15 +22,41 @@ service cloud.firestore {
       return signedIn() && request.auth.token.orgId is string && request.auth.token.orgId.size() > 0;
     }
 
-    function sameOrg(orgId) {
+    function signedInUserPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function hasSignedInUserProfile() {
+      return signedIn() && exists(signedInUserPath());
+    }
+
+    function tokenMatchesOrg(orgId) {
       return hasOrgClaim() && request.auth.token.orgId == orgId;
+    }
+
+    function profileMatchesOrg(orgId) {
+      return hasSignedInUserProfile() && get(signedInUserPath()).data.orgId == orgId;
+    }
+
+    function sameOrg(orgId) {
+      return tokenMatchesOrg(orgId) || profileMatchesOrg(orgId);
+    }
+
+    function profileIsOrgAdmin() {
+      return hasSignedInUserProfile() && (
+        get(signedInUserPath()).data.isAdmin == true ||
+        get(signedInUserPath()).data.role == 'admin' ||
+        get(signedInUserPath()).data.role == 'owner' ||
+        (get(signedInUserPath()).data.roles is list && get(signedInUserPath()).data.roles.hasAny(['admin', 'owner', 'Super Admin']))
+      );
     }
 
     function isOrgAdmin(orgId) {
       return sameOrg(orgId) && (
         request.auth.token.admin == true ||
         request.auth.token.role == 'admin' ||
-        request.auth.token.role == 'owner'
+        request.auth.token.role == 'owner' ||
+        profileIsOrgAdmin()
       );
     }
 
@@ -59,13 +85,18 @@ service cloud.firestore {
 
     function sameOrgProfile() {
       return signedIn() &&
-        resource.data.orgId is string &&
-        request.auth.token.orgId == resource.data.orgId;
+        resource.data.orgId is string && (
+          request.auth.token.orgId == resource.data.orgId ||
+          (hasSignedInUserProfile() && get(signedInUserPath()).data.orgId == resource.data.orgId)
+        );
     }
 
     function requestOwnProfileOrgIsValid() {
       return !request.resource.data.keys().hasAny(['orgId']) ||
-        (request.resource.data.orgId is string && request.auth.token.orgId == request.resource.data.orgId);
+        (request.resource.data.orgId is string && (
+          request.auth.token.orgId == request.resource.data.orgId ||
+          (hasSignedInUserProfile() && get(signedInUserPath()).data.orgId == request.resource.data.orgId)
+        ));
     }
 
     function protectedUserFieldsUnchanged() {

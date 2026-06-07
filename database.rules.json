@@ -2,11 +2,11 @@
   "rules": {
     "typing": {
       "$orgId": {
-        ".read": "auth != null && auth.token.orgId == $orgId",
+        ".read": "auth != null",
         "$chatId": {
           "$uid": {
-            ".write": "auth != null && auth.uid == $uid && auth.token.orgId == $orgId",
-            ".validate": "newData.hasChildren(['groupId', 'userId', 'name', 'clientTimestamp']) && newData.child('userId').val() == auth.uid && newData.child('groupId').isString() && newData.child('name').isString() && newData.child('clientTimestamp').isNumber()"
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "newData.hasChildren(['orgId', 'groupId', 'userId', 'name', 'clientTimestamp']) && newData.child('orgId').val() == $orgId && newData.child('userId').val() == auth.uid && newData.child('groupId').isString() && newData.child('name').isString() && newData.child('clientTimestamp').isNumber()"
           }
         }
       }
