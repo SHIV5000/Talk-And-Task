@@ -4,7 +4,7 @@ import StorageDashboard from '../DeveloperConsole/Storage/StorageDashboard.jsx';
 import { db, functions } from '../../firebase.js';
 import {
   collection, addDoc, serverTimestamp, updateDoc, doc,
-  deleteDoc, setDoc, onSnapshot, query, orderBy, getDocs, where,
+  deleteDoc, setDoc, onSnapshot, query, orderBy, limit, getDocs, where,
 } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import { httpsCallable } from 'firebase/functions';
@@ -219,15 +219,15 @@ export default function AdminPanel({
   useEffect(() => {
     if (!effectiveOrgId) return undefined;
     const unsubs = [
-      onSnapshot(orgCollection('sessions'), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0)))),
+      onSnapshot(query(orgCollection('sessions'), orderBy('lastActivity', 'desc'), limit(200)), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0)))),
       onSnapshot(orgCollection('roles'), (snap) => {
         const stored = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         const merged = [...DEFAULT_ROLES.filter((role) => !stored.some((s) => s.id === role.id || s.name === role.name)), ...stored];
         setRoles(merged);
       }),
       onSnapshot(orgCollection('retentionPolicies'), (snap) => setRetentionPolicies(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(query(orgCollection('retention_cleanup_logs'), orderBy('timestamp', 'desc')), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(query(orgCollection('exports'), orderBy('timestamp', 'desc')), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(query(orgCollection('retention_cleanup_logs'), orderBy('timestamp', 'desc'), limit(100)), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      onSnapshot(query(orgCollection('exports'), orderBy('timestamp', 'desc'), limit(100)), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
       onSnapshot(orgDoc('settings', 'institution'), (snap) => {
         if (snap.exists()) setAdminSettings((prev) => ({ ...prev, ...snap.data() }));
       }),
@@ -245,12 +245,12 @@ export default function AdminPanel({
   // Broadcast acks
   useEffect(() => {
     if (activeTab === 'broadcast' && effectiveOrgId) {
-      const unsubAcks = onSnapshot(orgCollection('broadcast_acks'), (snap) => {
+      const unsubAcks = onSnapshot(query(orgCollection('broadcast_acks'), orderBy('timestamp', 'desc'), limit(300)), (snap) => {
         const acks = snap.docs.map((d) => d.data());
         acks.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
         setAllAcks(acks);
       });
-      const q = query(broadcastHistoryCollectionRef(), orderBy('timestamp', 'desc'));
+      const q = query(broadcastHistoryCollectionRef(), orderBy('timestamp', 'desc'), limit(100));
       const unsubPast = onSnapshot(q, (snap) => {
         setPastBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       });

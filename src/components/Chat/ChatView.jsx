@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 
@@ -11,6 +11,127 @@ const formatDayLabel = (value) => {
   return DAY_FMT.format(date).replace(/ /g, '-');
 };
 
+const DEFAULT_VIRTUAL_ROW_HEIGHT = 156;
+const VIRTUAL_OVERSCAN = 8;
+
+const findVisibleStart = (offsets, sizes, scrollTop) => {
+  for (let index = 0; index < offsets.length; index += 1) {
+    if (offsets[index] + sizes[index] >= scrollTop) return index;
+  }
+  return Math.max(0, offsets.length - 1);
+};
+
+function useSimpleMessageVirtualizer(rows, scrollParentRef) {
+  const rowSizesRef = useRef(new Map());
+  const [measureVersion, setMeasureVersion] = useState(0);
+  const [viewport, setViewport] = useState({ scrollTop: 0, height: 0 });
+
+  useEffect(() => {
+    const scrollParent = scrollParentRef.current;
+    if (!scrollParent) return undefined;
+
+    const updateViewport = () => {
+      setViewport({ scrollTop: scrollParent.scrollTop, height: scrollParent.clientHeight });
+    };
+
+    updateViewport();
+    scrollParent.addEventListener('scroll', updateViewport, { passive: true });
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateViewport) : null;
+    resizeObserver?.observe(scrollParent);
+
+    return () => {
+      scrollParent.removeEventListener('scroll', updateViewport);
+      resizeObserver?.disconnect();
+    };
+  }, [scrollParentRef]);
+
+  const { offsets, sizes, totalSize } = useMemo(() => {
+    let runningOffset = 0;
+    const nextOffsets = [];
+    const nextSizes = [];
+
+    rows.forEach((row) => {
+      nextOffsets.push(runningOffset);
+      const rowSize = rowSizesRef.current.get(row.key) || DEFAULT_VIRTUAL_ROW_HEIGHT;
+      nextSizes.push(rowSize);
+      runningOffset += rowSize;
+    });
+
+    return { offsets: nextOffsets, sizes: nextSizes, totalSize: runningOffset };
+  }, [rows, measureVersion]);
+
+  const virtualItems = useMemo(() => {
+    if (rows.length === 0) return [];
+    if (!viewport.height) {
+      const start = Math.max(0, rows.length - 20);
+      return rows.slice(start).map((row, index) => ({ index: start + index, row, start: offsets[start + index] || 0 }));
+    }
+
+    const startIndex = Math.max(0, findVisibleStart(offsets, sizes, viewport.scrollTop) - VIRTUAL_OVERSCAN);
+    const viewportEnd = viewport.scrollTop + viewport.height;
+    let endIndex = startIndex;
+
+    while (endIndex < rows.length && offsets[endIndex] <= viewportEnd) endIndex += 1;
+    endIndex = Math.min(rows.length - 1, endIndex + VIRTUAL_OVERSCAN);
+
+    const items = [];
+    for (let index = startIndex; index <= endIndex; index += 1) {
+      items.push({ index, row: rows[index], start: offsets[index] || 0 });
+    }
+    return items;
+  }, [offsets, rows, sizes, viewport.height, viewport.scrollTop]);
+
+  const measureRow = useCallback((rowKey, measuredHeight) => {
+    if (!measuredHeight) return;
+    const roundedHeight = Math.ceil(measuredHeight);
+    if (rowSizesRef.current.get(rowKey) === roundedHeight) return;
+    rowSizesRef.current.set(rowKey, roundedHeight);
+    setMeasureVersion((version) => version + 1);
+  }, []);
+
+  const scrollToIndex = useCallback((index, align = 'center') => {
+    const scrollParent = scrollParentRef.current;
+    if (!scrollParent || index < 0 || index >= rows.length) return;
+
+    const rowStart = offsets[index] || 0;
+    const rowSize = sizes[index] || DEFAULT_VIRTUAL_ROW_HEIGHT;
+    const nextTop = align === 'start'
+      ? rowStart
+      : rowStart - Math.max(0, (scrollParent.clientHeight - rowSize) / 2);
+
+    scrollParent.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+  }, [offsets, rows.length, scrollParentRef, sizes]);
+
+  return { measureRow, scrollToIndex, totalSize, virtualItems };
+}
+
+function VirtualMessageRow({ row, start, measureRow, children }) {
+  const rowRef = useRef(null);
+
+  useEffect(() => {
+    const node = rowRef.current;
+    if (!node) return undefined;
+
+    const updateSize = () => measureRow(row.key, node.getBoundingClientRect().height);
+    updateSize();
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateSize) : null;
+    resizeObserver?.observe(node);
+
+    return () => resizeObserver?.disconnect();
+  }, [measureRow, row.key, row.measureKey]);
+
+  return (
+    <div
+      ref={rowRef}
+      className="absolute left-0 top-0 w-full"
+      style={{ transform: `translateY(${start}px)` }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function ChatView({
   messagesToRender, messages, activeGroup, user, currentUserData, isVipAdmin,
   pinnedMessages, typingStatus, replyingTo, setReplyingTo, toolPreferences,
@@ -22,7 +143,8 @@ export default function ChatView({
   handleSaveEdit, setSelectedMessage, setIsEditingTaskTitle, messagesEndRef,
   chatContainerRef, isAtBottom, setIsAtBottom, highlightedMsgId,
   unreadHighlightIds, handleAddInlineComment, jumpToPrivateSource,
-  customTags, setActiveReplies, setActiveTaskSidebar, sendMessageToDB, featureFlags = {}
+  customTags, setActiveReplies, setActiveTaskSidebar, sendMessageToDB, featureFlags = {},
+  isLoadingOlderMessages = false, hasOlderMessages = false, loadOlderMessages
 }) {
   const [expandedThreads, setExpandedThreads] = useState({});
   const userEmail = (user?.email || '').toLowerCase();
@@ -77,8 +199,46 @@ export default function ChatView({
     return map;
   }, [messages]);
 
+  const messageRows = useMemo(() => messagesToRender.map((msg, idx) => {
+    const threadReplies = repliesByParent.get(msg.id) || [];
+    const threadReplyCount = threadReplies.length;
+    const currentDay = msg.dateString || (msg.timestamp?.toDate ? msg.timestamp.toDate().toISOString().split('T')[0] : '');
+    const prev = messagesToRender[idx - 1];
+    const prevDay = prev?.dateString || (prev?.timestamp?.toDate ? prev.timestamp.toDate().toISOString().split('T')[0] : '');
+    const threadExpanded = !!expandedThreads[msg.id];
+    const isEditing = editingMessageId === msg.id;
+
+    return {
+      key: msg.id,
+      measureKey: `${msg.id}:${threadExpanded}:${threadReplyCount}:${isEditing}:${editMessageText?.length || 0}`,
+      msg,
+      currentDay,
+      showDaySeparator: !!currentDay && currentDay !== prevDay,
+      threadReplies,
+      threadReplyCount,
+      threadExpanded,
+    };
+  }), [editMessageText, editingMessageId, expandedThreads, messagesToRender, repliesByParent]);
+
+  const messageIndexById = useMemo(() => {
+    const map = new Map();
+    messageRows.forEach((row, index) => map.set(row.msg.id, index));
+    return map;
+  }, [messageRows]);
+
+  const { measureRow, scrollToIndex, totalSize, virtualItems } = useSimpleMessageVirtualizer(messageRows, chatContainerRef);
+
+  const scrollToVirtualMessage = useCallback((messageId) => {
+    const messageIndex = messageIndexById.get(messageId);
+    if (messageIndex !== undefined) scrollToIndex(messageIndex, 'center');
+    setTimeout(() => scrollToMessageDirect?.(messageId), 80);
+  }, [messageIndexById, scrollToIndex, scrollToMessageDirect]);
+
   useEffect(() => {
     if (pendingScrollTarget) {
+      const targetIndex = messageIndexById.get(pendingScrollTarget);
+      if (targetIndex !== undefined) scrollToIndex(targetIndex, 'center');
+
       let attempts = 0;
       const scrollPoller = setInterval(() => {
         const el = document.getElementById(`msg-${pendingScrollTarget}`);
@@ -105,7 +265,7 @@ export default function ChatView({
 
       return () => clearInterval(scrollPoller);
     }
-  }, [pendingScrollTarget, setPendingScrollTarget]);
+  }, [messageIndexById, pendingScrollTarget, scrollToIndex, setPendingScrollTarget]);
 
   return (
     <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-3 md:px-4 bg-slate-50 dark:bg-slate-950 relative">
@@ -134,7 +294,7 @@ export default function ChatView({
         {pinnedMessages.length > 0 && (
           <div
             className="sticky top-2 z-10 bg-white dark:bg-slate-900 shadow-lg rounded-lg p-2.5 mb-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border border-slate-100 dark:border-slate-700 pinned-banner-glow relative overflow-hidden"
-            onClick={() => scrollToMessageDirect(pinnedMessages[0].id)}
+            onClick={() => scrollToVirtualMessage(pinnedMessages[0].id)}
           >
             <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-300 font-medium mb-1">
               <span><i className="fa-solid fa-thumbtack mr-1 text-indigo-500"></i> Pinned Message</span>
@@ -157,63 +317,76 @@ export default function ChatView({
         )}
 
         <div className="relative z-[1] flex flex-col justify-end">
-          {messagesToRender.map((msg, idx) => {
-            const threadReplies = repliesByParent.get(msg.id) || [];
-            const threadReplyCount = threadReplies.length;
-            const currentDay = msg.dateString || (msg.timestamp?.toDate ? msg.timestamp.toDate().toISOString().split('T')[0] : '');
-            const prev = messagesToRender[idx - 1];
-            const prevDay = prev?.dateString || (prev?.timestamp?.toDate ? prev.timestamp.toDate().toISOString().split('T')[0] : '');
-            return (
-              <React.Fragment key={msg.id}>
-                {currentDay && currentDay !== prevDay && (
-                  <div className="flex items-center gap-3 my-5 text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                    <div className="flex-1 border-t border-dotted border-slate-300 dark:border-slate-700"></div>
-                    <span>{formatDayLabel(currentDay)}</span>
-                    <div className="flex-1 border-t border-dotted border-slate-300 dark:border-slate-700"></div>
-                  </div>
-                )}
-                <MessageBubble
-                  msg={msg}
-                  userEmail={user.email}
-                  currentUserData={currentUserData}
-                  activeGroup={activeGroup}
-                  isVipAdmin={isVipAdmin}
-                  hasReplies={threadReplyCount > 0}
-                  replyCount={threadReplyCount}
-                  isHighlighted={highlightedMsgId === msg.id}
-                  isUnreadHighlight={unreadHighlightIds?.includes(msg.id)}
-                  editingMessageId={editingMessageId}
-                  editMessageText={editMessageText}
-                  setEditingMessageId={setEditingMessageId}
-                  setEditMessageText={setEditMessageText}
-                  handleSaveEdit={handleSaveEdit}
-                  scrollToMessageDirect={scrollToMessageDirect}
-                  handleReaction={handleReaction}
-                  handleToggleBookmark={handleToggleBookmark}
-                  handleTogglePin={handleTogglePin}
-                  handleDeleteMessage={handleDeleteMessage}
-                  chatInputRef={chatInputRef}
-                  toolPreferences={toolPreferences}
-                  setReplyingTo={setReplyingTo}
-                  setSelectedMessage={setSelectedMessage}
-                  setIsEditingTaskTitle={setIsEditingTaskTitle}
-                  setActiveModal={setActiveModal}
-                  dbUsers={dbUsers}
-                  jumpToPrivateSource={jumpToPrivateSource}
-                  handleAddInlineComment={handleAddInlineComment}
-                  customTags={customTags || []}
-                  setActiveReplies={(msg) => { setActiveTaskSidebar?.(null); setActiveReplies?.(msg); }}
-                  setActiveTaskSidebar={setActiveTaskSidebar}
-                  onOpenTask={() => {}}
-                  threadReplies={threadReplies}
-                  threadExpanded={!!expandedThreads[msg.id]}
-                  onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
-                  sendMessageToDB={sendMessageToDB}
-                  featureFlags={featureFlags}
-                />
-              </React.Fragment>
-            );
-          })}
+          {hasOlderMessages && (
+            <div className="mb-4 flex justify-center">
+              <button
+                type="button"
+                onClick={loadOlderMessages}
+                disabled={isLoadingOlderMessages}
+                className="rounded-full border border-indigo-200 bg-white px-4 py-2 text-xs font-bold text-indigo-600 shadow-sm transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-indigo-500/30 dark:bg-slate-900 dark:text-indigo-200 dark:hover:bg-slate-800"
+              >
+                {isLoadingOlderMessages ? 'Loading older messages...' : 'Load older messages'}
+              </button>
+            </div>
+          )}
+          <div
+            className="relative w-full"
+            style={{ height: `${totalSize}px` }}
+          >
+            {virtualItems.map(({ row, start }) => {
+              const { msg, currentDay, showDaySeparator, threadReplies, threadReplyCount, threadExpanded } = row;
+              return (
+                <VirtualMessageRow key={row.key} row={row} start={start} measureRow={measureRow}>
+                  {showDaySeparator && (
+                    <div className="flex items-center gap-3 my-5 text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                      <div className="flex-1 border-t border-dotted border-slate-300 dark:border-slate-700"></div>
+                      <span>{formatDayLabel(currentDay)}</span>
+                      <div className="flex-1 border-t border-dotted border-slate-300 dark:border-slate-700"></div>
+                    </div>
+                  )}
+                  <MessageBubble
+                    msg={msg}
+                    userEmail={user.email}
+                    currentUserData={currentUserData}
+                    activeGroup={activeGroup}
+                    isVipAdmin={isVipAdmin}
+                    hasReplies={threadReplyCount > 0}
+                    replyCount={threadReplyCount}
+                    isHighlighted={highlightedMsgId === msg.id}
+                    isUnreadHighlight={unreadHighlightIds?.includes(msg.id)}
+                    editingMessageId={editingMessageId}
+                    editMessageText={editMessageText}
+                    setEditingMessageId={setEditingMessageId}
+                    setEditMessageText={setEditMessageText}
+                    handleSaveEdit={handleSaveEdit}
+                    scrollToMessageDirect={scrollToVirtualMessage}
+                    handleReaction={handleReaction}
+                    handleToggleBookmark={handleToggleBookmark}
+                    handleTogglePin={handleTogglePin}
+                    handleDeleteMessage={handleDeleteMessage}
+                    chatInputRef={chatInputRef}
+                    toolPreferences={toolPreferences}
+                    setReplyingTo={setReplyingTo}
+                    setSelectedMessage={setSelectedMessage}
+                    setIsEditingTaskTitle={setIsEditingTaskTitle}
+                    setActiveModal={setActiveModal}
+                    dbUsers={dbUsers}
+                    jumpToPrivateSource={jumpToPrivateSource}
+                    handleAddInlineComment={handleAddInlineComment}
+                    customTags={customTags || []}
+                    setActiveReplies={(msg) => { setActiveTaskSidebar?.(null); setActiveReplies?.(msg); }}
+                    setActiveTaskSidebar={setActiveTaskSidebar}
+                    onOpenTask={() => {}}
+                    threadReplies={threadReplies}
+                    threadExpanded={threadExpanded}
+                    onToggleThread={() => setExpandedThreads(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+                    sendMessageToDB={sendMessageToDB}
+                    featureFlags={featureFlags}
+                  />
+                </VirtualMessageRow>
+              );
+            })}
+          </div>
         </div>
 
         {typingStatus.length > 0 && (

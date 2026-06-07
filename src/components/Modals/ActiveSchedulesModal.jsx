@@ -14,6 +14,16 @@ export default function ActiveSchedulesModal({ setActiveModal, user, activeRemin
   const [editVal, setEditVal] = useState('');
   const [editDate, setEditDate] = useState('');
 
+  const orgCollectionRef = (collectionName) => {
+    if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}.`);
+    return collection(db, "organizations", orgId, collectionName);
+  };
+
+  const orgDocRef = (collectionName, documentId) => {
+    if (!orgId) throw new Error(`Organization context is required before accessing ${collectionName}/${documentId}.`);
+    return doc(db, "organizations", orgId, collectionName, documentId);
+  };
+
   useEffect(() => {
     if (tab === 'scheduled' && orgId) fetchScheduled();
   }, [tab, user.uid, orgId]);
@@ -22,26 +32,27 @@ export default function ActiveSchedulesModal({ setActiveModal, user, activeRemin
     setLoading(true);
     if (!orgId) return setLoading(false);
     try {
-        const q = query(collection(db, "organizations", orgId, "scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
+        const q = query(orgCollectionRef("scheduled_messages"), where("senderUid", "==", user.uid), where("status", "==", "pending"));
         const snap = await getDocs(q);
         setScheduledMsgs(snap.docs.map(d => ({id: d.id, ...d.data()})));
     } catch(e) {}
     setLoading(false);
   };
 
-  const cancelReminder = async (id) => { if (!orgId) return; try { await deleteDoc(doc(db, "organizations", orgId, "reminders", id)); } catch(e) {} };
+  const cancelReminder = async (id) => { if (!orgId) return; try { await deleteDoc(orgDocRef("reminders", id)); } catch(e) {} };
   const cancelScheduled = async (id) => {
       if (!orgId) return;
-      try { await deleteDoc(doc(db, "organizations", orgId, "scheduled_messages", id)); setScheduledMsgs(prev => prev.filter(m => m.id !== id)); } catch(e) {}
+      try { await deleteDoc(orgDocRef("scheduled_messages", id)); setScheduledMsgs(prev => prev.filter(m => m.id !== id)); } catch(e) {}
   };
 
   const saveEdit = async (id, isReminder) => {
       if (!orgId) return;
       try {
           if (isReminder) {
-              await updateDoc(doc(db, "organizations", orgId, "reminders", id), { messageText: editVal, remindAt: editDate });
+              await updateDoc(orgDocRef("reminders", id), { messageText: editVal, remindAt: editDate });
           } else {
-              await updateDoc(doc(db, "organizations", orgId, "scheduled_messages", id), { text: editVal, scheduledFor: editDate });
+              const scheduledAt = new Date(editDate);
+              await updateDoc(orgDocRef("scheduled_messages", id), { text: editVal, scheduledFor: scheduledAt.toISOString(), scheduledAt });
               fetchScheduled();
           }
           setEditingId(null);
