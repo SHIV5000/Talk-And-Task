@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
+  getAuth, onAuthStateChanged, signOut, GoogleAuthProvider,
   signInWithRedirect, getRedirectResult, signInWithEmailAndPassword, setPersistence, inMemoryPersistence
 } from 'firebase/auth';
 import {
@@ -65,7 +65,7 @@ const functions = getFunctions(app);
 export const performance = typeof window !== 'undefined' ? getPerformance(app) : null;
 
 export {
-  onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
+  onAuthStateChanged, signOut, GoogleAuthProvider,
   signInWithRedirect, getRedirectResult, signInWithEmailAndPassword, setPersistence, inMemoryPersistence,
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, setDoc, getDocs, where, deleteDoc,

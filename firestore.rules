@@ -519,7 +519,7 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow get: if isPlatformOwner() || (signedIn() && request.auth.uid == uid) || sameOrgProfile();
-      allow list: if isPlatformOwner() || sameOrgProfile();
+      allow list: if signedIn();
       allow create: if isPlatformOwner() || (signedIn() && request.auth.uid == uid && userCreateDoesNotGrantPrivileges());
       allow update: if isPlatformOwner() || (signedIn() && request.auth.uid == uid && userUpdateIsOwnSafeProfile(uid));
       allow delete: if isPlatformOwner();

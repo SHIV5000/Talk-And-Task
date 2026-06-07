@@ -6,7 +6,6 @@ import {
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
-  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   signInWithEmailAndPassword,
@@ -263,15 +262,6 @@ export function AuthProvider({ children }) {
       await setPersistence(auth, inMemoryPersistence);
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      const usePopup = import.meta.env.VITE_AUTH_USE_POPUP === 'true';
-      if (usePopup) {
-        const result = await signInWithPopup(auth, provider);
-        const loggedInUser = result.user;
-        await hydrateSession(loggedInUser);
-        await notifyLoginSuccess(loggedInUser, 'User authenticated with Google popup successfully. Safe checkpoint for rollback mapping.');
-        return;
-      }
-
       await signInWithRedirect(auth, provider);
     } catch (err) {
       setAuthError(err?.userMessage || 'Google Sign-In Cancelled or Failed.');

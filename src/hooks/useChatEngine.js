@@ -37,6 +37,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     const oldestMessageTimestampRef = useRef(null);
     const prevMessagesCountRef = useRef(0);
     const [orgStorageDetails, setOrgStorageDetails] = useState(null);
+    const [typingAccessAllowed, setTypingAccessAllowed] = useState(false);
 
     useEffect(() => {
         const orgId = currentUserData?.orgId || currentUserData?.organizationId || currentUserData?.tenantId;
@@ -56,6 +57,29 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 
         return () => unsubscribe();
     }, [currentUserData?.orgId, currentUserData?.organizationId, currentUserData?.tenantId, currentUserData?.org_details]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setTypingAccessAllowed(false);
+
+        if (!orgId || !user?.getIdTokenResult) return undefined;
+
+        user.getIdTokenResult(true)
+            .then((tokenResult) => {
+                if (cancelled) return;
+                const claims = tokenResult?.claims || {};
+                const claimOrgId = String(claims.orgId || '');
+                const isPlatformOwner = claims.platformOwner === true || claims.isPlatformOwner === true || (user.email || '').toLowerCase() === GLOBAL_SUPER_ADMIN_EMAIL;
+                setTypingAccessAllowed(isPlatformOwner || claimOrgId === orgId);
+            })
+            .catch((error) => {
+                if (!cancelled) console.warn('Unable to verify typing indicator access:', error);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [orgId, user]);
 
     const hasOrgContext = useCallback((action = 'continue') => {
         if (orgId) return true;
@@ -200,7 +224,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 
     useEffect(() => {
         setTypingStatus([]);
-        if (!orgId || !activeGroup?.id || !user?.uid) return undefined;
+        if (!typingAccessAllowed || !orgId || !activeGroup?.id || !user?.uid) return undefined;
         const typingListRef = rtdbRef(realtimeDb, `typing/${orgId}/${activeGroup.id}`);
         const unsubscribe = onValue(typingListRef, (snapshot) => {
             const data = snapshot.val() || {};
@@ -214,7 +238,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
             setTypingStatus([]);
         });
         return () => unsubscribe();
-    }, [activeGroup?.id, orgId, user?.uid]);
+    }, [activeGroup?.id, orgId, typingAccessAllowed, user?.uid]);
 
 
     const loadOlderMessages = useCallback(async () => {
@@ -334,9 +358,9 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     const typingRtdbPath = useCallback(() => {
-        if (!orgId || !activeGroup?.id || !user?.uid) return null;
+        if (!typingAccessAllowed || !orgId || !activeGroup?.id || !user?.uid) return null;
         return `typing/${orgId}/${activeGroup.id}/${user.uid}`;
-    }, [activeGroup?.id, orgId, user?.uid]);
+    }, [activeGroup?.id, orgId, typingAccessAllowed, user?.uid]);
 
     const clearTypingEvent = useCallback(() => {
         const path = typingRtdbPath();
@@ -349,7 +373,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     }, [typingRtdbPath]);
 
     const triggerTypingEvent = (userName) => {
-        if(!activeGroup || !user?.uid || !hasOrgContext('update typing status')) return;
+        if(!typingAccessAllowed || !activeGroup || !user?.uid || !hasOrgContext('update typing status')) return;
         const path = typingRtdbPath();
         if (!path) return;
         try {

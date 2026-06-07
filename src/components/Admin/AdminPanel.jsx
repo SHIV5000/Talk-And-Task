@@ -111,6 +111,9 @@ export default function AdminPanel({
     alert('Organization context is still loading. Please try again in a moment.');
     return false;
   }, [effectiveOrgId]);
+  const handleAdminSnapshotError = useCallback((label) => (error) => {
+    console.warn(`Unable to listen for admin ${label}:`, error);
+  }, []);
 
   // ===== TABS =====
   const [activeTab, setActiveTab] = useState('overview');
@@ -212,28 +215,28 @@ export default function AdminPanel({
         setOrgDetails(docSnap.data());
         setIsOrgSaved(true);
       }
-    });
+    }, handleAdminSnapshotError('organization details'));
     return () => unsub();
-  }, [effectiveOrgId, orgDoc]);
+  }, [effectiveOrgId, orgDoc, handleAdminSnapshotError]);
 
   useEffect(() => {
     if (!effectiveOrgId) return undefined;
     const unsubs = [
-      onSnapshot(query(orgCollection('sessions'), orderBy('lastActivity', 'desc'), limit(200)), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0)))),
+      onSnapshot(query(orgCollection('sessions'), orderBy('lastActivity', 'desc'), limit(200)), (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.lastActivity?.toMillis?.() || 0) - (a.lastActivity?.toMillis?.() || 0))), handleAdminSnapshotError('sessions')),
       onSnapshot(orgCollection('roles'), (snap) => {
         const stored = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         const merged = [...DEFAULT_ROLES.filter((role) => !stored.some((s) => s.id === role.id || s.name === role.name)), ...stored];
         setRoles(merged);
-      }),
-      onSnapshot(orgCollection('retentionPolicies'), (snap) => setRetentionPolicies(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(query(orgCollection('retention_cleanup_logs'), orderBy('timestamp', 'desc'), limit(100)), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-      onSnapshot(query(orgCollection('exports'), orderBy('timestamp', 'desc'), limit(100)), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+      }, handleAdminSnapshotError('roles')),
+      onSnapshot(orgCollection('retentionPolicies'), (snap) => setRetentionPolicies(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), handleAdminSnapshotError('retention policies')),
+      onSnapshot(query(orgCollection('retention_cleanup_logs'), orderBy('timestamp', 'desc'), limit(100)), (snap) => setRetentionRuns(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), handleAdminSnapshotError('retention cleanup logs')),
+      onSnapshot(query(orgCollection('exports'), orderBy('timestamp', 'desc'), limit(100)), (snap) => setExportsHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), handleAdminSnapshotError('exports')),
       onSnapshot(orgDoc('settings', 'institution'), (snap) => {
         if (snap.exists()) setAdminSettings((prev) => ({ ...prev, ...snap.data() }));
-      }),
+      }, handleAdminSnapshotError('institution settings')),
     ];
     return () => unsubs.forEach((unsub) => unsub());
-  }, [effectiveOrgId, orgCollection, orgDoc]);
+  }, [effectiveOrgId, orgCollection, orgDoc, handleAdminSnapshotError]);
 
   useEffect(() => {
     if (!effectiveOrgId) return;
@@ -249,17 +252,17 @@ export default function AdminPanel({
         const acks = snap.docs.map((d) => d.data());
         acks.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
         setAllAcks(acks);
-      });
+      }, handleAdminSnapshotError('broadcast acknowledgements'));
       const q = query(broadcastHistoryCollectionRef(), orderBy('timestamp', 'desc'), limit(100));
       const unsubPast = onSnapshot(q, (snap) => {
         setPastBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      });
+      }, handleAdminSnapshotError('broadcast history'));
       return () => {
         unsubAcks();
         unsubPast();
       };
     }
-  }, [activeTab, effectiveOrgId, broadcastHistoryCollectionRef, orgCollection]);
+  }, [activeTab, effectiveOrgId, broadcastHistoryCollectionRef, orgCollection, handleAdminSnapshotError]);
 
   // Derived broadcast data
   const uniqueBroadcastIds = useMemo(

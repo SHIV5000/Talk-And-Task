@@ -20,15 +20,16 @@ export default function SupportTicketsModal({ setActiveModal, user, currentUserD
     const ticketQuery = isAdmin
       ? query(collection(db, 'organizations', orgId, 'supportTickets'), limit(100))
       : query(collection(db, 'organizations', orgId, 'supportTickets'), where('createdByUid', '==', user.uid), limit(20));
+    const handleSnapshotError = (error) => console.warn('Unable to listen for support ticket data:', error);
     const unsubTickets = onSnapshot(ticketQuery, (snap) => {
       const rows = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
       rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
       setTickets(rows);
-    });
+    }, handleSnapshotError);
     const unsubStatus = onSnapshot(collection(db, 'organizations', orgId, 'systemSettings'), (snap) => {
       const statusDoc = snap.docs.find((docSnap) => docSnap.id === 'supportStatus');
       setSupportStatus(statusDoc?.data() || { isAcceptingTickets: true });
-    });
+    }, handleSnapshotError);
     return () => { unsubTickets(); unsubStatus(); };
   }, [isAdmin, orgId, user?.uid]);
 
