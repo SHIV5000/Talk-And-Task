@@ -4,7 +4,7 @@ import { renderSafeRichText, richTextToPlainText } from '../../utils/richText.js
 import MemoizedAvatar from '../Common/MemoizedAvatar.jsx';
 import useUserDisplayName from '../../hooks/useUserDisplayName.js';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { db, storage } from '../../firebase.js';
+import { db, storage, functions, httpsCallable } from '../../firebase.js';
 import { doc, updateDoc, collection, addDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { jsPDF } from 'jspdf';
@@ -136,7 +136,7 @@ const MessageBubble = React.memo(({
 
   const hasReactions = Object.keys(msg.reactions || {}).length > 0;
 
-  const isSecure = (msg.fileName || '').startsWith('__SECURE__');
+  const isSecure = msg.secureDownload === true || (msg.fileName || '').startsWith('__SECURE__');
   const displayFileName = isSecure ? msg.fileName.replace('__SECURE__', '') : msg.fileName;
   const maskUrl = (v = '') => String(v).replace(/https?:\/\/[^\s"']+/g, '[secure-link]');
 
@@ -353,6 +353,22 @@ const MessageBubble = React.memo(({
     isTask: msg.isTask === true,
     isPrivateForward: msg.isPrivateForward === true,
   }, 'inline reply source message');
+
+  const handleSecurePdfDownload = async (e) => {
+    e.stopPropagation();
+    if (!msg.secureDownload || !orgId) return;
+    try {
+      const requestOtp = httpsCallable(functions, 'requestPdfOtp');
+      await requestOtp({ orgId, messageId: msg.id });
+      const otp = window.prompt('Enter the 6-digit OTP sent to your email to download this secure PDF.');
+      if (!otp) return;
+      const verifyOtp = httpsCallable(functions, 'verifyPdfOtpAndDownload');
+      const result = await verifyOtp({ orgId, messageId: msg.id, otp });
+      if (result?.data?.downloadUrl) window.open(result.data.downloadUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      alert(error?.message || 'Secure PDF download failed.');
+    }
+  };
 
   const handleReplyAttachmentUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -832,13 +848,13 @@ const MessageBubble = React.memo(({
                           )}
                        </div>
                     ) : (
-                       <div className={`flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border-2 border-slate-300 w-fit max-w-[220px] shadow-sm ${!isSecure ? 'cursor-pointer hover:bg-slate-100' : 'cursor-default opacity-90'}`} onClick={(e) => { e.stopPropagation(); if(!isSecure) window.open(msg.fileUrl, '_blank'); }}>
+                       <div className={`flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border-2 border-slate-300 w-fit max-w-[220px] shadow-sm ${!isSecure || msg.secureDownload ? 'cursor-pointer hover:bg-slate-100' : 'cursor-default opacity-90'}`} onClick={(e) => { e.stopPropagation(); if(msg.secureDownload) handleSecurePdfDownload(e); else if(!isSecure) window.open(msg.fileUrl, '_blank'); }}>
                           <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center text-indigo-500 shadow-sm shrink-0"><i className="fa-solid fa-file-lines text-lg"></i></div>
                           <div className="flex-1 overflow-hidden min-w-0 flex flex-col">
                              <p className="text-sm font-bold text-slate-700 truncate">{maskUrl(displayFileName)}</p>
-                             {isSecure && <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mt-0.5"><i className="fa-solid fa-lock"></i> Download Restricted</span>}
+                             {isSecure && <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mt-0.5"><i className="fa-solid fa-lock"></i> {msg.secureDownload ? 'Secure PDF - OTP required' : 'Download Restricted'}</span>}
                           </div>
-                          {!isSecure && <i className="fa-solid fa-download text-slate-400 pr-1 hover:text-indigo-600 transition-colors"></i>}
+                          {msg.secureDownload ? <i className="fa-solid fa-shield-halved text-indigo-500 pr-1"></i> : !isSecure && <i className="fa-solid fa-download text-slate-400 pr-1 hover:text-indigo-600 transition-colors"></i>}
                        </div>
                     )}
                   </div>

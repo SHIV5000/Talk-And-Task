@@ -87,6 +87,19 @@ export default function InputArea({
     clearTypingIndicator();
   };
 
+  const isPdfFile = (file) => /pdf$/i.test(file?.name || '') || file?.type === 'application/pdf';
+  const secureRecipientOptions = (activeGroup?.members || [])
+    .filter((email) => email && email !== user?.email)
+    .map((email) => dbUsers.find((dbUser) => dbUser.email === email) || { email, name: email.split('@')[0] });
+  const toggleSecureRecipient = (pendingId, email) => {
+    setPendingFiles(prev => prev.map(file => {
+      if (file.id !== pendingId) return file;
+      const recipients = new Set(file.secureRecipients || []);
+      if (recipients.has(email)) recipients.delete(email); else recipients.add(email);
+      return { ...file, secureRecipients: Array.from(recipients) };
+    }));
+  };
+
   return (
     <div className={`${composerVariant === 'reply' ? 'bg-white border-t border-slate-200 p-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'bg-white border-t border-gray-200 px-3 md:px-4 py-3 safe-bottom'} shrink-0 z-[var(--z-composer)] flex flex-col gap-2 w-full max-w-full min-w-0 relative ${containerClassName}`}>
       <style>{`.custom-wysiwyg:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }.mention-chip{display:inline-block;background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:0 6px;font-weight:800;}`}</style>
@@ -176,6 +189,25 @@ export default function InputArea({
                   <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{(pf.file.size / 1024 / 1024).toFixed(2)} MB</span>
                 </div>
                 <textarea rows={1} value={pf.caption} onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight < 120 ? e.target.scrollHeight : 120) + 'px'; setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, caption: e.target.value } : f)); }} placeholder="Add a caption..." className="w-full text-sm text-slate-800 dark:text-slate-100 outline-none bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 resize-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"></textarea>
+                {isPdfFile(pf.file) && (
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-900">
+                    <label className="flex items-center gap-2 font-black">
+                      <input type="checkbox" checked={!!pf.securePdf} onChange={(e) => setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, securePdf: e.target.checked, secureRecipients: e.target.checked ? (f.secureRecipients || []) : [] } : f))} />
+                      🔒 Secure Download <span className="ml-auto text-[10px] text-indigo-500">Daily secure sends: 5/day</span>
+                    </label>
+                    {pf.securePdf && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {secureRecipientOptions.map((recipient) => (
+                          <label key={recipient.email} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 font-bold shadow-sm">
+                            <input type="checkbox" checked={(pf.secureRecipients || []).includes(recipient.email)} onChange={() => toggleSecureRecipient(pf.id, recipient.email)} />
+                            {recipient.name || recipient.email}
+                          </label>
+                        ))}
+                        {secureRecipientOptions.length === 0 && <span className="font-bold text-amber-700">No recipient available for secure PDF.</span>}
+                      </div>
+                    )}
+                  </div>
+                )}
 
               </div>
               <button onClick={() => { setPendingFiles(prev => prev.filter(f => f.id !== pf.id)); if (pendingFiles.length === 1) setShowFileRename(false); }} className="text-slate-400 hover:text-rose-500 p-2"><i className="fa-solid fa-trash-can text-lg"></i></button>

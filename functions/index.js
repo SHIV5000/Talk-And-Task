@@ -1341,3 +1341,124 @@ exports.toggleUserArchiveStatus = onCall(async (request) => {
     throw new HttpsError('internal', error.message || 'Failed to update user status.');
   }
 });
+
+const getDayKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
+const PDF_DAILY_LIMIT = 5;
+
+const assertSecurePdfAccess = async (request, orgId, messageId) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  if (!orgId || !messageId) throw new HttpsError('invalid-argument', 'orgId and messageId are required.');
+  const userSnap = await db.collection('users').doc(request.auth.uid).get();
+  const user = userSnap.data() || {};
+  const email = normalizeEmail(request.auth.token?.email || user.email);
+  const messageRef = db.collection('organizations').doc(orgId).collection('messages').doc(messageId);
+  const messageSnap = await messageRef.get();
+  if (!messageSnap.exists) throw new HttpsError('not-found', 'Secure PDF message was not found.');
+  const message = messageSnap.data() || {};
+  const allowed = uniqueStrings(message.secureRecipients || []).map(normalizeEmail);
+  const isSender = message.senderUid === request.auth.uid || normalizeEmail(message.senderEmail) === email;
+  if (message.secureDownload !== true) throw new HttpsError('failed-precondition', 'This file is not a secure PDF.');
+  if (!isSender && !allowed.includes(email)) throw new HttpsError('permission-denied', 'You are not authorized to download this secure PDF.');
+  return { user, email, messageRef, message };
+};
+
+const incrementDailyCounter = async (orgId, collectionName, uid, dayKey, limit) => db.runTransaction(async (transaction) => {
+  const ref = db.collection('organizations').doc(orgId).collection(collectionName).doc(`${dayKey}_${uid}`);
+  const snap = await transaction.get(ref);
+  const count = snap.exists ? Number(snap.data().count || 0) : 0;
+  if (count >= limit) throw new HttpsError('resource-exhausted', `Daily limit of ${limit} reached.`);
+  transaction.set(ref, { uid, dayKey, count: count + 1, updatedAt: serverTimestamp() }, { merge: true });
+  return count + 1;
+});
+
+exports.requestPdfOtp = onCall(async (request) => {
+  const { orgId, messageId } = request.data || {};
+  const { email, message } = await assertSecurePdfAccess(request, orgId, messageId);
+  const dayKey = getDayKey();
+  await incrementDailyCounter(orgId, 'secure_pdf_otp_daily', request.auth.uid, dayKey, PDF_DAILY_LIMIT);
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000);
+  await db.collection('organizations').doc(orgId).collection('secure_pdf_otps').doc(`${request.auth.uid}_${messageId}`).set({
+    uid: request.auth.uid,
+    email,
+    messageId,
+    otp,
+    attempts: 0,
+    expiresAt,
+    createdAt: serverTimestamp(),
+  });
+  await db.collection('mail').add({
+    to: [email],
+    message: {
+      subject: `Talk & Task secure PDF OTP: ${message.fileName || 'Secure PDF'}`,
+      text: `Your OTP is ${otp}. It expires in 5 minutes. File: ${message.fileName || 'Secure PDF'}.`,
+      html: `<p>Your secure PDF OTP is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p><p>File: ${message.fileName || 'Secure PDF'}</p>`,
+    },
+    createdAt: serverTimestamp(),
+  });
+  return { success: true };
+});
+
+exports.verifyPdfOtpAndDownload = onCall(async (request) => {
+  const { orgId, messageId, otp } = request.data || {};
+  const { email, message } = await assertSecurePdfAccess(request, orgId, messageId);
+  const otpRef = db.collection('organizations').doc(orgId).collection('secure_pdf_otps').doc(`${request.auth.uid}_${messageId}`);
+  const otpSnap = await otpRef.get();
+  if (!otpSnap.exists) throw new HttpsError('not-found', 'Request a new OTP.');
+  const otpData = otpSnap.data() || {};
+  if ((otpData.expiresAt?.toMillis?.() || 0) < Date.now()) {
+    await otpRef.delete();
+    throw new HttpsError('deadline-exceeded', 'OTP expired. Request a new OTP.');
+  }
+  if (Number(otpData.attempts || 0) >= 3) throw new HttpsError('resource-exhausted', 'Too many OTP attempts.');
+  if (String(otpData.otp) !== String(otp || '').trim()) {
+    await otpRef.set({ attempts: admin.firestore.FieldValue.increment(1), lastFailedAt: serverTimestamp() }, { merge: true });
+    throw new HttpsError('permission-denied', 'Invalid OTP.');
+  }
+  const dayKey = getDayKey();
+  const downloadRef = db.collection('organizations').doc(orgId).collection('userDownloads').doc(`${request.auth.uid}_${messageId}`);
+  if ((await downloadRef.get()).exists) throw new HttpsError('already-exists', 'This secure PDF was already downloaded by you.');
+  await incrementDailyCounter(orgId, 'secure_pdf_download_daily', request.auth.uid, dayKey, PDF_DAILY_LIMIT);
+  await otpRef.delete();
+  await downloadRef.set({ uid: request.auth.uid, email, messageId, downloadedAt: serverTimestamp(), fileName: message.fileName || null });
+  await db.collection('organizations').doc(orgId).collection('downloadSummaries').doc(message.senderUid || 'system').collection('pending').add({
+    messageId,
+    fileName: message.fileName || 'Secure PDF',
+    downloadedBy: email,
+    downloadedAt: serverTimestamp(),
+    senderUid: message.senderUid || null,
+  });
+  const bucket = admin.storage().bucket();
+  const [downloadUrl] = await bucket.file(message.storagePath).getSignedUrl({ action: 'read', expires: Date.now() + 2 * 60 * 1000 });
+  return { success: true, downloadUrl, stamped: false, note: 'Secure audit recorded; signed one-time URL issued.' };
+});
+
+exports.sendSecurePdfDownloadSummaries = onSchedule({ schedule: 'every day 15:00', timeZone: 'Asia/Kolkata' }, async () => {
+  const orgs = await db.collection('organizations').get();
+  for (const orgSnap of orgs.docs) {
+    const summaryUsers = await orgSnap.ref.collection('downloadSummaries').listDocuments();
+    for (const senderRef of summaryUsers) {
+      const pendingSnap = await senderRef.collection('pending').limit(50).get();
+      if (pendingSnap.empty) continue;
+      const lines = pendingSnap.docs.map((docSnap) => {
+        const data = docSnap.data() || {};
+        return `Your file ${data.fileName} was downloaded by ${data.downloadedBy}.`;
+      });
+      await orgSnap.ref.collection('messages').add({
+        text: lines.join('\n'),
+        senderUid: 'system',
+        senderEmail: 'system@talk-task.local',
+        senderName: 'Talk & Task Secure PDF Bot',
+        groupId: 'secure-pdf-summary',
+        groupName: 'Secure PDF Summary',
+        timestamp: serverTimestamp(),
+        isTask: false,
+        allowedUsers: [],
+        isPrivateForward: false,
+        seenBy: [],
+        reactions: {},
+      });
+      await Promise.all(pendingSnap.docs.map((docSnap) => docSnap.ref.delete()));
+    }
+  }
+});

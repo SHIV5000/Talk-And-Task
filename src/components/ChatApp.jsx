@@ -462,7 +462,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [activeTaskSidebar, setActiveTaskSidebar] = useState(null);
     const [maxFileSizeMb, setMaxFileSizeMb] = useState(() => Number(localStorage.getItem("maxFileSizeMb") || 5));
-    const [viewMode, setViewMode] = useState("chat");
+    const [viewMode, setViewMode] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.viewMode || "chat"; } catch { return "chat"; } });
     const [showNotifications, setShowNotifications] = useState(false);
     const [alertPulseActive, setAlertPulseActive] = useState(false);
     const lastNotificationTotalRef = useRef(0);
@@ -479,9 +479,9 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [dismissedBroadcastId, setDismissedBroadcastId] = useState(null);
 
     const [sidebarSearch, setSidebarSearch] = useState("");
-    const [chatFilter, setChatFilter] = useState("all");
+    const [chatFilter, setChatFilter] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.chatFilter || "all"; } catch { return "all"; } });
     const [showFilterMenu, setShowFilterMenu] = useState(false);
-    const [chatDateFilter, setChatDateFilter] = useState("");
+    const [chatDateFilter, setChatDateFilter] = useState(() => { try { return JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || "{}")?.chatDateFilter || ""; } catch { return ""; } });
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessageId, setEditingMessageId] = useState(null);
@@ -508,6 +508,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
     const [isUploading, setIsUploading] = useState(false);
     const [pendingFiles, setPendingFiles] = useState([]);
     const [showFileRename, setShowFileRename] = useState(false);
+    const [profilePhotoDraft, setProfilePhotoDraft] = useState(null);
     const [trailFileUploading, setTrailFileUploading] = useState(false);
     const [profileUploadProgress, setProfileUploadProgress] = useState(0);
     const [groupPicUploadProgress, setGroupPicUploadProgress] = useState(0);
@@ -609,6 +610,26 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         isApproved: currentUserData?.isApproved !== false || isGlobalSuperAdmin,
         roles: isGlobalSuperAdmin ? Array.from(new Set([...(currentUserData?.roles || []), 'Super Admin'])) : currentUserData?.roles,
     }), [currentUserData, isGlobalSuperAdmin]);
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        const state = { activeGroupId: activeGroup?.id || null, viewMode, chatFilter, chatDateFilter, scrollTop: chatContainerRef.current?.scrollTop || 0 };
+        localStorage.setItem(`talkTaskUiState:${user.uid}`, JSON.stringify(state));
+    }, [activeGroup?.id, chatDateFilter, chatFilter, user?.uid, viewMode]);
+
+    useEffect(() => {
+        if (!user?.uid || activeGroup || groups.length === 0) return;
+        try {
+            const saved = JSON.parse(localStorage.getItem(`talkTaskUiState:${user.uid}`) || '{}');
+            const savedGroup = groups.find((group) => group.id === saved.activeGroupId);
+            if (savedGroup) {
+                setActiveGroup(savedGroup);
+                setTimeout(() => {
+                    if (chatContainerRef.current && Number.isFinite(Number(saved.scrollTop))) chatContainerRef.current.scrollTop = Number(saved.scrollTop);
+                }, 150);
+            }
+        } catch (error) {}
+    }, [activeGroup, groups, user?.uid]);
 
     const featureFlags = useMemo(() => normalizeFeatureFlags(currentUserData?.featureFlags), [currentUserData?.featureFlags]);
     const shouldLoadChatData = viewMode === 'chat' && !isWorkspaceLoading && featureFlags.chat !== false;
@@ -1018,7 +1039,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             if (i === 0 && currentText && currentText !== '<br>') finalCaption = finalCaption ? `${currentText}\n${finalCaption}` : currentText;
             pf.caption = finalCaption; pf.text = finalCaption;
 
-            try { await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); }
+            try { if (pf.securePdf && !(pf.secureRecipients || []).length) throw new Error("Select at least one secure PDF recipient."); await uploadAndSendFileDB(pf, setUploadProgress); } catch (error) { alert(`Upload failed: ${error.message}`); }
         }
         playMelody('fileUpload');
         setIsUploading(false); setUploadProgress(0);
@@ -1393,7 +1414,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
 
     const handleProfileSubmit = async (e) => {
         e.preventDefault();
-        const file = profilePicInputRef.current?.files[0];
+        const file = profilePhotoDraft?.file || profilePicInputRef.current?.files[0];
         try {
             let updateData = { name: profileForm.name ?? '', fontSize: profileForm.fontSize, fontFamily: profileForm.fontFamily, themeFont: profileForm.themeFont || 'Inter', displayMode: profileForm.displayMode || 'light', fontScale: profileForm.fontScale || 'normal' };
             if (file) {
@@ -1413,7 +1434,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
             }
             await updateDoc(doc(db, "users", user.uid), updateData);
             setProfileForm(prev => ({ ...prev, name: updateData.name, themeFont: updateData.themeFont, displayMode: updateData.displayMode, fontScale: updateData.fontScale }));
-            setActiveModal(null); setProfileUploadProgress(0);
+            setActiveModal(null); setProfilePhotoDraft(null); setProfileUploadProgress(0);
         } catch (error) { alert("Profile update failed."); setProfileUploadProgress(0); }
     };
 
@@ -1440,6 +1461,7 @@ export default function ChatApp({ user, onLogout, appVersion: appVersionProp }) 
         featureFlags,
         setReplyingTo, chatInputRef, currentUserData, profileForm,
         setProfileForm, profilePicInputRef, profileUploadProgress,
+        profilePhotoDraft, setProfilePhotoDraft,
         setProfileUploadProgress, handleProfileSubmit, toolPreferences,
         setToolPreferences, user, groupForm, setGroupForm, editingGroup,
         handleGroupSubmit, groupPicInputRef, handleGroupPicUpload,

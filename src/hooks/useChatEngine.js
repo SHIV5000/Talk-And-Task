@@ -391,7 +391,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
     };
 
     const uploadAndSendFileDB = async (pf, onProgress, replyingTo = null) => {
-    const { file, customName, caption } = pf;
+    const { file, customName, caption, securePdf = false, secureRecipients = [] } = pf;
     const safeCaption = caption || ""; // Prevents .trim() crashes
 
     if (!orgId) throw new Error('Organization context is required before uploading files.');
@@ -424,7 +424,8 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
 
     const groupPathSegment = sanitizeStoragePathSegment(activeGroup.id, 'group');
     const storedFileName = sanitizeStoragePathSegment(processedFile.name || customName, 'attachment');
-    const storagePath = `organizations/${orgId}/uploads/chat/${groupPathSegment}/${Date.now()}_${createUploadId()}_${storedFileName}`;
+    const secureFileId = createUploadId();
+    const storagePath = `organizations/${orgId}/uploads/chat/${groupPathSegment}/${Date.now()}_${secureFileId}_${storedFileName}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, processedFile);
 
@@ -452,6 +453,7 @@ export default function useChatEngine({ orgId, user, activeGroup, dbUsers, group
                     originalFileSize: file.size,
                     uploadedBy: user.uid,
                     uploadedAt: serverTimestamp(),
+                    ...(securePdf ? { secureDownload: true, secureFileId, secureRecipients: [...new Set(secureRecipients)], secureDownloadStatus: "otp_required" } : {}),
                     ...replyData,
                     ...(supportRouting.isPrivateForward ? { allowedUsers: supportRouting.allowedUsers || [] } : {}),
                 }));

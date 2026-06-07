@@ -9,10 +9,22 @@ export default function ProfileSettingsModal({
   profilePicInputRef,
   profileUploadProgress,
   handleProfileSubmit,
+  profilePhotoDraft,
+  setProfilePhotoDraft,
   user,
   featureFlags = {},
 }) {
   const [activeTab, setActiveTab] = useState('profile');
+  const handlePhotoSelect = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setProfilePhotoDraft?.({ file, previewUrl: URL.createObjectURL(file) });
+  };
+  const clearPhotoDraft = () => {
+    if (profilePhotoDraft?.previewUrl) URL.revokeObjectURL(profilePhotoDraft.previewUrl);
+    setProfilePhotoDraft?.(null);
+    if (profilePicInputRef.current) profilePicInputRef.current.value = '';
+  };
   const tabs = featureFlags.customBranding === false ? ['profile'] : ['profile', 'theme'];
   const fontScaleOptions = [
     { key: 'compact', label: 'Compact' },
@@ -43,8 +55,8 @@ export default function ProfileSettingsModal({
             <>
               <div className="flex flex-col items-center gap-4">
                 <div className="w-32 h-32 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden relative cursor-pointer group shadow-inner border-4 border-slate-50" onClick={() => profilePicInputRef.current?.click()}>
-                  {currentUserData?.profilePicUrl ? (
-                    <img src={currentUserData.profilePicUrl} className="w-full h-full object-cover" alt="avatar" loading="eager" decoding="async" fetchPriority="high" />
+                  {(profilePhotoDraft?.previewUrl || currentUserData?.profilePicUrl) ? (
+                    <img src={profilePhotoDraft?.previewUrl || currentUserData.profilePicUrl} className="w-full h-full object-cover" alt="avatar" loading="eager" decoding="async" fetchPriority="high" />
                   ) : (
                     <i className="fa-solid fa-user text-5xl text-slate-300"></i>
                   )}
@@ -52,8 +64,14 @@ export default function ProfileSettingsModal({
                     <i className="fa-solid fa-camera text-white text-2xl"></i>
                   </div>
                 </div>
-                <input type="file" ref={profilePicInputRef} className="hidden" accept="image/*" />
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">Tap to change avatar</div>
+                <input type="file" ref={profilePicInputRef} className="hidden" accept="image/*" onChange={handlePhotoSelect} />
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">Tap to preview avatar</div>
+                {profilePhotoDraft && (
+                  <div className="flex gap-2 text-xs">
+                    <button type="button" onClick={clearPhotoDraft} className="px-3 py-1 rounded-full border border-rose-200 text-rose-600 font-bold">Cancel photo</button>
+                    <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 font-bold">Preview ready — click Save</span>
+                  </div>
+                )}
                 {profileUploadProgress > 0 && (
                   <div className="w-full max-w-xs"><div className="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200"><div className="h-full bg-indigo-600 transition-all" style={{ width: `${Math.round(profileUploadProgress)}%` }} /></div><div className="mt-1 text-center text-[10px] font-black text-indigo-600">Uploading {Math.round(profileUploadProgress)}%</div></div>
                 )}
@@ -113,9 +131,9 @@ export default function ProfileSettingsModal({
           )}
 
           <div className="flex items-center gap-3 pt-1">
-            <button type="button" onClick={() => setActiveModal(null)} className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100 py-3.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-bold tracking-wide">Cancel</button>
+            <button type="button" onClick={() => { clearPhotoDraft(); setActiveModal(null); }} className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100 py-3.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-bold tracking-wide">Cancel</button>
             <button onClick={handleProfileSubmit} disabled={profileUploadProgress > 0} className="flex-1 bg-indigo-600 text-white py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold tracking-wide hover:-translate-y-0.5 active:translate-y-0">
-              {profileUploadProgress > 0 ? `Uploading Photo ${Math.round(profileUploadProgress)}%` : 'Save Changes'}
+              {profileUploadProgress > 0 ? `Uploading Photo ${Math.round(profileUploadProgress)}%` : profilePhotoDraft ? 'Save Photo & Changes' : 'Save Changes'}
             </button>
           </div>
         </div>
