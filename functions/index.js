@@ -1,12 +1,22 @@
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onObjectDeleted, onObjectFinalized } = require('firebase-functions/v2/storage');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
+const crypto = require('node:crypto');
 
 admin.initializeApp();
 const db = admin.firestore();
 
 const DEFAULT_ORG_ID = 'mpgs';
+const FUNCTION_RUNTIME = { maxInstances: 10 };
+const ADMIN_FUNCTION_RUNTIME = { maxInstances: 5 };
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMITS = {
+  default: { limit: 60, windowMs: RATE_LIMIT_WINDOW_MS },
+  admin: { limit: 30, windowMs: RATE_LIMIT_WINDOW_MS },
+  securePdf: { limit: 10, windowMs: RATE_LIMIT_WINDOW_MS },
+};
 const TENANT_COLLECTIONS = [
   'messages',
   'groups',
@@ -18,6 +28,7 @@ const TENANT_COLLECTIONS = [
 const DEFAULT_APP_VERSION = '1.0.0';
 const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const SUPPORT_GROUP_ID = 'support';
+const TENANT_UPLOAD_PREFIX = /^organizations\/([^/]+)\/uploads\//;
 const DEFAULT_PACKAGES = {
   starter: {
     name: 'Starter',
@@ -259,6 +270,264 @@ const logAuditEvent = async (type, adminId, target, details = {}) => db.collecti
   timestamp: admin.firestore.FieldValue.serverTimestamp(),
 });
 
+const logOrgAuditEvent = async (orgId, type, adminId, target, details = {}) => {
+  const payload = {
+    type,
+    adminId,
+    user: adminId,
+    target,
+    details,
+    content: `${type}: ${target}`,
+    immutableId: `${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  await Promise.all([
+    db.collection('audit_logs').add({ ...payload, orgId }).catch(() => null),
+    db.collection('organizations').doc(orgId).collection('audit_logs').add(payload).catch(() => null),
+  ]);
+};
+
+const sanitizeRateLimitKey = (value) => String(value || 'global').replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 120);
+
+const enforceCallableRateLimit = async (request, bucket = 'default', orgId = 'platform') => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const config = RATE_LIMITS[bucket] || RATE_LIMITS.default;
+  const uid = request.auth.uid;
+  const windowStart = Math.floor(Date.now() / config.windowMs) * config.windowMs;
+  const rateLimitId = `${sanitizeRateLimitKey(bucket)}_${sanitizeRateLimitKey(uid)}_${windowStart}`;
+  const ref = db.collection('rate_limits').doc(rateLimitId);
+  const nextCount = await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const count = snap.exists ? Number(snap.data().count || 0) : 0;
+    if (count >= config.limit) return count + 1;
+    transaction.set(ref, {
+      bucket,
+      orgId,
+      uid,
+      count: count + 1,
+      limit: config.limit,
+      windowStart: admin.firestore.Timestamp.fromMillis(windowStart),
+      expiresAt: admin.firestore.Timestamp.fromMillis(windowStart + config.windowMs * 2),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    return count + 1;
+  });
+  if (nextCount > config.limit) {
+    await db.collection('organizations').doc(orgId || 'platform').collection('abuse_logs').add({
+      type: 'CALLABLE_RATE_LIMIT_EXCEEDED',
+      bucket,
+      uid,
+      count: nextCount,
+      limit: config.limit,
+      createdAt: serverTimestamp(),
+    }).catch(() => null);
+    throw new HttpsError('resource-exhausted', 'Too many requests. Please wait and try again.');
+  }
+};
+
+const getCallerProfile = async (request) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const snap = await db.collection('users').doc(request.auth.uid).get();
+  return { uid: request.auth.uid, ...(snap.data() || {}) };
+};
+
+const assertOrgAdminCallable = async (request, orgId) => {
+  const cleanOrgId = String(orgId || '').trim();
+  if (!cleanOrgId) throw new HttpsError('invalid-argument', 'orgId is required.');
+  const caller = await getCallerProfile(request);
+  const token = request.auth.token || {};
+  const callerOrgId = String(token.orgId || caller.orgId || '').trim();
+  const isPlatformOwner = !!(token.isPlatformOwner || token.platformOwner || caller.isPlatformOwner) || normalizeEmail(token.email || caller.email) === GLOBAL_SUPPORT_ADMIN_EMAIL;
+  const isAdmin = isPlatformOwner || !!(token.admin || caller.isAdmin) || ['admin', 'owner'].includes(String(token.role || caller.role || '').toLowerCase());
+  if (!isPlatformOwner && callerOrgId !== cleanOrgId) throw new HttpsError('permission-denied', 'Cross-organization admin action denied.');
+  if (!isAdmin) throw new HttpsError('permission-denied', 'Organization admin access is required.');
+  await enforceCallableRateLimit(request, 'admin', cleanOrgId);
+  return { orgId: cleanOrgId, caller, isPlatformOwner };
+};
+
+const assertUserBelongsToOrg = async (uid, orgId) => {
+  const userRef = db.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new HttpsError('not-found', 'User not found.');
+  const user = userSnap.data() || {};
+  if (String(user.orgId || '') !== orgId) throw new HttpsError('permission-denied', 'Target user is outside this organization.');
+  return { userRef, user };
+};
+
+const getOrgIdFromTenantUploadPath = (filePath = '') => {
+  const match = String(filePath || '').match(TENANT_UPLOAD_PREFIX);
+  return match?.[1] || null;
+};
+
+const updateTenantUploadUsage = async (object, direction) => {
+  const filePath = object?.name || '';
+  const orgId = getOrgIdFromTenantUploadPath(filePath);
+  const size = Number(object?.size || 0);
+  if (!orgId || !Number.isFinite(size) || size <= 0) return;
+
+  const deltaBytes = direction === 'delete' ? -size : size;
+  const update = {
+    storageUsedBytes: admin.firestore.FieldValue.increment(deltaBytes),
+    storageLastUpdatedAt: serverTimestamp(),
+  };
+  const orgRef = db.collection('organizations').doc(orgId);
+  await orgRef.set(update, { merge: true });
+  await orgRef.collection('org_details').doc('details').set(update, { merge: true });
+};
+
+const uniqueStrings = (values = []) => Array.from(new Set((Array.isArray(values) ? values : [])
+  .map((value) => String(value || '').trim())
+  .filter(Boolean)));
+
+const scheduledSourceToOrgId = (scheduleRef) => {
+  const segments = scheduleRef.path.split('/');
+  return segments[0] === 'organizations' && segments[2] === 'scheduled_messages' ? segments[1] : null;
+};
+
+const formatIstMessageParts = (date = new Date()) => ({
+  dateString: new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date),
+  time: new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date),
+});
+
+const normalizeTaskDisplayFields = (taskData = {}, text = '') => ({
+  taskTitle: taskData.title || taskData.taskTitle || text || undefined,
+  taskStatus: taskData.status || undefined,
+  taskPriority: taskData.priority || undefined,
+  taskDeadline: taskData.deadline || undefined,
+  taskAssigneeEmails: uniqueStrings(taskData.assignees || []),
+  taskAssigneeNames: Array.isArray(taskData.assigneeNames) ? uniqueStrings(taskData.assigneeNames) : undefined,
+  taskAssigneeCount: Array.isArray(taskData.assignees) ? taskData.assignees.length : 0,
+  taskMasterReviewerEmail: taskData.masterReviewerEmail || undefined,
+});
+
+const buildScheduledMessagePayload = (scheduleData = {}, deliveredAt = new Date()) => {
+  const senderEmail = scheduleData.senderEmail || '';
+  if (!scheduleData.senderUid || !senderEmail || !scheduleData.groupId) {
+    throw new Error('Scheduled message is missing senderUid, senderEmail, or groupId.');
+  }
+  const allowedUsers = uniqueStrings(scheduleData.allowedUsers || []);
+  const isPrivateForward = scheduleData.isPrivateForward === true || allowedUsers.length > 0;
+  const commonPayload = {
+    text: scheduleData.text || '',
+    senderUid: scheduleData.senderUid || '',
+    senderEmail,
+    senderName: scheduleData.senderName || (senderEmail ? senderEmail.split('@')[0] : undefined),
+    senderAvatar: scheduleData.senderAvatar || null,
+    groupId: scheduleData.groupId || '',
+    groupName: scheduleData.groupName || 'Scheduled',
+    groupAvatar: scheduleData.groupAvatar || null,
+    timestamp: serverTimestamp(),
+    ...formatIstMessageParts(deliveredAt),
+    isTask: scheduleData.isTask === true,
+    allowedUsers: isPrivateForward ? allowedUsers : [],
+    isPrivateForward,
+    seenBy: uniqueStrings(scheduleData.seenBy || (senderEmail ? [senderEmail] : [])),
+    reactions: scheduleData.reactions && typeof scheduleData.reactions === 'object' && !Array.isArray(scheduleData.reactions) ? scheduleData.reactions : {},
+    deliveredTo: uniqueStrings(scheduleData.deliveredTo || (senderEmail ? [senderEmail] : [])),
+    scheduledMessageId: scheduleData.id || null,
+  };
+
+  if (scheduleData.isTask === true) {
+    Object.assign(commonPayload, normalizeTaskDisplayFields(scheduleData.taskData || {}, scheduleData.text || ''));
+    commonPayload.taskData = scheduleData.taskData || {};
+    if (scheduleData.taskDeadline) commonPayload.taskDeadline = scheduleData.taskDeadline;
+    if (scheduleData.taskAssignees) commonPayload.taskAssignees = scheduleData.taskAssignees;
+  }
+
+  return Object.fromEntries(Object.entries(commonPayload).filter(([, value]) => value !== undefined));
+};
+
+const lockScheduledMessage = async (scheduleRef, invocationId, nowTimestamp) => db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(scheduleRef);
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  const leaseExpiresAt = data.processingLeaseExpiresAt?.toMillis?.() || 0;
+  const canProcess = data.status === 'pending' || (data.status === 'processing' && leaseExpiresAt <= nowTimestamp.toMillis());
+  if (!canProcess) return null;
+
+  transaction.update(scheduleRef, {
+    status: 'processing',
+    processingStartedAt: nowTimestamp,
+    processingLeaseExpiresAt: admin.firestore.Timestamp.fromMillis(nowTimestamp.toMillis() + 5 * 60 * 1000),
+    processedBy: invocationId,
+    retryCount: admin.firestore.FieldValue.increment(data.status === 'processing' ? 1 : 0),
+  });
+  return { id: snap.id, ref: scheduleRef, data: { ...data, id: snap.id } };
+});
+
+const markScheduledMessageFailed = async (scheduleRef, invocationId, error) => {
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(scheduleRef);
+    if (!snap.exists) return;
+    const data = snap.data() || {};
+    if (data.status !== 'processing' || data.processedBy !== invocationId) return;
+    transaction.update(scheduleRef, {
+      status: 'failed',
+      failedAt: serverTimestamp(),
+      lastError: String(error?.message || error || 'Unknown scheduled delivery error').slice(0, 1000),
+      processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
+    });
+  });
+};
+
+const deliverScheduledMessage = async (lockedSchedule, invocationId) => {
+  const orgId = scheduledSourceToOrgId(lockedSchedule.ref);
+  if (!orgId) throw new Error(`Scheduled message ${lockedSchedule.ref.path} is not under organizations/{orgId}.`);
+
+  const messageRef = db.collection('organizations').doc(orgId).collection('messages').doc(`scheduled_${lockedSchedule.id}`);
+  const deliveredAt = new Date();
+  const payload = buildScheduledMessagePayload(lockedSchedule.data, deliveredAt);
+
+  await db.runTransaction(async (transaction) => {
+    const [scheduleSnap, messageSnap] = await Promise.all([
+      transaction.get(lockedSchedule.ref),
+      transaction.get(messageRef),
+    ]);
+    if (!scheduleSnap.exists) return;
+    const scheduleData = scheduleSnap.data() || {};
+    if (scheduleData.status !== 'processing' || scheduleData.processedBy !== invocationId) return;
+
+    if (!messageSnap.exists) {
+      transaction.set(messageRef, payload);
+    }
+    transaction.update(lockedSchedule.ref, {
+      status: 'sent',
+      sentAt: serverTimestamp(),
+      messageId: messageRef.id,
+      messagePath: messageRef.path,
+      processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
+      lastError: admin.firestore.FieldValue.delete(),
+    });
+  });
+};
+
+const fetchDueScheduledMessages = async (nowTimestamp) => {
+  const pendingSnap = await db.collectionGroup('scheduled_messages')
+    .where('status', '==', 'pending')
+    .where('scheduledAt', '<=', nowTimestamp)
+    .limit(100)
+    .get();
+  const staleProcessingSnap = await db.collectionGroup('scheduled_messages')
+    .where('status', '==', 'processing')
+    .where('processingLeaseExpiresAt', '<=', nowTimestamp)
+    .limit(100)
+    .get();
+
+  const byPath = new Map();
+  pendingSnap.docs.concat(staleProcessingSnap.docs).forEach((docSnap) => byPath.set(docSnap.ref.path, docSnap.ref));
+  return Array.from(byPath.values());
+};
+
 const getMergedPermissions = async (uid) => {
   const userSnap = await db.collection('users').doc(uid).get();
   const user = userSnap.data() || {};
@@ -375,6 +644,30 @@ const setOnboardingClaims = async (uid, profile) => {
   return customClaims;
 };
 
+exports.trackTenantUploadCreated = onObjectFinalized(async (event) => {
+  try {
+    await updateTenantUploadUsage(event.data, 'create');
+  } catch (error) {
+    logger.error('Failed to increment tenant upload usage.', {
+      path: event.data?.name,
+      size: event.data?.size,
+      error: error?.message || error,
+    });
+  }
+});
+
+exports.trackTenantUploadDeleted = onObjectDeleted(async (event) => {
+  try {
+    await updateTenantUploadUsage(event.data, 'delete');
+  } catch (error) {
+    logger.error('Failed to decrement tenant upload usage.', {
+      path: event.data?.name,
+      size: event.data?.size,
+      error: error?.message || error,
+    });
+  }
+});
+
 exports.resolveAuthOnboarding = onCall(async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -466,7 +759,8 @@ exports.resolveAuthOnboarding = onCall(async (request) => {
   };
 });
 
-exports.createUser = onCall(async (request) => {
+exports.createUser = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  await enforceCallableRateLimit(request, 'admin', String(request.data?.orgId || request.auth?.token?.orgId || DEFAULT_ORG_ID));
   await assertPermission(request, 'Users', 'create');
 
   const data = request.data || {};
@@ -577,6 +871,41 @@ exports.forceLogoutAllUsers = onCall(async (request) => {
   await batch.commit();
   await logAuditEvent('FORCE_LOGOUT_ALL', request.auth.uid, 'all-sessions', { count: uids.length, affectedUsers: uids });
   return { ok: true, count: uids.length };
+});
+
+exports.processScheduledMessages = onSchedule({
+  schedule: 'every 1 minutes',
+  timeZone: 'Asia/Kolkata',
+}, async (event) => {
+  const nowTimestamp = admin.firestore.Timestamp.now();
+  const invocationId = event.id || `processScheduledMessages_${Date.now()}`;
+  const scheduleRefs = await fetchDueScheduledMessages(nowTimestamp);
+  let sent = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const scheduleRef of scheduleRefs) {
+    const lockedSchedule = await lockScheduledMessage(scheduleRef, invocationId, nowTimestamp);
+    if (!lockedSchedule) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      await deliverScheduledMessage(lockedSchedule, invocationId);
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      logger.error('Failed to deliver scheduled message.', {
+        path: scheduleRef.path,
+        error: error?.message || error,
+      });
+      await markScheduledMessageFailed(scheduleRef, invocationId, error);
+    }
+  }
+
+  logger.info('Processed scheduled messages.', { sent, failed, skipped, scanned: scheduleRefs.length });
+  return { sent, failed, skipped, scanned: scheduleRefs.length };
 });
 
 exports.retentionCleanup = onSchedule('every day 02:00', async () => {
@@ -1080,7 +1409,8 @@ exports.backfillPublicMessageVisibility = onCall(async (request) => {
   return stats;
 });
 
-exports.toggleUserArchiveStatus = onCall(async (request) => {
+exports.toggleUserArchiveStatus = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  await enforceCallableRateLimit(request, 'admin', String(request.data?.orgId || request.auth?.token?.orgId || DEFAULT_ORG_ID));
   await assertPermission(request, 'Users', 'update');
   const { uid, isArchived } = request.data || {};
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
@@ -1104,5 +1434,402 @@ exports.toggleUserArchiveStatus = onCall(async (request) => {
   } catch (error) {
     logger.error('Failed to toggle user archive status', { uid, error });
     throw new HttpsError('internal', error.message || 'Failed to update user status.');
+  }
+});
+
+
+exports.health = onRequest(FUNCTION_RUNTIME, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  response.status(200).json({
+    ok: true,
+    service: 'talk-task-functions',
+    version: process.env.K_REVISION || DEFAULT_APP_VERSION,
+    checkedAt: new Date().toISOString(),
+  });
+});
+
+exports.adminDeleteRole = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, roleId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const cleanRoleId = String(roleId || '').trim();
+  if (!cleanRoleId) throw new HttpsError('invalid-argument', 'roleId is required.');
+  const roleRef = db.collection('organizations').doc(orgId).collection('roles').doc(cleanRoleId);
+  const roleSnap = await roleRef.get();
+  if (!roleSnap.exists) throw new HttpsError('not-found', 'Role not found.');
+  const role = roleSnap.data() || {};
+  if (role.system || ['Super Admin', 'Auditor', 'Department Moderator'].includes(role.name)) {
+    throw new HttpsError('failed-precondition', 'System roles cannot be deleted.');
+  }
+  await roleRef.delete();
+  await logOrgAuditEvent(orgId, 'ROLE_DELETE', caller.uid, cleanRoleId, { name: role.name });
+  return { ok: true };
+});
+
+exports.adminUpdateUserAccess = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, uid, roles, isAdmin, isApproved } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const cleanUid = String(uid || '').trim();
+  if (!cleanUid) throw new HttpsError('invalid-argument', 'uid is required.');
+  const { userRef, user } = await assertUserBelongsToOrg(cleanUid, orgId);
+  const updates = { updatedAt: serverTimestamp() };
+  if (Array.isArray(roles)) updates.roles = [...new Set(roles.map((role) => String(role || '').trim()).filter(Boolean))];
+  if (typeof isAdmin === 'boolean') {
+    updates.isAdmin = isAdmin;
+    updates.role = isAdmin ? 'admin' : (user.role === 'admin' ? 'member' : (user.role || 'member'));
+  }
+  if (typeof isApproved === 'boolean') updates.isApproved = isApproved;
+  await userRef.set(updates, { merge: true });
+  if (typeof isAdmin === 'boolean') {
+    const authUser = await admin.auth().getUser(cleanUid).catch(() => null);
+    await admin.auth().setCustomUserClaims(cleanUid, {
+      ...(authUser?.customClaims || {}),
+      orgId,
+      admin: isAdmin,
+      role: updates.role || user.role || 'member',
+      isPlatformOwner: !!user.isPlatformOwner,
+      platformOwner: !!user.isPlatformOwner,
+    });
+  }
+  await logOrgAuditEvent(orgId, 'USER_ACCESS_UPDATE', caller.uid, cleanUid, { roles: updates.roles, isAdmin, isApproved });
+  return { ok: true };
+});
+
+exports.adminForceLogoutSession = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, sessionId, uid } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const sessionRef = db.collection('organizations').doc(orgId).collection('sessions').doc(String(sessionId || '').trim());
+  if (!sessionId) throw new HttpsError('invalid-argument', 'sessionId is required.');
+  await sessionRef.delete();
+  if (uid) await admin.auth().revokeRefreshTokens(String(uid)).catch(() => null);
+  await logOrgAuditEvent(orgId, 'FORCE_LOGOUT', caller.uid, sessionId, { affectedUid: uid || null });
+  return { ok: true };
+});
+
+exports.adminForceLogoutAll = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const sessionsSnap = await db.collection('organizations').doc(orgId).collection('sessions').limit(500).get();
+  const uids = [...new Set(sessionsSnap.docs.map((docSnap) => docSnap.data().uid).filter(Boolean))];
+  await Promise.all(uids.map((uid) => admin.auth().revokeRefreshTokens(uid).catch(() => null)));
+  const batch = db.batch();
+  sessionsSnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+  if (!sessionsSnap.empty) await batch.commit();
+  await logOrgAuditEvent(orgId, 'FORCE_LOGOUT_ALL', caller.uid, 'all-sessions', { count: sessionsSnap.size, affectedUsers: uids });
+  return { ok: true, count: sessionsSnap.size };
+});
+
+exports.adminDeleteRetentionPolicy = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, policyId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const ref = db.collection('organizations').doc(orgId).collection('retentionPolicies').doc(String(policyId || '').trim());
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Retention policy not found.');
+  await ref.delete();
+  await logOrgAuditEvent(orgId, 'RETENTION_POLICY_DELETE', caller.uid, policyId, snap.data() || {});
+  return { ok: true };
+});
+
+exports.adminRunRetentionCleanup = onCall({ ...ADMIN_FUNCTION_RUNTIME, timeoutSeconds: 120 }, async (request) => {
+  const { orgId, policyId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const orgRef = db.collection('organizations').doc(orgId);
+  const policyRef = orgRef.collection('retentionPolicies').doc(String(policyId || '').trim());
+  const policySnap = await policyRef.get();
+  if (!policySnap.exists) throw new HttpsError('not-found', 'Retention policy not found.');
+  const policy = policySnap.data() || {};
+  const threshold = admin.firestore.Timestamp.fromMillis(Date.now() - Number(policy.ttlDays || 30) * 24 * 60 * 60 * 1000);
+  const messagesSnap = await orgRef.collection('messages').where('timestamp', '<', threshold).limit(500).get();
+  const batch = db.batch();
+  let affected = 0;
+  messagesSnap.docs.forEach((messageSnap) => {
+    const message = messageSnap.data() || {};
+    const category = policy.category || 'Chat Messages';
+    const matches = category === 'All Messages & Task Cards' || (category === 'Task Cards' ? message.isTask === true : message.isTask !== true);
+    if (!matches) return;
+    if (policy.action === 'archive') {
+      batch.set(orgRef.collection(message.isTask ? 'archived_tasks' : 'archived_messages').doc(messageSnap.id), { ...message, archivedAt: serverTimestamp(), lifecycleRuleId: policyId });
+    }
+    batch.delete(messageSnap.ref);
+    affected += 1;
+  });
+  if (affected > 0) await batch.commit();
+  await orgRef.collection('retention_cleanup_logs').add({ ruleId: policyId, ruleName: policy.category || 'Chat Messages', timestamp: serverTimestamp(), status: 'completed', affected });
+  await logOrgAuditEvent(orgId, 'RETENTION_RUN', caller.uid, policyId, { affected, action: policy.action, ttlDays: policy.ttlDays, category: policy.category });
+  return { ok: true, affected };
+});
+
+exports.adminArchiveUserPersonalData = onCall({ ...ADMIN_FUNCTION_RUNTIME, timeoutSeconds: 120 }, async (request) => {
+  const { orgId, uid } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const cleanUid = String(uid || '').trim();
+  const { userRef, user } = await assertUserBelongsToOrg(cleanUid, orgId);
+  const emailHash = crypto.createHash('sha256').update(String(user.email || cleanUid)).digest('hex');
+  await userRef.set({ name: 'Deleted User', emailHash, email: '', isArchived: true, profilePicUrl: null, updatedAt: serverTimestamp() }, { merge: true });
+  await admin.auth().updateUser(cleanUid, { disabled: true }).catch(() => null);
+  const orgRef = db.collection('organizations').doc(orgId);
+  const messagesSnap = await orgRef.collection('messages').where('senderUid', '==', cleanUid).limit(500).get();
+  const sessionsSnap = await orgRef.collection('sessions').where('uid', '==', cleanUid).limit(500).get();
+  const batch = db.batch();
+  messagesSnap.docs.forEach((docSnap) => batch.set(docSnap.ref, { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: docSnap.data().isTask ? docSnap.data().text : '[deleted]' }, { merge: true }));
+  sessionsSnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+  if (!messagesSnap.empty || !sessionsSnap.empty) await batch.commit();
+  await logOrgAuditEvent(orgId, 'DSAR_DELETE', caller.uid, cleanUid, { emailHash, messages: messagesSnap.size, sessions: sessionsSnap.size });
+  return { ok: true, messages: messagesSnap.size, sessions: sessionsSnap.size };
+});
+
+exports.adminDeleteTaskMessage = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, messageId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const ref = db.collection('organizations').doc(orgId).collection('messages').doc(String(messageId || '').trim());
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Task not found.');
+  if (snap.data()?.isTask !== true) throw new HttpsError('failed-precondition', 'Only task messages can be deleted with this action.');
+  await ref.delete();
+  await logOrgAuditEvent(orgId, 'TASK_DELETE', caller.uid, messageId, { text: snap.data()?.text || '' });
+  return { ok: true };
+});
+
+
+const addWorkingDaysSkippingUnavailable = (startDate, workingDays, unavailableDates = []) => {
+  const unavailable = new Set(unavailableDates || []);
+  const cursor = new Date(startDate);
+  let added = 0;
+  while (added < workingDays) {
+    cursor.setDate(cursor.getDate() + 1);
+    const day = cursor.getDay();
+    const iso = cursor.toISOString().split('T')[0];
+    if (day === 0 || day === 6 || unavailable.has(iso)) continue;
+    added += 1;
+  }
+  return admin.firestore.Timestamp.fromDate(cursor);
+};
+
+const getSupportRuntimeState = async (orgId) => {
+  const settingsRef = db.collection('organizations').doc(orgId).collection('systemSettings').doc('supportStatus');
+  const unavailableRef = db.collection('organizations').doc(orgId).collection('systemSettings').doc('developerUnavailability');
+  const [settingsSnap, unavailableSnap] = await Promise.all([settingsRef.get(), unavailableRef.get()]);
+  return {
+    statusRef: settingsRef,
+    isAcceptingTickets: settingsSnap.exists ? settingsSnap.data().isAcceptingTickets !== false : true,
+    pausedReason: settingsSnap.data()?.pausedReason || '',
+    unavailableDates: unavailableSnap.data()?.unavailableDates || [],
+  };
+};
+
+exports.createSupportTicket = onCall(FUNCTION_RUNTIME, async (request) => {
+  const { orgId, subject, category = 'General', priority = 'normal', description = '' } = request.data || {};
+  const cleanSubject = String(subject || '').trim();
+  const cleanDescription = String(description || '').trim();
+  if (!cleanSubject || !cleanDescription) throw new HttpsError('invalid-argument', 'Subject and description are required.');
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  await enforceCallableRateLimit(request, 'default', orgId);
+  const cleanOrgId = String(orgId || '').trim();
+  if (!cleanOrgId) throw new HttpsError('invalid-argument', 'orgId is required.');
+  const caller = await getCallerProfile(request);
+  if (String(caller.orgId || request.auth.token?.orgId || '') !== cleanOrgId) throw new HttpsError('permission-denied', 'Organization mismatch.');
+  const runtime = await getSupportRuntimeState(cleanOrgId);
+  if (!runtime.isAcceptingTickets) throw new HttpsError('failed-precondition', runtime.pausedReason || 'Support tickets are temporarily paused.');
+  const weekStart = new Date();
+  const weekday = weekStart.getDay() || 7;
+  weekStart.setDate(weekStart.getDate() - weekday + 1);
+  const weekKey = getDayKey(weekStart);
+  const weeklyRef = db.collection('organizations').doc(cleanOrgId).collection('supportTicketWeeklyLimits').doc(`${weekKey}_${request.auth.uid}`);
+  const ticketRef = db.collection('organizations').doc(cleanOrgId).collection('supportTickets').doc();
+  await db.runTransaction(async (transaction) => {
+    const weeklySnap = await transaction.get(weeklyRef);
+    if ((weeklySnap.data()?.count || 0) >= 1) throw new HttpsError('resource-exhausted', 'You can create only 1 support ticket per week.');
+    const estimatedResolution = addWorkingDaysSkippingUnavailable(new Date(), priority === 'urgent' ? 2 : 5, runtime.unavailableDates);
+    transaction.set(ticketRef, {
+      subject: cleanSubject.slice(0, 140),
+      category: String(category || 'General').trim().slice(0, 60),
+      priority: String(priority || 'normal').trim().slice(0, 20),
+      description: cleanDescription.slice(0, 4000),
+      status: 'open',
+      orgId: cleanOrgId,
+      createdByUid: request.auth.uid,
+      createdByEmail: caller.email || request.auth.token?.email || '',
+      createdByName: caller.name || request.auth.token?.name || caller.email || 'User',
+      estimatedResolution,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      auditTrail: [{ action: 'created', actorUid: request.auth.uid, actorEmail: caller.email || '', at: admin.firestore.Timestamp.now() }],
+    });
+    transaction.set(weeklyRef, { uid: request.auth.uid, weekKey, count: admin.firestore.FieldValue.increment(1), updatedAt: serverTimestamp() }, { merge: true });
+  });
+  await ticketRef.collection('replies').add({ text: cleanDescription, actorUid: request.auth.uid, actorEmail: caller.email || '', visibility: 'public', createdAt: serverTimestamp() });
+  await logOrgAuditEvent(cleanOrgId, 'SUPPORT_TICKET_CREATE', request.auth.uid, ticketRef.id, { subject, category, priority });
+  return { ok: true, ticketId: ticketRef.id };
+});
+
+exports.replySupportTicket = onCall(FUNCTION_RUNTIME, async (request) => {
+  const { orgId, ticketId, text, internal = false } = request.data || {};
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  await enforceCallableRateLimit(request, 'default', orgId);
+  const caller = await getCallerProfile(request);
+  const ticketRef = db.collection('organizations').doc(orgId).collection('supportTickets').doc(String(ticketId || '').trim());
+  const ticketSnap = await ticketRef.get();
+  if (!ticketSnap.exists) throw new HttpsError('not-found', 'Ticket not found.');
+  const ticket = ticketSnap.data() || {};
+  const isAdmin = caller.isAdmin || request.auth.token?.admin || caller.isPlatformOwner;
+  if (!isAdmin && ticket.createdByUid !== request.auth.uid) throw new HttpsError('permission-denied', 'Ticket access denied.');
+  await ticketRef.collection('replies').add({ text: String(text || '').trim().slice(0, 4000), actorUid: request.auth.uid, actorEmail: caller.email || '', visibility: internal && isAdmin ? 'internal' : 'public', createdAt: serverTimestamp() });
+  await ticketRef.set({ updatedAt: serverTimestamp(), lastReplyAt: serverTimestamp(), status: ticket.status === 'open' && isAdmin ? 'in-progress' : ticket.status }, { merge: true });
+  await logOrgAuditEvent(orgId, 'SUPPORT_TICKET_REPLY', request.auth.uid, ticketId, { internal: internal && isAdmin });
+  return { ok: true };
+});
+
+exports.updateSupportTicketStatus = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, ticketId, status } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const allowed = ['open', 'in-progress', 'resolved', 'closed'];
+  if (!allowed.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status.');
+  const update = { status, updatedAt: serverTimestamp() };
+  if (status === 'resolved') update.resolvedAt = serverTimestamp();
+  await db.collection('organizations').doc(orgId).collection('supportTickets').doc(String(ticketId || '').trim()).set(update, { merge: true });
+  await logOrgAuditEvent(orgId, 'SUPPORT_TICKET_STATUS', caller.uid, ticketId, { status });
+  return { ok: true };
+});
+
+exports.setSupportIntakeStatus = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, isAcceptingTickets, pausedReason = '' } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  await db.collection('organizations').doc(orgId).collection('systemSettings').doc('supportStatus').set({ isAcceptingTickets: isAcceptingTickets !== false, pausedReason: String(pausedReason || '').slice(0, 500), pausedAt: isAcceptingTickets === false ? serverTimestamp() : null, updatedAt: serverTimestamp(), updatedBy: caller.uid }, { merge: true });
+  await logOrgAuditEvent(orgId, 'SUPPORT_INTAKE_STATUS', caller.uid, 'supportStatus', { isAcceptingTickets, pausedReason });
+  return { ok: true };
+});
+
+exports.setDeveloperUnavailability = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, unavailableDates = [] } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const dates = [...new Set((Array.isArray(unavailableDates) ? unavailableDates : []).map((date) => String(date || '').slice(0, 10)).filter(Boolean))].sort();
+  await db.collection('organizations').doc(orgId).collection('systemSettings').doc('developerUnavailability').set({ unavailableDates: dates, updatedAt: serverTimestamp(), updatedBy: caller.uid }, { merge: true });
+  const openTickets = await db.collection('organizations').doc(orgId).collection('supportTickets').where('status', 'in', ['open', 'in-progress']).limit(200).get();
+  const batch = db.batch();
+  openTickets.docs.forEach((ticketSnap) => batch.set(ticketSnap.ref, { estimatedResolution: addWorkingDaysSkippingUnavailable(new Date(), 5, dates), updatedAt: serverTimestamp() }, { merge: true }));
+  if (!openTickets.empty) await batch.commit();
+  await logOrgAuditEvent(orgId, 'SUPPORT_UNAVAILABILITY_UPDATE', caller.uid, 'developerUnavailability', { unavailableDates: dates, recalculated: openTickets.size });
+  return { ok: true, recalculated: openTickets.size };
+});
+
+const getDayKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
+const PDF_DAILY_LIMIT = 5;
+
+const assertSecurePdfAccess = async (request, orgId, messageId) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  if (!orgId || !messageId) throw new HttpsError('invalid-argument', 'orgId and messageId are required.');
+  const userSnap = await db.collection('users').doc(request.auth.uid).get();
+  const user = userSnap.data() || {};
+  const email = normalizeEmail(request.auth.token?.email || user.email);
+  const messageRef = db.collection('organizations').doc(orgId).collection('messages').doc(messageId);
+  const messageSnap = await messageRef.get();
+  if (!messageSnap.exists) throw new HttpsError('not-found', 'Secure PDF message was not found.');
+  const message = messageSnap.data() || {};
+  const allowed = uniqueStrings(message.secureRecipients || []).map(normalizeEmail);
+  const isSender = message.senderUid === request.auth.uid || normalizeEmail(message.senderEmail) === email;
+  if (message.secureDownload !== true) throw new HttpsError('failed-precondition', 'This file is not a secure PDF.');
+  if (!isSender && !allowed.includes(email)) throw new HttpsError('permission-denied', 'You are not authorized to download this secure PDF.');
+  return { user, email, messageRef, message };
+};
+
+const incrementDailyCounter = async (orgId, collectionName, uid, dayKey, limit) => db.runTransaction(async (transaction) => {
+  const ref = db.collection('organizations').doc(orgId).collection(collectionName).doc(`${dayKey}_${uid}`);
+  const snap = await transaction.get(ref);
+  const count = snap.exists ? Number(snap.data().count || 0) : 0;
+  if (count >= limit) throw new HttpsError('resource-exhausted', `Daily limit of ${limit} reached.`);
+  transaction.set(ref, { uid, dayKey, count: count + 1, updatedAt: serverTimestamp() }, { merge: true });
+  return count + 1;
+});
+
+exports.requestPdfOtp = onCall(FUNCTION_RUNTIME, async (request) => {
+  const { orgId, messageId } = request.data || {};
+  await enforceCallableRateLimit(request, 'securePdf', String(orgId || 'platform'));
+  const { email, message } = await assertSecurePdfAccess(request, orgId, messageId);
+  const dayKey = getDayKey();
+  await incrementDailyCounter(orgId, 'secure_pdf_otp_daily', request.auth.uid, dayKey, PDF_DAILY_LIMIT);
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000);
+  await db.collection('organizations').doc(orgId).collection('secure_pdf_otps').doc(`${request.auth.uid}_${messageId}`).set({
+    uid: request.auth.uid,
+    email,
+    messageId,
+    otp,
+    attempts: 0,
+    expiresAt,
+    createdAt: serverTimestamp(),
+  });
+  await db.collection('mail').add({
+    to: [email],
+    message: {
+      subject: `Talk & Task secure PDF OTP: ${message.fileName || 'Secure PDF'}`,
+      text: `Your OTP is ${otp}. It expires in 5 minutes. File: ${message.fileName || 'Secure PDF'}.`,
+      html: `<p>Your secure PDF OTP is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p><p>File: ${message.fileName || 'Secure PDF'}</p>`,
+    },
+    createdAt: serverTimestamp(),
+  });
+  return { success: true };
+});
+
+exports.verifyPdfOtpAndDownload = onCall(FUNCTION_RUNTIME, async (request) => {
+  const { orgId, messageId, otp } = request.data || {};
+  await enforceCallableRateLimit(request, 'securePdf', String(orgId || 'platform'));
+  const { email, message } = await assertSecurePdfAccess(request, orgId, messageId);
+  const otpRef = db.collection('organizations').doc(orgId).collection('secure_pdf_otps').doc(`${request.auth.uid}_${messageId}`);
+  const otpSnap = await otpRef.get();
+  if (!otpSnap.exists) throw new HttpsError('not-found', 'Request a new OTP.');
+  const otpData = otpSnap.data() || {};
+  if ((otpData.expiresAt?.toMillis?.() || 0) < Date.now()) {
+    await otpRef.delete();
+    throw new HttpsError('deadline-exceeded', 'OTP expired. Request a new OTP.');
+  }
+  if (Number(otpData.attempts || 0) >= 3) throw new HttpsError('resource-exhausted', 'Too many OTP attempts.');
+  if (String(otpData.otp) !== String(otp || '').trim()) {
+    await otpRef.set({ attempts: admin.firestore.FieldValue.increment(1), lastFailedAt: serverTimestamp() }, { merge: true });
+    throw new HttpsError('permission-denied', 'Invalid OTP.');
+  }
+  const dayKey = getDayKey();
+  const downloadRef = db.collection('organizations').doc(orgId).collection('userDownloads').doc(`${request.auth.uid}_${messageId}`);
+  if ((await downloadRef.get()).exists) throw new HttpsError('already-exists', 'This secure PDF was already downloaded by you.');
+  await incrementDailyCounter(orgId, 'secure_pdf_download_daily', request.auth.uid, dayKey, PDF_DAILY_LIMIT);
+  await otpRef.delete();
+  await downloadRef.set({ uid: request.auth.uid, email, messageId, downloadedAt: serverTimestamp(), fileName: message.fileName || null });
+  await db.collection('organizations').doc(orgId).collection('downloadSummaries').doc(message.senderUid || 'system').collection('pending').add({
+    messageId,
+    fileName: message.fileName || 'Secure PDF',
+    downloadedBy: email,
+    downloadedAt: serverTimestamp(),
+    senderUid: message.senderUid || null,
+  });
+  const bucket = admin.storage().bucket();
+  const [downloadUrl] = await bucket.file(message.storagePath).getSignedUrl({ action: 'read', expires: Date.now() + 2 * 60 * 1000 });
+  return { success: true, downloadUrl, stamped: false, note: 'Secure audit recorded; signed one-time URL issued.' };
+});
+
+exports.sendSecurePdfDownloadSummaries = onSchedule({ schedule: 'every day 15:00', timeZone: 'Asia/Kolkata' }, async () => {
+  const orgs = await db.collection('organizations').get();
+  for (const orgSnap of orgs.docs) {
+    const summaryUsers = await orgSnap.ref.collection('downloadSummaries').listDocuments();
+    for (const senderRef of summaryUsers) {
+      const pendingSnap = await senderRef.collection('pending').limit(50).get();
+      if (pendingSnap.empty) continue;
+      const lines = pendingSnap.docs.map((docSnap) => {
+        const data = docSnap.data() || {};
+        return `Your file ${data.fileName} was downloaded by ${data.downloadedBy}.`;
+      });
+      await orgSnap.ref.collection('messages').add({
+        text: lines.join('\n'),
+        senderUid: 'system',
+        senderEmail: 'system@talk-task.local',
+        senderName: 'Talk & Task Secure PDF Bot',
+        groupId: 'secure-pdf-summary',
+        groupName: 'Secure PDF Summary',
+        timestamp: serverTimestamp(),
+        isTask: false,
+        allowedUsers: [],
+        isPrivateForward: false,
+        seenBy: [],
+        reactions: {},
+      });
+      await Promise.all(pendingSnap.docs.map((docSnap) => docSnap.ref.delete()));
+    }
   }
 });

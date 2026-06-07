@@ -271,18 +271,18 @@ export function AuthProvider({ children }) {
     } catch (err) {
       const code = err?.code || '';
       if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(code)) {
-        setAuthError('Invalid email or password. Use the email and temporary password your admin created.');
+        setAuthError('Invalid email or password. Contact Your School Admin For This App.');
         return;
       }
       if (code === 'auth/too-many-requests') {
-        setAuthError('Too many failed login attempts. Please wait and try again.');
+        setAuthError('Invalid email or password. Contact Your School Admin For This App.');
         return;
       }
       if (code === 'auth/invalid-email') {
-        setAuthError('Please enter a valid email address.');
+        setAuthError('Invalid email or password. Contact Your School Admin For This App.');
         return;
       }
-      setAuthError(err?.userMessage || 'Email/password sign-in failed. Please try again.');
+      setAuthError('Invalid email or password. Contact Your School Admin For This App.');
     }
   }, [hydrateSession, notifyLoginSuccess, requestNotificationPermission]);
 
