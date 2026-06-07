@@ -110,6 +110,17 @@ export default function LeftSidebar({
           </div>
         </div>
 
+        <div className="px-3 py-2 border-b border-white/10">
+          <button
+            type="button"
+            onClick={() => setActiveModal('support_tickets')}
+            className="w-full rounded-xl bg-white/10 hover:bg-white/20 text-white px-3 py-2 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+            title="Support tickets"
+          >
+            <i className="fa-solid fa-headset"></i> Support Tickets
+          </button>
+        </div>
+
         {/* Search */}
         <div className={`border-b-2 border-white/20 shrink-0 overflow-hidden transition-all duration-300 ease-out ${showSearch ? 'max-h-24 opacity-100 p-3' : 'max-h-0 opacity-0 px-3 py-0'}`}>
           <div className="bg-white/10 rounded-lg flex items-center px-3 py-2 focus-within:bg-white/20 transition-all">
@@ -176,7 +187,7 @@ export default function LeftSidebar({
                   name={g.name}
                   sizeClass="w-[49px] h-[49px]"
                   isGroup={true}
-                  extraClasses={`mr-3 shrink-0 border-2 ${hasUnread ? 'border-emerald-500' : 'border-white/30'}`}
+                  extraClasses={`mr-3 shrink-0 border-2 ${hasUnread ? 'border-emerald-500 ring-2 ring-emerald-300' : 'border-rose-500/80 ring-1 ring-rose-300/80'}`}
                 />
                 <div className="flex-1 min-w-0 overflow-hidden border-b-2 border-white/20 flex flex-col justify-center pr-2">
                   <div className="flex justify-between items-center mb-[2px]">
@@ -248,6 +259,7 @@ export default function LeftSidebar({
                     url={u.profilePicUrl}
                     name={u.name}
                     sizeClass="w-[49px] h-[49px]"
+                    extraClasses={`border-2 ${unreadInfo.total > 0 ? 'border-emerald-500 ring-2 ring-emerald-300' : 'border-rose-500/80 ring-1 ring-rose-300/80'}`}
                   />
                   <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full ${isOnline ? 'bg-emerald-700' : 'bg-[#800020]'}`} />
                 </div>
