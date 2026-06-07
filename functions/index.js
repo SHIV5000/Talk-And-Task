@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onObjectDeleted, onObjectFinalized } = require('firebase-functions/v2/storage');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 
@@ -18,6 +19,7 @@ const TENANT_COLLECTIONS = [
 const DEFAULT_APP_VERSION = '1.0.0';
 const GLOBAL_SUPPORT_ADMIN_EMAIL = 'shivsuri1@gmail.com';
 const SUPPORT_GROUP_ID = 'support';
+const TENANT_UPLOAD_PREFIX = /^organizations\/([^/]+)\/uploads\//;
 const DEFAULT_PACKAGES = {
   starter: {
     name: 'Starter',
@@ -259,6 +261,180 @@ const logAuditEvent = async (type, adminId, target, details = {}) => db.collecti
   timestamp: admin.firestore.FieldValue.serverTimestamp(),
 });
 
+const getOrgIdFromTenantUploadPath = (filePath = '') => {
+  const match = String(filePath || '').match(TENANT_UPLOAD_PREFIX);
+  return match?.[1] || null;
+};
+
+const updateTenantUploadUsage = async (object, direction) => {
+  const filePath = object?.name || '';
+  const orgId = getOrgIdFromTenantUploadPath(filePath);
+  const size = Number(object?.size || 0);
+  if (!orgId || !Number.isFinite(size) || size <= 0) return;
+
+  const deltaBytes = direction === 'delete' ? -size : size;
+  const update = {
+    storageUsedBytes: admin.firestore.FieldValue.increment(deltaBytes),
+    storageLastUpdatedAt: serverTimestamp(),
+  };
+  const orgRef = db.collection('organizations').doc(orgId);
+  await orgRef.set(update, { merge: true });
+  await orgRef.collection('org_details').doc('details').set(update, { merge: true });
+};
+
+const uniqueStrings = (values = []) => Array.from(new Set((Array.isArray(values) ? values : [])
+  .map((value) => String(value || '').trim())
+  .filter(Boolean)));
+
+const scheduledSourceToOrgId = (scheduleRef) => {
+  const segments = scheduleRef.path.split('/');
+  return segments[0] === 'organizations' && segments[2] === 'scheduled_messages' ? segments[1] : null;
+};
+
+const formatIstMessageParts = (date = new Date()) => ({
+  dateString: new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date),
+  time: new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date),
+});
+
+const normalizeTaskDisplayFields = (taskData = {}, text = '') => ({
+  taskTitle: taskData.title || taskData.taskTitle || text || undefined,
+  taskStatus: taskData.status || undefined,
+  taskPriority: taskData.priority || undefined,
+  taskDeadline: taskData.deadline || undefined,
+  taskAssigneeEmails: uniqueStrings(taskData.assignees || []),
+  taskAssigneeNames: Array.isArray(taskData.assigneeNames) ? uniqueStrings(taskData.assigneeNames) : undefined,
+  taskAssigneeCount: Array.isArray(taskData.assignees) ? taskData.assignees.length : 0,
+  taskMasterReviewerEmail: taskData.masterReviewerEmail || undefined,
+});
+
+const buildScheduledMessagePayload = (scheduleData = {}, deliveredAt = new Date()) => {
+  const senderEmail = scheduleData.senderEmail || '';
+  if (!scheduleData.senderUid || !senderEmail || !scheduleData.groupId) {
+    throw new Error('Scheduled message is missing senderUid, senderEmail, or groupId.');
+  }
+  const allowedUsers = uniqueStrings(scheduleData.allowedUsers || []);
+  const isPrivateForward = scheduleData.isPrivateForward === true || allowedUsers.length > 0;
+  const commonPayload = {
+    text: scheduleData.text || '',
+    senderUid: scheduleData.senderUid || '',
+    senderEmail,
+    senderName: scheduleData.senderName || (senderEmail ? senderEmail.split('@')[0] : undefined),
+    senderAvatar: scheduleData.senderAvatar || null,
+    groupId: scheduleData.groupId || '',
+    groupName: scheduleData.groupName || 'Scheduled',
+    groupAvatar: scheduleData.groupAvatar || null,
+    timestamp: serverTimestamp(),
+    ...formatIstMessageParts(deliveredAt),
+    isTask: scheduleData.isTask === true,
+    allowedUsers: isPrivateForward ? allowedUsers : [],
+    isPrivateForward,
+    seenBy: uniqueStrings(scheduleData.seenBy || (senderEmail ? [senderEmail] : [])),
+    reactions: scheduleData.reactions && typeof scheduleData.reactions === 'object' && !Array.isArray(scheduleData.reactions) ? scheduleData.reactions : {},
+    deliveredTo: uniqueStrings(scheduleData.deliveredTo || (senderEmail ? [senderEmail] : [])),
+    scheduledMessageId: scheduleData.id || null,
+  };
+
+  if (scheduleData.isTask === true) {
+    Object.assign(commonPayload, normalizeTaskDisplayFields(scheduleData.taskData || {}, scheduleData.text || ''));
+    commonPayload.taskData = scheduleData.taskData || {};
+    if (scheduleData.taskDeadline) commonPayload.taskDeadline = scheduleData.taskDeadline;
+    if (scheduleData.taskAssignees) commonPayload.taskAssignees = scheduleData.taskAssignees;
+  }
+
+  return Object.fromEntries(Object.entries(commonPayload).filter(([, value]) => value !== undefined));
+};
+
+const lockScheduledMessage = async (scheduleRef, invocationId, nowTimestamp) => db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(scheduleRef);
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  const leaseExpiresAt = data.processingLeaseExpiresAt?.toMillis?.() || 0;
+  const canProcess = data.status === 'pending' || (data.status === 'processing' && leaseExpiresAt <= nowTimestamp.toMillis());
+  if (!canProcess) return null;
+
+  transaction.update(scheduleRef, {
+    status: 'processing',
+    processingStartedAt: nowTimestamp,
+    processingLeaseExpiresAt: admin.firestore.Timestamp.fromMillis(nowTimestamp.toMillis() + 5 * 60 * 1000),
+    processedBy: invocationId,
+    retryCount: admin.firestore.FieldValue.increment(data.status === 'processing' ? 1 : 0),
+  });
+  return { id: snap.id, ref: scheduleRef, data: { ...data, id: snap.id } };
+});
+
+const markScheduledMessageFailed = async (scheduleRef, invocationId, error) => {
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(scheduleRef);
+    if (!snap.exists) return;
+    const data = snap.data() || {};
+    if (data.status !== 'processing' || data.processedBy !== invocationId) return;
+    transaction.update(scheduleRef, {
+      status: 'failed',
+      failedAt: serverTimestamp(),
+      lastError: String(error?.message || error || 'Unknown scheduled delivery error').slice(0, 1000),
+      processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
+    });
+  });
+};
+
+const deliverScheduledMessage = async (lockedSchedule, invocationId) => {
+  const orgId = scheduledSourceToOrgId(lockedSchedule.ref);
+  if (!orgId) throw new Error(`Scheduled message ${lockedSchedule.ref.path} is not under organizations/{orgId}.`);
+
+  const messageRef = db.collection('organizations').doc(orgId).collection('messages').doc(`scheduled_${lockedSchedule.id}`);
+  const deliveredAt = new Date();
+  const payload = buildScheduledMessagePayload(lockedSchedule.data, deliveredAt);
+
+  await db.runTransaction(async (transaction) => {
+    const [scheduleSnap, messageSnap] = await Promise.all([
+      transaction.get(lockedSchedule.ref),
+      transaction.get(messageRef),
+    ]);
+    if (!scheduleSnap.exists) return;
+    const scheduleData = scheduleSnap.data() || {};
+    if (scheduleData.status !== 'processing' || scheduleData.processedBy !== invocationId) return;
+
+    if (!messageSnap.exists) {
+      transaction.set(messageRef, payload);
+    }
+    transaction.update(lockedSchedule.ref, {
+      status: 'sent',
+      sentAt: serverTimestamp(),
+      messageId: messageRef.id,
+      messagePath: messageRef.path,
+      processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
+      lastError: admin.firestore.FieldValue.delete(),
+    });
+  });
+};
+
+const fetchDueScheduledMessages = async (nowTimestamp) => {
+  const pendingSnap = await db.collectionGroup('scheduled_messages')
+    .where('status', '==', 'pending')
+    .where('scheduledAt', '<=', nowTimestamp)
+    .limit(100)
+    .get();
+  const staleProcessingSnap = await db.collectionGroup('scheduled_messages')
+    .where('status', '==', 'processing')
+    .where('processingLeaseExpiresAt', '<=', nowTimestamp)
+    .limit(100)
+    .get();
+
+  const byPath = new Map();
+  pendingSnap.docs.concat(staleProcessingSnap.docs).forEach((docSnap) => byPath.set(docSnap.ref.path, docSnap.ref));
+  return Array.from(byPath.values());
+};
+
 const getMergedPermissions = async (uid) => {
   const userSnap = await db.collection('users').doc(uid).get();
   const user = userSnap.data() || {};
@@ -374,6 +550,30 @@ const setOnboardingClaims = async (uid, profile) => {
   await admin.auth().setCustomUserClaims(uid, customClaims);
   return customClaims;
 };
+
+exports.trackTenantUploadCreated = onObjectFinalized(async (event) => {
+  try {
+    await updateTenantUploadUsage(event.data, 'create');
+  } catch (error) {
+    logger.error('Failed to increment tenant upload usage.', {
+      path: event.data?.name,
+      size: event.data?.size,
+      error: error?.message || error,
+    });
+  }
+});
+
+exports.trackTenantUploadDeleted = onObjectDeleted(async (event) => {
+  try {
+    await updateTenantUploadUsage(event.data, 'delete');
+  } catch (error) {
+    logger.error('Failed to decrement tenant upload usage.', {
+      path: event.data?.name,
+      size: event.data?.size,
+      error: error?.message || error,
+    });
+  }
+});
 
 exports.resolveAuthOnboarding = onCall(async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -577,6 +777,41 @@ exports.forceLogoutAllUsers = onCall(async (request) => {
   await batch.commit();
   await logAuditEvent('FORCE_LOGOUT_ALL', request.auth.uid, 'all-sessions', { count: uids.length, affectedUsers: uids });
   return { ok: true, count: uids.length };
+});
+
+exports.processScheduledMessages = onSchedule({
+  schedule: 'every 1 minutes',
+  timeZone: 'Asia/Kolkata',
+}, async (event) => {
+  const nowTimestamp = admin.firestore.Timestamp.now();
+  const invocationId = event.id || `processScheduledMessages_${Date.now()}`;
+  const scheduleRefs = await fetchDueScheduledMessages(nowTimestamp);
+  let sent = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const scheduleRef of scheduleRefs) {
+    const lockedSchedule = await lockScheduledMessage(scheduleRef, invocationId, nowTimestamp);
+    if (!lockedSchedule) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      await deliverScheduledMessage(lockedSchedule, invocationId);
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      logger.error('Failed to deliver scheduled message.', {
+        path: scheduleRef.path,
+        error: error?.message || error,
+      });
+      await markScheduledMessageFailed(scheduleRef, invocationId, error);
+    }
+  }
+
+  logger.info('Processed scheduled messages.', { sent, failed, skipped, scanned: scheduleRefs.length });
+  return { sent, failed, skipped, scanned: scheduleRefs.length };
 });
 
 exports.retentionCleanup = onSchedule('every day 02:00', async () => {
