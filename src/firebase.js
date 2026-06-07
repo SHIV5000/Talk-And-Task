@@ -11,6 +11,7 @@ import {
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { getPerformance, trace } from 'firebase/performance';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAoOsog2NP6Pf8YNSxn0rRYK4MSLEVNNZc",
@@ -58,6 +59,7 @@ export const auth = getAuth(app);
 export const db = createFirestoreInstance();
 export const storage = getStorage(app);
 const functions = getFunctions(app);
+export const performance = typeof window !== 'undefined' ? getPerformance(app) : null;
 
 export {
   onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
@@ -65,5 +67,5 @@ export {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, setDoc, getDocs, where, deleteDoc,
   ref, uploadBytesResumable, getDownloadURL,
-  functions, httpsCallable
+  functions, httpsCallable, trace
 };

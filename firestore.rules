@@ -379,6 +379,33 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /abuse_logs/{abuseLogId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow write: if false;
+      }
+
+      match /roles/{roleId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow create, update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && isOrgAdmin(orgId));
+        allow delete: if false;
+      }
+
+      match /sessions/{sessionId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow write: if false;
+      }
+
+      match /retentionPolicies/{policyId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow create, update: if isPlatformOwner() || (canWriteOrgAppData(orgId) && isOrgAdmin(orgId));
+        allow delete: if false;
+      }
+
+      match /retention_cleanup_logs/{cleanupId} {
+        allow read: if isPlatformOwner() || (sameOrg(orgId) && isOrgAdmin(orgId));
+        allow write: if false;
+      }
+
       match /{document=**} {
         allow read, write: if false;
       }

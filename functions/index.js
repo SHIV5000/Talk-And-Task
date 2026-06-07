@@ -1,13 +1,22 @@
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onObjectDeleted, onObjectFinalized } = require('firebase-functions/v2/storage');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
+const crypto = require('node:crypto');
 
 admin.initializeApp();
 const db = admin.firestore();
 
 const DEFAULT_ORG_ID = 'mpgs';
+const FUNCTION_RUNTIME = { maxInstances: 10 };
+const ADMIN_FUNCTION_RUNTIME = { maxInstances: 5 };
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMITS = {
+  default: { limit: 60, windowMs: RATE_LIMIT_WINDOW_MS },
+  admin: { limit: 30, windowMs: RATE_LIMIT_WINDOW_MS },
+  securePdf: { limit: 10, windowMs: RATE_LIMIT_WINDOW_MS },
+};
 const TENANT_COLLECTIONS = [
   'messages',
   'groups',
@@ -260,6 +269,90 @@ const logAuditEvent = async (type, adminId, target, details = {}) => db.collecti
   immutableId: `${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
   timestamp: admin.firestore.FieldValue.serverTimestamp(),
 });
+
+const logOrgAuditEvent = async (orgId, type, adminId, target, details = {}) => {
+  const payload = {
+    type,
+    adminId,
+    user: adminId,
+    target,
+    details,
+    content: `${type}: ${target}`,
+    immutableId: `${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  await Promise.all([
+    db.collection('audit_logs').add({ ...payload, orgId }).catch(() => null),
+    db.collection('organizations').doc(orgId).collection('audit_logs').add(payload).catch(() => null),
+  ]);
+};
+
+const sanitizeRateLimitKey = (value) => String(value || 'global').replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 120);
+
+const enforceCallableRateLimit = async (request, bucket = 'default', orgId = 'platform') => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const config = RATE_LIMITS[bucket] || RATE_LIMITS.default;
+  const uid = request.auth.uid;
+  const windowStart = Math.floor(Date.now() / config.windowMs) * config.windowMs;
+  const rateLimitId = `${sanitizeRateLimitKey(bucket)}_${sanitizeRateLimitKey(uid)}_${windowStart}`;
+  const ref = db.collection('rate_limits').doc(rateLimitId);
+  const nextCount = await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const count = snap.exists ? Number(snap.data().count || 0) : 0;
+    if (count >= config.limit) return count + 1;
+    transaction.set(ref, {
+      bucket,
+      orgId,
+      uid,
+      count: count + 1,
+      limit: config.limit,
+      windowStart: admin.firestore.Timestamp.fromMillis(windowStart),
+      expiresAt: admin.firestore.Timestamp.fromMillis(windowStart + config.windowMs * 2),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    return count + 1;
+  });
+  if (nextCount > config.limit) {
+    await db.collection('organizations').doc(orgId || 'platform').collection('abuse_logs').add({
+      type: 'CALLABLE_RATE_LIMIT_EXCEEDED',
+      bucket,
+      uid,
+      count: nextCount,
+      limit: config.limit,
+      createdAt: serverTimestamp(),
+    }).catch(() => null);
+    throw new HttpsError('resource-exhausted', 'Too many requests. Please wait and try again.');
+  }
+};
+
+const getCallerProfile = async (request) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const snap = await db.collection('users').doc(request.auth.uid).get();
+  return { uid: request.auth.uid, ...(snap.data() || {}) };
+};
+
+const assertOrgAdminCallable = async (request, orgId) => {
+  const cleanOrgId = String(orgId || '').trim();
+  if (!cleanOrgId) throw new HttpsError('invalid-argument', 'orgId is required.');
+  const caller = await getCallerProfile(request);
+  const token = request.auth.token || {};
+  const callerOrgId = String(token.orgId || caller.orgId || '').trim();
+  const isPlatformOwner = !!(token.isPlatformOwner || token.platformOwner || caller.isPlatformOwner) || normalizeEmail(token.email || caller.email) === GLOBAL_SUPPORT_ADMIN_EMAIL;
+  const isAdmin = isPlatformOwner || !!(token.admin || caller.isAdmin) || ['admin', 'owner'].includes(String(token.role || caller.role || '').toLowerCase());
+  if (!isPlatformOwner && callerOrgId !== cleanOrgId) throw new HttpsError('permission-denied', 'Cross-organization admin action denied.');
+  if (!isAdmin) throw new HttpsError('permission-denied', 'Organization admin access is required.');
+  await enforceCallableRateLimit(request, 'admin', cleanOrgId);
+  return { orgId: cleanOrgId, caller, isPlatformOwner };
+};
+
+const assertUserBelongsToOrg = async (uid, orgId) => {
+  const userRef = db.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new HttpsError('not-found', 'User not found.');
+  const user = userSnap.data() || {};
+  if (String(user.orgId || '') !== orgId) throw new HttpsError('permission-denied', 'Target user is outside this organization.');
+  return { userRef, user };
+};
 
 const getOrgIdFromTenantUploadPath = (filePath = '') => {
   const match = String(filePath || '').match(TENANT_UPLOAD_PREFIX);
@@ -666,7 +759,8 @@ exports.resolveAuthOnboarding = onCall(async (request) => {
   };
 });
 
-exports.createUser = onCall(async (request) => {
+exports.createUser = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  await enforceCallableRateLimit(request, 'admin', String(request.data?.orgId || request.auth?.token?.orgId || DEFAULT_ORG_ID));
   await assertPermission(request, 'Users', 'create');
 
   const data = request.data || {};
@@ -1315,7 +1409,8 @@ exports.backfillPublicMessageVisibility = onCall(async (request) => {
   return stats;
 });
 
-exports.toggleUserArchiveStatus = onCall(async (request) => {
+exports.toggleUserArchiveStatus = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  await enforceCallableRateLimit(request, 'admin', String(request.data?.orgId || request.auth?.token?.orgId || DEFAULT_ORG_ID));
   await assertPermission(request, 'Users', 'update');
   const { uid, isArchived } = request.data || {};
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
@@ -1340,6 +1435,158 @@ exports.toggleUserArchiveStatus = onCall(async (request) => {
     logger.error('Failed to toggle user archive status', { uid, error });
     throw new HttpsError('internal', error.message || 'Failed to update user status.');
   }
+});
+
+
+exports.health = onRequest(FUNCTION_RUNTIME, async (request, response) => {
+  response.set('Cache-Control', 'no-store');
+  response.status(200).json({
+    ok: true,
+    service: 'talk-task-functions',
+    version: process.env.K_REVISION || DEFAULT_APP_VERSION,
+    checkedAt: new Date().toISOString(),
+  });
+});
+
+exports.adminDeleteRole = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, roleId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const cleanRoleId = String(roleId || '').trim();
+  if (!cleanRoleId) throw new HttpsError('invalid-argument', 'roleId is required.');
+  const roleRef = db.collection('organizations').doc(orgId).collection('roles').doc(cleanRoleId);
+  const roleSnap = await roleRef.get();
+  if (!roleSnap.exists) throw new HttpsError('not-found', 'Role not found.');
+  const role = roleSnap.data() || {};
+  if (role.system || ['Super Admin', 'Auditor', 'Department Moderator'].includes(role.name)) {
+    throw new HttpsError('failed-precondition', 'System roles cannot be deleted.');
+  }
+  await roleRef.delete();
+  await logOrgAuditEvent(orgId, 'ROLE_DELETE', caller.uid, cleanRoleId, { name: role.name });
+  return { ok: true };
+});
+
+exports.adminUpdateUserAccess = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, uid, roles, isAdmin, isApproved } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const cleanUid = String(uid || '').trim();
+  if (!cleanUid) throw new HttpsError('invalid-argument', 'uid is required.');
+  const { userRef, user } = await assertUserBelongsToOrg(cleanUid, orgId);
+  const updates = { updatedAt: serverTimestamp() };
+  if (Array.isArray(roles)) updates.roles = [...new Set(roles.map((role) => String(role || '').trim()).filter(Boolean))];
+  if (typeof isAdmin === 'boolean') {
+    updates.isAdmin = isAdmin;
+    updates.role = isAdmin ? 'admin' : (user.role === 'admin' ? 'member' : (user.role || 'member'));
+  }
+  if (typeof isApproved === 'boolean') updates.isApproved = isApproved;
+  await userRef.set(updates, { merge: true });
+  if (typeof isAdmin === 'boolean') {
+    const authUser = await admin.auth().getUser(cleanUid).catch(() => null);
+    await admin.auth().setCustomUserClaims(cleanUid, {
+      ...(authUser?.customClaims || {}),
+      orgId,
+      admin: isAdmin,
+      role: updates.role || user.role || 'member',
+      isPlatformOwner: !!user.isPlatformOwner,
+      platformOwner: !!user.isPlatformOwner,
+    });
+  }
+  await logOrgAuditEvent(orgId, 'USER_ACCESS_UPDATE', caller.uid, cleanUid, { roles: updates.roles, isAdmin, isApproved });
+  return { ok: true };
+});
+
+exports.adminForceLogoutSession = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, sessionId, uid } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const sessionRef = db.collection('organizations').doc(orgId).collection('sessions').doc(String(sessionId || '').trim());
+  if (!sessionId) throw new HttpsError('invalid-argument', 'sessionId is required.');
+  await sessionRef.delete();
+  if (uid) await admin.auth().revokeRefreshTokens(String(uid)).catch(() => null);
+  await logOrgAuditEvent(orgId, 'FORCE_LOGOUT', caller.uid, sessionId, { affectedUid: uid || null });
+  return { ok: true };
+});
+
+exports.adminForceLogoutAll = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const sessionsSnap = await db.collection('organizations').doc(orgId).collection('sessions').limit(500).get();
+  const uids = [...new Set(sessionsSnap.docs.map((docSnap) => docSnap.data().uid).filter(Boolean))];
+  await Promise.all(uids.map((uid) => admin.auth().revokeRefreshTokens(uid).catch(() => null)));
+  const batch = db.batch();
+  sessionsSnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+  if (!sessionsSnap.empty) await batch.commit();
+  await logOrgAuditEvent(orgId, 'FORCE_LOGOUT_ALL', caller.uid, 'all-sessions', { count: sessionsSnap.size, affectedUsers: uids });
+  return { ok: true, count: sessionsSnap.size };
+});
+
+exports.adminDeleteRetentionPolicy = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, policyId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const ref = db.collection('organizations').doc(orgId).collection('retentionPolicies').doc(String(policyId || '').trim());
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Retention policy not found.');
+  await ref.delete();
+  await logOrgAuditEvent(orgId, 'RETENTION_POLICY_DELETE', caller.uid, policyId, snap.data() || {});
+  return { ok: true };
+});
+
+exports.adminRunRetentionCleanup = onCall({ ...ADMIN_FUNCTION_RUNTIME, timeoutSeconds: 120 }, async (request) => {
+  const { orgId, policyId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const orgRef = db.collection('organizations').doc(orgId);
+  const policyRef = orgRef.collection('retentionPolicies').doc(String(policyId || '').trim());
+  const policySnap = await policyRef.get();
+  if (!policySnap.exists) throw new HttpsError('not-found', 'Retention policy not found.');
+  const policy = policySnap.data() || {};
+  const threshold = admin.firestore.Timestamp.fromMillis(Date.now() - Number(policy.ttlDays || 30) * 24 * 60 * 60 * 1000);
+  const messagesSnap = await orgRef.collection('messages').where('timestamp', '<', threshold).limit(500).get();
+  const batch = db.batch();
+  let affected = 0;
+  messagesSnap.docs.forEach((messageSnap) => {
+    const message = messageSnap.data() || {};
+    const category = policy.category || 'Chat Messages';
+    const matches = category === 'All Messages & Task Cards' || (category === 'Task Cards' ? message.isTask === true : message.isTask !== true);
+    if (!matches) return;
+    if (policy.action === 'archive') {
+      batch.set(orgRef.collection(message.isTask ? 'archived_tasks' : 'archived_messages').doc(messageSnap.id), { ...message, archivedAt: serverTimestamp(), lifecycleRuleId: policyId });
+    }
+    batch.delete(messageSnap.ref);
+    affected += 1;
+  });
+  if (affected > 0) await batch.commit();
+  await orgRef.collection('retention_cleanup_logs').add({ ruleId: policyId, ruleName: policy.category || 'Chat Messages', timestamp: serverTimestamp(), status: 'completed', affected });
+  await logOrgAuditEvent(orgId, 'RETENTION_RUN', caller.uid, policyId, { affected, action: policy.action, ttlDays: policy.ttlDays, category: policy.category });
+  return { ok: true, affected };
+});
+
+exports.adminArchiveUserPersonalData = onCall({ ...ADMIN_FUNCTION_RUNTIME, timeoutSeconds: 120 }, async (request) => {
+  const { orgId, uid } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const cleanUid = String(uid || '').trim();
+  const { userRef, user } = await assertUserBelongsToOrg(cleanUid, orgId);
+  const emailHash = crypto.createHash('sha256').update(String(user.email || cleanUid)).digest('hex');
+  await userRef.set({ name: 'Deleted User', emailHash, email: '', isArchived: true, profilePicUrl: null, updatedAt: serverTimestamp() }, { merge: true });
+  await admin.auth().updateUser(cleanUid, { disabled: true }).catch(() => null);
+  const orgRef = db.collection('organizations').doc(orgId);
+  const messagesSnap = await orgRef.collection('messages').where('senderUid', '==', cleanUid).limit(500).get();
+  const sessionsSnap = await orgRef.collection('sessions').where('uid', '==', cleanUid).limit(500).get();
+  const batch = db.batch();
+  messagesSnap.docs.forEach((docSnap) => batch.set(docSnap.ref, { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: docSnap.data().isTask ? docSnap.data().text : '[deleted]' }, { merge: true }));
+  sessionsSnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+  if (!messagesSnap.empty || !sessionsSnap.empty) await batch.commit();
+  await logOrgAuditEvent(orgId, 'DSAR_DELETE', caller.uid, cleanUid, { emailHash, messages: messagesSnap.size, sessions: sessionsSnap.size });
+  return { ok: true, messages: messagesSnap.size, sessions: sessionsSnap.size };
+});
+
+exports.adminDeleteTaskMessage = onCall(ADMIN_FUNCTION_RUNTIME, async (request) => {
+  const { orgId, messageId } = request.data || {};
+  const { caller } = await assertOrgAdminCallable(request, orgId);
+  const ref = db.collection('organizations').doc(orgId).collection('messages').doc(String(messageId || '').trim());
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Task not found.');
+  if (snap.data()?.isTask !== true) throw new HttpsError('failed-precondition', 'Only task messages can be deleted with this action.');
+  await ref.delete();
+  await logOrgAuditEvent(orgId, 'TASK_DELETE', caller.uid, messageId, { text: snap.data()?.text || '' });
+  return { ok: true };
 });
 
 const getDayKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
@@ -1371,8 +1618,9 @@ const incrementDailyCounter = async (orgId, collectionName, uid, dayKey, limit) 
   return count + 1;
 });
 
-exports.requestPdfOtp = onCall(async (request) => {
+exports.requestPdfOtp = onCall(FUNCTION_RUNTIME, async (request) => {
   const { orgId, messageId } = request.data || {};
+  await enforceCallableRateLimit(request, 'securePdf', String(orgId || 'platform'));
   const { email, message } = await assertSecurePdfAccess(request, orgId, messageId);
   const dayKey = getDayKey();
   await incrementDailyCounter(orgId, 'secure_pdf_otp_daily', request.auth.uid, dayKey, PDF_DAILY_LIMIT);
@@ -1399,8 +1647,9 @@ exports.requestPdfOtp = onCall(async (request) => {
   return { success: true };
 });
 
-exports.verifyPdfOtpAndDownload = onCall(async (request) => {
+exports.verifyPdfOtpAndDownload = onCall(FUNCTION_RUNTIME, async (request) => {
   const { orgId, messageId, otp } = request.data || {};
+  await enforceCallableRateLimit(request, 'securePdf', String(orgId || 'platform'));
   const { email, message } = await assertSecurePdfAccess(request, orgId, messageId);
   const otpRef = db.collection('organizations').doc(orgId).collection('secure_pdf_otps').doc(`${request.auth.uid}_${messageId}`);
   const otpSnap = await otpRef.get();

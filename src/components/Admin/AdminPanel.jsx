@@ -403,6 +403,15 @@ export default function AdminPanel({
     }).catch(() => {});
   };
 
+  const callAdminFunction = useCallback(async (functionName, payload = {}) => {
+    if (!ensureOrgContext()) return null;
+    const callable = httpsCallable(functions, functionName);
+    const result = await callable({ orgId: effectiveOrgId, ...payload });
+    return result.data;
+  }, [effectiveOrgId]);
+
+  const applyUserAccessUpdate = async (uid, updates) => callAdminFunction('adminUpdateUserAccess', { uid, ...updates });
+
   const updateRolePermission = async (role, area, action, checked) => {
     if (!ensureOrgContext()) return;
     const permissions = { ...(role.permissions || makePermissionGrid(false)) };
@@ -426,29 +435,25 @@ export default function AdminPanel({
     if (!ensureOrgContext()) return;
     if (role.system || SYSTEM_ROLES.includes(role.name)) return alert('System roles cannot be deleted.');
     if (!window.confirm(`Delete role ${role.name}?`)) return;
-    await deleteDoc(orgDoc('roles', role.id));
-    await logAuditEvent('ROLE_DELETE', role.id, { name: role.name });
+    await callAdminFunction('adminDeleteRole', { roleId: role.id });
     setSelectedRoleId('super-admin');
   };
 
   const updateUserRoles = async (userRecord, roleName, checked) => {
     const nextRoles = checked ? [...new Set([...(userRecord.roles || []), roleName])] : (userRecord.roles || []).filter((role) => role !== roleName);
-    await updateDoc(doc(db, 'users', userRecord.uid), { roles: nextRoles });
-    await logAuditEvent('USER_ROLE_UPDATE', userRecord.uid, { email: userRecord.email, roles: nextRoles });
+    await applyUserAccessUpdate(userRecord.uid, { roles: nextRoles });
   };
 
   const forceLogoutSession = async (session) => {
     if (!ensureOrgContext()) return;
     if (!window.confirm(`Force logout ${session.email || session.uid}?`)) return;
-    await deleteDoc(orgDoc('sessions', session.id));
-    await logAuditEvent('FORCE_LOGOUT', session.id, { affectedUid: session.uid, email: session.email, ip: session.ip });
+    await callAdminFunction('adminForceLogoutSession', { sessionId: session.id, uid: session.uid });
   };
 
   const forceLogoutAll = async () => {
     if (!ensureOrgContext()) return;
     if (!window.confirm('This will immediately sign out every user across all devices. Are you sure?')) return;
-    await Promise.all(sessions.map((session) => deleteDoc(orgDoc('sessions', session.id))));
-    await logAuditEvent('FORCE_LOGOUT_ALL', 'all-sessions', { affectedUsers: sessions.map((s) => s.uid), count: sessions.length });
+    await callAdminFunction('adminForceLogoutAll');
   };
 
   const saveRetentionPolicy = async () => {
@@ -473,32 +478,13 @@ export default function AdminPanel({
   const deleteRetentionPolicy = async (policy) => {
     if (!ensureOrgContext()) return;
     if (!window.confirm(`Delete lifecycle rule for ${policy.category}?`)) return;
-    await deleteDoc(orgDoc('retentionPolicies', policy.id));
-    await logAuditEvent('RETENTION_POLICY_DELETE', policy.id, { category: policy.category, ttlDays: policy.ttlDays, action: policy.action });
+    await callAdminFunction('adminDeleteRetentionPolicy', { policyId: policy.id });
   };
 
   const runCleanupNow = async (policy) => {
     if (!ensureOrgContext()) return;
-    const threshold = Date.now() - Number(policy.ttlDays || 30) * 24 * 60 * 60 * 1000;
-    const category = policy.category || 'Chat Messages';
-    const matchesCategory = (message) => {
-      if (category === 'Task Cards') return message.isTask === true;
-      if (category === 'All Messages & Task Cards') return true;
-      return message.isTask !== true;
-    };
-    const expiredMessages = (messages || [])
-      .filter((message) => matchesCategory(message) && (message.timestamp?.toMillis?.() || Date.now()) < threshold)
-      .slice(0, 500);
-    const runRef = await addDoc(orgCollection('retention_cleanup_logs'), { ruleId: policy.id, ruleName: category, timestamp: serverTimestamp(), status: 'running', affected: 0 });
-    for (const message of expiredMessages) {
-      if (policy.action === 'archive') {
-        const archiveCollection = message.isTask ? 'archived_tasks' : 'archived_messages';
-        await setDoc(orgDoc(archiveCollection, message.id), { ...message, archivedAt: serverTimestamp(), lifecycleRuleId: policy.id });
-      }
-      await deleteDoc(orgDoc('messages', message.id));
-    }
-    await updateDoc(orgDoc('retention_cleanup_logs', runRef.id), { status: 'completed', affected: expiredMessages.length });
-    await logAuditEvent('RETENTION_RUN', policy.id, { affected: expiredMessages.length, action: policy.action, ttlDays: policy.ttlDays, category });
+    const result = await callAdminFunction('adminRunRetentionCleanup', { policyId: policy.id });
+    alert(`Cleanup completed. Affected records: ${result?.affected || 0}`);
   };
 
   const exportFullDatabase = async () => {
@@ -540,10 +526,7 @@ export default function AdminPanel({
     if (!selectedDsarUser) return alert('Select a user first.');
     const code = `DELETE ${selectedDsarUser.email}`;
     if (window.prompt(`This permanently anonymises personal data for ${selectedDsarUser.name || selectedDsarUser.email}. Type: ${code}`) !== code) return;
-    await updateDoc(doc(db, 'users', selectedDsarUser.uid), { name: 'Deleted User', emailHash: btoa(selectedDsarUser.email || selectedDsarUser.uid), email: '', isArchived: true, profilePicUrl: null });
-    await Promise.all(messages.filter((m) => m.senderUid === selectedDsarUser.uid || m.senderEmail === selectedDsarUser.email).map((m) => updateDoc(orgDoc('messages', m.id), { senderEmail: 'deleted-user', senderUid: 'deleted-user', text: m.isTask ? m.text : '[deleted]' }).catch(() => {})));
-    await Promise.all(sessions.filter((s) => s.uid === selectedDsarUser.uid).map((s) => deleteDoc(orgDoc('sessions', s.id))));
-    await logAuditEvent('DSAR_DELETE', selectedDsarUser.uid, { confirmationCode: code });
+    await callAdminFunction('adminArchiveUserPersonalData', { uid: selectedDsarUser.uid, confirmationCode: code });
   };
 
   const saveInstitutionSettings = async () => {
@@ -588,7 +571,7 @@ export default function AdminPanel({
   const handleDeleteTask = async (taskId) => {
     if (!ensureOrgContext()) return;
     if (!window.confirm('Delete this task permanently?')) return;
-    await deleteDoc(orgDoc('messages', taskId));
+    await callAdminFunction('adminDeleteTaskMessage', { messageId: taskId });
   };
 
   // --- People (Users) ---
@@ -608,7 +591,7 @@ export default function AdminPanel({
 
     try {
       const toggleUserArchiveStatus = httpsCallable(functions, 'toggleUserArchiveStatus');
-      await toggleUserArchiveStatus({ uid: userRecord.uid, isArchived: willArchive });
+      await toggleUserArchiveStatus({ orgId: effectiveOrgId, uid: userRecord.uid, isArchived: willArchive });
     } catch (e) {
       alert(`Failed to ${willArchive ? 'archive' : 'unarchive'} user: ` + e.message);
     }
@@ -1004,14 +987,14 @@ export default function AdminPanel({
                 <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center gap-3 flex-wrap">
                   <span className="text-sm font-bold text-indigo-700">{selectedUsers.size} selected</span>
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={async () => { if (!window.confirm(`Approve ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isApproved: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Approve</button>
-                    <button onClick={async () => { if (!window.confirm(`Grant admin to ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isAdmin: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600">Make Admin</button>
-                    <button onClick={async () => { if (!window.confirm(`Revoke admin from ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => updateDoc(doc(db, 'users', uid), { isAdmin: false }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600">Revoke Admin</button>
-                    <button onClick={async () => { 
-                      if (!window.confirm(`Archive ${selectedUsers.size} user(s)? They will be disabled and hidden.`)) return; 
+                    <button onClick={async () => { if (!window.confirm(`Approve ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => applyUserAccessUpdate(uid, { isApproved: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Approve</button>
+                    <button onClick={async () => { if (!window.confirm(`Grant admin to ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => applyUserAccessUpdate(uid, { isAdmin: true }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600">Make Admin</button>
+                    <button onClick={async () => { if (!window.confirm(`Revoke admin from ${selectedUsers.size} user(s)?`)) return; await Promise.all(Array.from(selectedUsers).map((uid) => applyUserAccessUpdate(uid, { isAdmin: false }))); setSelectedUsers(new Set()); }} className="px-3 py-1.5 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600">Revoke Admin</button>
+                    <button onClick={async () => {
+                      if (!window.confirm(`Archive ${selectedUsers.size} user(s)? They will be disabled and hidden.`)) return;
                       const toggleUserArchiveStatus = httpsCallable(functions, 'toggleUserArchiveStatus');
-                      await Promise.all(Array.from(selectedUsers).map((uid) => toggleUserArchiveStatus({ uid, isArchived: true }))); 
-                      setSelectedUsers(new Set()); 
+                      await Promise.all(Array.from(selectedUsers).map((uid) => toggleUserArchiveStatus({ orgId: effectiveOrgId, uid, isArchived: true })));
+                      setSelectedUsers(new Set());
                     }} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600">Archive</button>
                     <button onClick={() => { const sel = filteredUsers.filter((u) => selectedUsers.has(u.uid)); const csv = 'Name,Email,Approved,Admin\n' + sel.map((u) => `"${u.name}","${u.email}","${u.isApproved}","${u.isAdmin}"`).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'selected_users.csv'; link.click(); }} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50">Export CSV</button>
                   </div>
@@ -1526,7 +1509,7 @@ export default function AdminPanel({
               <h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-recycle text-emerald-600 mr-2"></i>Data Lifecycle</h2>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Retention policies can auto-delete chat messages and task cards. Audit logs remain exempt.</p>
             </div>
-            
+
             <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
               <div>
                 <label className="text-xs font-bold text-slate-500">Category</label>
@@ -1553,7 +1536,7 @@ export default function AdminPanel({
               </div>
               <button onClick={saveRetentionPolicy} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Add Rule</button>
             </div>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                 <div className="p-3 font-black text-slate-700 border-b">Policies</div>
@@ -1573,7 +1556,7 @@ export default function AdminPanel({
                   </div>
                 ))}
               </div>
-              
+
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                 <div className="p-3 font-black text-slate-700 border-b">Past Cleanup Executions</div>
                 {retentionRuns.map((run) => (
