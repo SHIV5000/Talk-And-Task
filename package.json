@@ -29,6 +29,6 @@
     "autoprefixer": "^10.4.17",
     "vite": "^5.1.4",
     "vite-plugin-pwa": "^0.17.5",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^9.0.1"
   }
 }
